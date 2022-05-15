@@ -98,10 +98,10 @@ class SpectraTransformer(pl.LightningModule):
 
         peaks = torch.cat([latent_spectra, peaks], dim=1)
         out = self.transformer_encoder(peaks, src_key_padding_mask=mask)
-        out = self.fc(out[0][0])
+        out = self.fc(out[:,:1,:].squeeze(1))
         out = self.sigmoid(out)
         return out
-
+    
     def training_step(self, batch, batch_idx):
         x, labels = batch
         out = self.forward(x)

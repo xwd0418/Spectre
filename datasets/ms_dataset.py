@@ -33,7 +33,7 @@ class MsDataset(Dataset):
 def pad(batch):
     ms, fp = zip(*batch)
     ms = pad_sequence([torch.tensor(v, dtype=torch.float) for v in ms], batch_first=True)
-    return ms, torch.tensor(fp, dtype=torch.float)
+    return ms, torch.tensor(np.array(fp), dtype=torch.float)
 
 class MsDataModule(pl.LightningDataModule):
     def __init__(self, batch_size: int = 32):
