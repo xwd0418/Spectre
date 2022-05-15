@@ -72,8 +72,8 @@ class CoordinateEncoder(torch.nn.Module):
     """
     def __init__(
             self,
-            dim_coords,
             dim_model,
+            dim_coords,
             wavelength_bounds=None,
         ):
         super().__init__()
