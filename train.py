@@ -1,6 +1,6 @@
 import torch, pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
-from encoder import MassSpecEncoder
+from old_encoder import MassSpecEncoder
 from argparse import ArgumentParser
 from datasets.pair_dataset import PairDataModule
 from pytorch_lightning.loggers import TensorBoardLogger
