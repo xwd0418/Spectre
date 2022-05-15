@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
 import torch, torch.nn as nn
-from encoder import MassSpecEncoder
+from old_encoder import MassSpecEncoder
 from sklearn.metrics import f1_score  
 import torchvision.models as models
 import numpy as np
