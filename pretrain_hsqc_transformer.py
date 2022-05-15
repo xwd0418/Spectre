@@ -1,9 +1,9 @@
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 from argparse import ArgumentParser
-from datasets.ms_dataset import MsDataModule
+from datasets.hsqc_dataset_new import HsqcDataModule
 from pytorch_lightning.loggers import TensorBoardLogger
-from models.spectra_transformer import SpectraTransformer
+from models.hsqc_transformer import HsqcTransformer
 import logging, os, sys
 
 def main():
@@ -15,15 +15,15 @@ def main():
     lr, epochs = args["lr"], args["epochs"]
 
     out_path = "/workspace/volume/tensorboard"
-    path1, path2 = "lightning_logs", "SpectraTransformer"
+    path1, path2 = "lightning_logs", "HsqcTransformer"
 
-    model = SpectraTransformer(lr=lr,
-                               dim_model=1024,
-                               dim_coords=(512,512),
-                               n_heads=8,
-                               n_layers=3,
-                               wavelength_bounds=[(None, 3000),(None, 1)])
-    data_module = MsDataModule(batch_size=128)
+    model = HsqcTransformer(lr=lr,
+                            dim_model=1024,
+                            dim_coords=(342,341,341),
+                            n_heads=8,
+                            n_layers=3,
+                            wavelength_bounds=[(None, 300),(None, 15),(None,400000)])
+    data_module = HsqcDataModule(batch_size=128)
 
     # === Init Logger ===
     logger = logging.getLogger("lightning")

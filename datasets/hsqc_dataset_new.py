@@ -6,14 +6,14 @@ import pickle
 import os 
 import numpy as np
 
-class MsDataset(Dataset):
+class HsqcDataset(Dataset):
     """
-    Dataset for pretraining with MS information only:
+    Dataset for pretraining with HSQC information only:
     depends on colin-devpod file configuration
     """
 
     def __init__(self, split="train"):
-        self.dir = "/workspace/data/ms_pretrain"
+        self.dir = "/workspace/data/hsqc_pretrain"
         assert(split in ["train", "val", "test"])
         self.split_dir = os.path.join(self.dir, split+".pkl")
         assert(os.path.exists(self.split_dir))
@@ -25,16 +25,16 @@ class MsDataset(Dataset):
 
     def __getitem__(self, idx):
         sample_num = self.ids[idx]
-        spectra = self.data[sample_num]["MS"]
+        hsqc = self.data[sample_num]["HSQC"]
         fingerprint = self.data[sample_num]["FP"]
-        return spectra, fingerprint
+        return hsqc, fingerprint
 
 def pad(batch):
-    ms, fp = zip(*batch)
-    ms = pad_sequence([torch.tensor(v, dtype=torch.float) for v in ms], batch_first=True)
-    return ms, torch.tensor(np.array(fp), dtype=torch.float)
+    hsqc, fp = zip(*batch)
+    hsqc = pad_sequence([torch.tensor(v, dtype=torch.float) for v in hsqc], batch_first=True)
+    return hsqc, torch.tensor(np.array(fp), dtype=torch.float)
 
-class MsDataModule(pl.LightningDataModule):
+class HsqcDataModule(pl.LightningDataModule):
     def __init__(self, batch_size: int = 32):
         super().__init__()
         self.batch_size = batch_size
@@ -42,10 +42,10 @@ class MsDataModule(pl.LightningDataModule):
     
     def setup(self, stage):
         if stage == "fit" or stage is None:
-            self.train = MsDataset(split="train")
-            self.val = MsDataset(split="val")
+            self.train = HsqcDataset(split="train")
+            self.val = HsqcDataset(split="val")
         if stage == "test":
-            self.test = MsDataset(split="test")
+            self.test = HsqcDataset(split="test")
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
 
