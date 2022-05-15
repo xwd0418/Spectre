@@ -9,7 +9,7 @@ import logging, os, sys
 def main():
     parser = ArgumentParser(add_help=True)
     parser.add_argument("--epochs", type=int, default=160)
-    parser.add_argument("--lr", type=float, default=1e-5)
+    parser.add_argument("--lr", type=float, default=1e-3)
     args = vars(parser.parse_args())
 
     lr, epochs = args["lr"], args["epochs"]
@@ -22,7 +22,7 @@ def main():
                             dim_coords=(342,341,341),
                             n_heads=8,
                             n_layers=3,
-                            wavelength_bounds=[(None, 300),(None, 15),(None,400000)])
+                            wavelength_bounds=[(None, 150),(None, 10),(None,20000)])
     data_module = HsqcDataModule(batch_size=128)
 
     # === Init Logger ===
