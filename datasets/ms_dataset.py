@@ -2,6 +2,7 @@ import torch, torch.nn as nn
 import pytorch_lightning as pl
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
+import pickle
 import os 
 import numpy as np
 
@@ -13,28 +14,26 @@ class MsDataset(Dataset):
     """
 
     def __init__(self, split="train"):
-        self.dir = "/workspace/data"
+        self.dir = "/workspace/data/ms_pretrain"
         assert(split in ["train", "val", "test"])
-        self.split = os.path.join(self.dir, split)
-        self.labels = os.path.join(self.split, "r3fingerprints")
-        self.ms = os.path.join(self.split, "spectra")
-        assert(os.path.exists(self.labels) and os.path.exists(self.ms))
-        self.ids = list(os.listdir(self.ms))
+        self.split_dir = os.path.join(self.dir, split+".pkl")
+        assert(os.path.exists(self.split_dir))
+        self.data = pickle.load(open(self.split_dir, "rb"))
+        self.ids = list(self.data.keys())
     
     def __len__(self):
         return len(self.ids)
 
     def __getitem__(self, idx):
-        ccmslid = self.ids[idx]
-        spectra = np.load(os.path.join(self.ms, ccmslid))
-        fingerprint = np.load(os.path.join(self.labels, ccmslid))
-        return spectra, fingerprint, ccmslid
+        sample_num = self.ids[idx]
+        spectra = self.data[sample_num]["MS"]
+        fingerprint = self.data[sample_num]["FP"]
+        return spectra, fingerprint
 
 def pad(batch):
-    ms, fp, ccmslid = zip(*batch)
-    fp = np.array(fp)
+    ms, fp = zip(*batch)
     ms = pad_sequence([torch.tensor(v, dtype=torch.float) for v in ms], batch_first=True)
-    return ms, torch.tensor(fp, dtype=torch.float), ccmslid
+    return ms, torch.tensor(fp, dtype=torch.float)
 
 class MsDataModule(pl.LightningDataModule):
     def __init__(self, batch_size: int = 32):
