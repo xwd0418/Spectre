@@ -37,6 +37,10 @@ class PositionalEncoder(torch.nn.Module):
             torch.arange(0, n_cos).float() / (n_cos - 1)
         )
 
+        if torch.cuda.is_available():
+            sin_term = sin_term.to('cuda')
+            cos_term = cos_term.to('cuda')
+
         self.register_buffer("sin_term", sin_term)
         self.register_buffer("cos_term", cos_term)
     
