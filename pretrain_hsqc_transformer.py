@@ -8,8 +8,8 @@ import logging, os, sys
 
 def main():
     parser = ArgumentParser(add_help=True)
-    parser.add_argument("--epochs", type=int, default=160)
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--epochs", type=int, default=220)
+    parser.add_argument("--lr", type=float, default=1e-5)
     args = vars(parser.parse_args())
 
     lr, epochs = args["lr"], args["epochs"]
