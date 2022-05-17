@@ -5,7 +5,7 @@ import logging
 
 class PairDataset(Dataset):
     def __init__(self, split="train"):
-        self.dir = "/workspace/smart4.0/tempdata"
+        self.dir = "/workspace/smart4.5/tempdata"
         self.split = split
         self.orig_hsqc = os.path.join(self.dir, "data")
         self.new_specs = os.path.join(self.dir, "new_specs_05_02_22")
