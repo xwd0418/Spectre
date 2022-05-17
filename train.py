@@ -16,7 +16,7 @@ def main():
     lr, epochs = args["lr"], args["epochs"]
 
     out_path = "/data/smart4.0"
-    path1, path2 = "lightning_logs", "poggers2"
+    path1, path2 = "lightning_logs", "pair"
 
     model = PairNet(n_layers = 4, n_head = 4)
     data_module = PairDataModule(batch_size=32)
