@@ -36,7 +36,7 @@ def main():
                                wavelength_bounds=[(None, 2000),(None, 1)])
 
     model = BaselineDoubleTransformer(lr, hsqc, spec, 1, 2048, .2, 6144)
-    data_module = PairDataModule(batch_size=128)
+    data_module = PairDataModule(batch_size=64)
 
     # === Init Logger ===
     logger = logging.getLogger("lightning")
