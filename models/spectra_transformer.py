@@ -66,17 +66,9 @@ class SpectraTransformer(pl.LightningModule):
 
         self.loss = nn.BCELoss()
         self.cos = nn.CosineSimilarity(dim=1)
-
-    def forward(self, spectra):
-        """The forward pass.
-        Parameters
-        ----------
-        spectra : torch.Tensor of shape (n_spectra, n_peaks, 2)
-            The spectra to embed. Axis 0 represents a mass spectrum, axis 1
-            contains the peaks in the mass spectrum, and axis 2 is essentially
-            a 2-tuple specifying the m/z-intensity pair for each peak. These
-            should be zero-padded, such that all of the spectra in the batch
-            are the same length.
+    
+    def encode(self, spectra):
+        """
         Returns
         -------
         latent : torch.Tensor of shape (n_spectra, n_peaks + 1, dim_model)
@@ -98,6 +90,20 @@ class SpectraTransformer(pl.LightningModule):
 
         peaks = torch.cat([latent_spectra, peaks], dim=1)
         out = self.transformer_encoder(peaks, src_key_padding_mask=mask)
+        return out
+
+    def forward(self, spectra):
+        """The forward pass.
+        Parameters
+        ----------
+        spectra : torch.Tensor of shape (n_spectra, n_peaks, 2)
+            The spectra to embed. Axis 0 represents a mass spectrum, axis 1
+            contains the peaks in the mass spectrum, and axis 2 is essentially
+            a 2-tuple specifying the m/z-intensity pair for each peak. These
+            should be zero-padded, such that all of the spectra in the batch
+            are the same length.
+        """
+        out = self.encode(spectra)
         out = self.fc(out[:,:1,:].squeeze(1))
         out = self.sigmoid(out)
         return out
