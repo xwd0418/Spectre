@@ -15,6 +15,10 @@ class BaselineDoubleTransformer(pl.LightningModule):
         The transformer for encoding HSQC
     spec_transformer : SpectraTransformer, optional
         The transformer for encoding Mass Spectra
+    num_hidden : int, optional
+        The number of hidden layers to use
+    fc_dim : int, optional
+        The dimensionality of the feedforward hidden layers
     out_dim : int, optional
         The final output dimensionality of the model
     """
@@ -23,6 +27,9 @@ class BaselineDoubleTransformer(pl.LightningModule):
             lr=1e-3,
             hsqc_transformer=HsqcTransformer(),
             spec_transformer=SpectraTransformer(),
+            num_hidden=0, 
+            fc_dim=128, 
+            dropout=0,
             out_dim=6144
         ):
 
@@ -30,7 +37,23 @@ class BaselineDoubleTransformer(pl.LightningModule):
         self.lr = lr
         self.hsqc = hsqc_transformer
         self.spec = spec_transformer 
-        self.fc = nn.Linear(self.hsqc.fc.in_features+self.spec.fc.in_features, out_dim)
+        total_emb_dim = self.hsqc.fc.in_features+self.spec.fc.in_features
+
+        if num_hidden > 0:
+            fc_layers = [nn.Linear(total_emb_dim, fc_dim), nn.ReLU(), nn.Dropout(dropout)]
+            for i in range(num_hidden):
+                fc_layers.append(nn.Linear(fc_dim, fc_dim))
+                fc_layers.append(nn.ReLU())
+                fc_layers.append(nn.Dropout(dropout))
+            fc_layers.append(nn.Linear(fc_dim, out_dim))
+            fc_layers.append(nn.Sigmoid())
+            self.fc = nn.Sequential(*fc_layers)
+        else:
+            self.fc = nn.Sequential(
+                nn.Linear(total_emb_dim, out_dim),
+                nn.sigmoid()
+            )
+
         self.loss = nn.BCELoss()
         self.cos = nn.CosineSimilarity(dim=1)
     
@@ -40,7 +63,7 @@ class BaselineDoubleTransformer(pl.LightningModule):
         hsqc_cls_encoding = hsqc_encodings[:,:1,:].squeeze(1)
         spec_cls_encoding = spec_encodings[:,:1,:].squeeze(1)
         out = torch.cat([hsqc_cls_encoding, spec_cls_encoding], dim=1)
-        out = torch.sigmoid(self.fc(out))
+        out = self.fc(out)
         return out
 
     def training_step(self, batch, batch_idx):
