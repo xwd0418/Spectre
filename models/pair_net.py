@@ -14,11 +14,10 @@ class PairNet(pl.LightningModule):
             n_layers=4, 
             dim_ff=512,
             dropout=0,
-            out_dim=6144,
             lr = 1e-4
         ):
         super().__init__()
-        
+        self.save_hyperparameters()
         self.ms = MassSpecEncoder(dim_model, dim_intensity, n_head, n_layers, dim_ff, dropout, lr)
         self.proj = nn.Conv2d(2, 3, 1)
         self.features = models.resnet50(pretrained=False)
