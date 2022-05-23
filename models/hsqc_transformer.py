@@ -48,7 +48,7 @@ class HsqcTransformer(pl.LightningModule):
         self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         self.fc = nn.Linear(dim_model, out_dim)
         self.sigmoid = nn.Sigmoid()
-        self.latent= torch.nn.Parameter(torch.randn(1, 1, dim_model))
+        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
 
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
@@ -66,22 +66,14 @@ class HsqcTransformer(pl.LightningModule):
 
         self.loss = nn.BCELoss()
         self.cos = nn.CosineSimilarity(dim=1)
-
-    def forward(self, hsqc):
-        """The forward pass.
-        Parameters
-        ----------
-        hsqc: torch.Tensor of shape (batch_size, n_points, 3)
-            The hsqc to embed. Axis 0 represents an hsqc, axis 1
-            contains the coordinates in the hsqc, and axis 2 is essentially is
-            a 3-tuple specifying the coordinate's x, y, and z value. These
-            should be zero-padded, such that all of the hsqc in the batch
-            are the same length.
+    
+    def encode(self, hsqc):
+        """
         Returns
         -------
-        latent : torch.Tensor of shape (batch_size, n_points + 1, dim_model)
-            The latent representations for the hsqc and each of its
-            points. 
+        latent : torch.Tensor of shape (n_spectra, n_peaks + 1, dim_model)
+            The latent representations for the spectrum and each of its
+            peaks.
         mem_mask : torch.Tensor
             The memory mask specifying which elements were padding in X.
         """
@@ -98,6 +90,20 @@ class HsqcTransformer(pl.LightningModule):
 
         points = torch.cat([latent, points], dim=1)
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
+        return out
+
+    def forward(self, hsqc):
+        """The forward pass.
+        Parameters
+        ----------
+        hsqc: torch.Tensor of shape (batch_size, n_points, 3)
+            The hsqc to embed. Axis 0 represents an hsqc, axis 1
+            contains the coordinates in the hsqc, and axis 2 is essentially is
+            a 3-tuple specifying the coordinate's x, y, and z value. These
+            should be zero-padded, such that all of the hsqc in the batch
+            are the same length.
+        """
+        out = self.encode(hsqc)
         out = self.fc(out[:,:1,:].squeeze(1))
         out = self.sigmoid(out)
         return out
