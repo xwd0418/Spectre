@@ -1,10 +1,11 @@
 import pytorch_lightning as pl
-import torch, torch.nn as nn, torch.nn.functional as F
-from models import SpectraTransformer, HsqcTransformer
+import torch, torch.nn as nn 
+from models.spectra_transformer import SpectraTransformer 
+from models.hsqc_transformer import HsqcTransformer
 from sklearn.metrics import f1_score  
 import numpy as np
 
-class baseline_double_transformer(pl.LightningModule):
+class BaselineDoubleTransformer(pl.LightningModule):
     """ A baseline implementation of both hsqc and ms transformers
     Parameters
     ----------
@@ -25,10 +26,11 @@ class baseline_double_transformer(pl.LightningModule):
             out_dim=6144
         ):
 
+        super().__init__()
         self.lr = lr
         self.hsqc = hsqc_transformer
         self.spec = spec_transformer 
-        self.fc = nn.Linear(self.hsqc.dim_model+self.spec.dim_model, out_dim)
+        self.fc = nn.Linear(self.hsqc.fc.in_features+self.spec.fc.in_features, out_dim)
         self.loss = nn.BCELoss()
         self.cos = nn.CosineSimilarity(dim=1)
     
@@ -37,12 +39,8 @@ class baseline_double_transformer(pl.LightningModule):
         spec_encodings = self.spec.encode(ms)
         hsqc_cls_encoding = hsqc_encodings[:,:1,:].squeeze(1)
         spec_cls_encoding = spec_encodings[:,:1,:].squeeze(1)
-        # TODO: make sure cat dimensionality is correct, not in batch dim
-        print(spec_cls_encoding.shape)
-        print(hsqc_cls_encoding.shape)
-        out = torch.cat([hsqc_cls_encoding, spec_cls_encoding])
-        print(out.shape)
-        out = F.sigmoid(self.fc(out))
+        out = torch.cat([hsqc_cls_encoding, spec_cls_encoding], dim=1)
+        out = torch.sigmoid(self.fc(out))
         return out
 
     def training_step(self, batch, batch_idx):
@@ -86,7 +84,7 @@ class baseline_double_transformer(pl.LightningModule):
         labels = fp.cpu()
         f1 = f1_score(predicted.flatten(), labels.flatten())
         self.log("test/f1", np.mean(f1))
-        return loss
+        return {"test_loss":loss, "test_f1":f1}
         
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)

@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-import torch, torch.nn as nn, torch.nn.functional as F
+import torch, torch.nn as nn
 from encoder import CoordinateEncoder
 from sklearn.metrics import f1_score  
 import numpy as np
@@ -104,7 +104,7 @@ class SpectraTransformer(pl.LightningModule):
             are the same length.
         """
         out = self.encode(spectra)
-        out = F.sigmoid(self.fc(out[:,:1,:].squeeze(1)))
+        out = torch.sigmoid(self.fc(out[:,:1,:].squeeze(1)))
         return out
     
     def training_step(self, batch, batch_idx):
