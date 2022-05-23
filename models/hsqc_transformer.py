@@ -1,5 +1,5 @@
 import pytorch_lightning as pl
-import torch, torch.nn as nn
+import torch, torch.nn as nn, torch.nn.functional as F
 from encoder import CoordinateEncoder
 from sklearn.metrics import f1_score  
 import numpy as np
@@ -47,7 +47,6 @@ class HsqcTransformer(pl.LightningModule):
         self.lr = lr
         self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         self.fc = nn.Linear(dim_model, out_dim)
-        self.sigmoid = nn.Sigmoid()
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
 
         # The Transformer layers:
@@ -104,8 +103,7 @@ class HsqcTransformer(pl.LightningModule):
             are the same length.
         """
         out = self.encode(hsqc)
-        out = self.fc(out[:,:1,:].squeeze(1))
-        out = self.sigmoid(out)
+        out = F.sigmoid(self.fc(out[:,:1,:].squeeze(1)))
         return out
     
     def training_step(self, batch, batch_idx):
