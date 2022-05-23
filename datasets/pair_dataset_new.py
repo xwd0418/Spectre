@@ -36,7 +36,7 @@ def pad(batch):
     ms = pad_sequence([torch.tensor(v, dtype=torch.float) for v in ms], batch_first=True)
     return hsqc, ms, torch.tensor(np.array(fp), dtype=torch.float)
 
-class HsqcDataModule(pl.LightningDataModule):
+class PairDataModule(pl.LightningDataModule):
     def __init__(self, batch_size: int = 32):
         super().__init__()
         self.batch_size = batch_size
