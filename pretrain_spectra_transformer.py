@@ -8,21 +8,21 @@ import logging, os, sys
 
 def main():
     parser = ArgumentParser(add_help=True)
-    parser.add_argument("--epochs", type=int, default=160)
+    parser.add_argument("--epochs", type=int, default=250)
     parser.add_argument("--lr", type=float, default=1e-5)
     args = vars(parser.parse_args())
 
     lr, epochs = args["lr"], args["epochs"]
 
     out_path = "/workspace/volume/tensorboard"
-    path1, path2 = "lightning_logs", "SpectraTransformerDropout0.1"
+    path1, path2 = "lightning_logs", "SpectraTransformerDropout0"
 
     model = SpectraTransformer(lr=lr,
                                dim_model=1024,
                                dim_coords=(512,512),
                                n_heads=8,
                                n_layers=3,
-                               dropout=.1,
+                            #    dropout=.1,
                                wavelength_bounds=[(None, 2000),(None, 1)])
     data_module = MsDataModule(batch_size=128)
 
