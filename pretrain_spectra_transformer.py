@@ -15,7 +15,7 @@ def main():
     lr, epochs = args["lr"], args["epochs"]
 
     out_path = "/workspace/volume/tensorboard"
-    path1, path2 = "lightning_logs", "SpectraTransformer"
+    path1, path2 = "lightning_logs", "SpectraTransformerDropout0.1"
 
     model = SpectraTransformer(lr=lr,
                                dim_model=1024,
