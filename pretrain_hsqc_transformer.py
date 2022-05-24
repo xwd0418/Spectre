@@ -22,7 +22,7 @@ def main():
                             dim_coords=(342,341,341),
                             n_heads=8,
                             n_layers=3,
-                            dropout=.2,
+                            dropout=.3,
                             wavelength_bounds=[(None, 150),(None, 10),(None,20000)])
     data_module = HsqcDataModule(batch_size=128)
 
