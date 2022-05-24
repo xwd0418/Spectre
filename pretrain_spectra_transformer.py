@@ -22,6 +22,7 @@ def main():
                                dim_coords=(512,512),
                                n_heads=8,
                                n_layers=3,
+                               dropout=.2,
                                wavelength_bounds=[(None, 2000),(None, 1)])
     data_module = MsDataModule(batch_size=128)
 
