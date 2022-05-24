@@ -24,7 +24,7 @@ def main():
                             dim_coords=(342,341,341),
                             n_heads=8,
                             n_layers=3,
-                            dropout=.2,
+                            dropout=.3,
                             wavelength_bounds=[(None, 150),(None, 10),(None,20000)])
 
     spec = SpectraTransformer(lr=lr,
@@ -32,10 +32,10 @@ def main():
                                dim_coords=(512,512),
                                n_heads=8,
                                n_layers=3,
-                               dropout=.2,
+                               dropout=.3,
                                wavelength_bounds=[(None, 2000),(None, 1)])
 
-    model = BaselineDoubleTransformer(lr, hsqc, spec, 1, 2048, .2, 6144)
+    model = BaselineDoubleTransformer(lr, hsqc, spec, 1, 2048, .3, 6144)
     data_module = PairDataModule(batch_size=64)
 
     # === Init Logger ===

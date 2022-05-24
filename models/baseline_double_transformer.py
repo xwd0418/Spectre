@@ -19,6 +19,8 @@ class BaselineDoubleTransformer(pl.LightningModule):
         The number of hidden layers to use
     fc_dim : int, optional
         The dimensionality of the feedforward hidden layers
+    dropout : float, optiona
+        The dropout probability
     out_dim : int, optional
         The final output dimensionality of the model
     """
