@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--dim_model", type=int, default=1024)
     parser.add_argument("--dim_mz", type=int, default=512)
     parser.add_argument("--dim_intensity", type=int, default=512)
+    parser.add_argument("--dim_feedforward", type=int, default=1024)
     parser.add_argument("--n_heads", type=int, default=8)
     parser.add_argument("--n_layers", type=int, default=4)
     parser.add_argument("--dropout", type=float, default=.1)
@@ -33,6 +34,7 @@ def main():
     model = SpectraTransformer(lr=lr,
                                dim_model=args["dim_model"], 
                                dim_coords=dim_coords,
+                               dim_feedforward=args["dim_feedforward"],
                                n_heads=args["n_heads"],
                                n_layers=args["n_layers"],
                                dropout=args["dropout"],
