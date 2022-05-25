@@ -34,8 +34,8 @@ class BaselineDoubleTransformer(pl.LightningModule):
             dropout=0,
             out_dim=6144
         ):
-
         super().__init__()
+        self.save_hyperparameters()
         self.lr = lr
         self.hsqc = hsqc_transformer
         self.spec = spec_transformer 
