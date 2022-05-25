@@ -8,6 +8,7 @@ import logging, os, sys
 
 def main():
     parser = ArgumentParser(add_help=True)
+    parser.add_argument("--logdir", type=str, default="/workspace/volume/tensorboard")
     parser.add_argument("--epochs", type=int, default=250)
     parser.add_argument("--lr", type=float, default=1e-5)
     parser.add_argument("--dim_model", type=int, default=1024)
@@ -23,7 +24,7 @@ def main():
     lr, epochs = args["lr"], args["epochs"]
     dim_coords = (args["dim_mz"], args["dim_intensity"])
 
-    out_path = "/workspace/volume/tensorboard"
+    out_path = args["logdir"]
     path1 = "SpectraTransformer"
     os.makedirs(os.path.join(out_path, path1), exist_ok=True)
     path2 = str(len(os.listdir(os.path.join(out_path, path1))))
