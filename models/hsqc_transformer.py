@@ -44,6 +44,7 @@ class HsqcTransformer(pl.LightningModule):
             out_dim=6144
         ):
         super().__init__()
+        self.save_hyperparameters()
         self.lr = lr
         self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         self.fc = nn.Linear(dim_model, out_dim)
