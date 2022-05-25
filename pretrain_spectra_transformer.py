@@ -59,7 +59,7 @@ def main():
     trainer = pl.Trainer(max_epochs=epochs, gpus=1, logger=tbl, callbacks=[checkpoint_cb, earlystop_cb])
     trainer.fit(model, data_module)
     results = trainer.test(model, data_module)
-    logger.info(f"Test Cosine Similarity: {results[0]["test/cosine_sim"]}\nTest F1 Score: {results[0]["test/f1"]}\nTest Loss: {results[0]["test/loss"]}")
+    logger.info(f'Test Cosine Similarity: {results[0]["test/cosine_sim"]}\nTest F1 Score: {results[0]["test/f1"]}\nTest Loss: {results[0]["test/loss"]}')
 
 if __name__ == '__main__':
     main()
