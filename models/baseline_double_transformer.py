@@ -70,6 +70,9 @@ class BaselineDoubleTransformer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         hsqc, ms, fp = batch
+        print(fp.shape)
+        print(ms.shape)
+        print(hsqc.shape)
         out = self.forward(hsqc, ms)
         loss = self.loss(out, fp)
         self.log("tr/loss", loss)
@@ -103,6 +106,16 @@ class BaselineDoubleTransformer(pl.LightningModule):
         # cosine similarity
         cos = self.cos(fp, predicted)
         self.log("test/cosine_sim", torch.mean(cos).item())
+
+        # TODO: get rid of above test cosine sim (redundant computation)
+        dots = torch.matmul(fp, out.T)
+        truenorms = torch.norm(fp, dim=1).unsqueeze(0).T
+        prednorms = torch.norm(out, dim=1).unsqueeze(0)
+        norms = torch.matmul(truenorms, prednorms)
+        cossims = (dots/norms) 
+        # the number of elements that have higher cossine sim to true sample
+        torch.sum(cossims > cossims.diagonal()) # TODO: double check that cossims > diag computed correctly
+        # TODO: average or accumulate this sum somehow and record per epoch
 
         # f1 score
         predicted = predicted.cpu()
