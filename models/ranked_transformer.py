@@ -3,8 +3,7 @@ import torch, torch.nn as nn
 from encoder import CoordinateEncoder
 from utils import ranker
 from sklearn.metrics import f1_score  
-import numpy as np
-
+import numpy as np, os
 
 class HsqcRankedTransformer(pl.LightningModule):
     """A Transformer encoder for input HSQC.
@@ -52,6 +51,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.fc = nn.Linear(dim_model, out_dim)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
 
+        assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt"))
         self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt")
         
         # The Transformer layers:
@@ -108,7 +108,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             are the same length.
         """
         out = self.encode(hsqc)
-        out = torch.sigmoid(self.fc(out[:,:1,:].squeeze(1)))
+        out = torch.sigmoid(self.fc(out[:,:1,:].squeeze(1))) # extracts cls token
         return out
     
     def training_step(self, batch, batch_idx):
@@ -124,29 +124,27 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
 
         loss = self.loss(out, labels)
-        self.log("val/loss", loss)
 
         predicted = (out >= 0.5)
         # cosine similarity
         cos = self.cos(labels, predicted)
         self.log("val/cosine_sim", torch.mean(cos).item())
 
+        # active bits
+        active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
+
         # f1 score
         predicted = predicted.cpu()
         labels = labels.cpu()
         f1 = f1_score(predicted.flatten(), labels.flatten())
-        self.log("val/f1", np.mean(f1))
 
         # ranking f1
         predicted = predicted.type(torch.FloatTensor)
         rank_res = self.ranker.batched_rank(predicted, labels)
         cts = [1, 5, 10]
         ranks = {f"rank_{allow}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
-
-        rank_res = self.ranker.batched_rank(predicted, labels)
-        cts = [1, 5, 10]
-        ranks = {f"rank_{allow}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
-        return {"ce_loss": loss.item(), "cos": torch.mean(cos).item(), "f1": np.mean(f1), **ranks}
+        return {"ce_loss": loss.item(), "cos": torch.mean(cos).item(), 
+            "f1": np.mean(f1), "perc_active_bits": active.item(), **ranks}
 
     def validation_epoch_end(self, validation_step_outputs):
         feats = validation_step_outputs[0].keys()

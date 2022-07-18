@@ -17,6 +17,9 @@ reconcile diverging workflows between colin and james.
         UPDATE TO NOT BE VOLUME SPECIFIC  
     - pair_dataset: dataset for james' work with HSQC images + MS  
         SHOULD BE RENAMED TO DIFFERENTIATE HSQC COORDS VS IMAGES   
+    - hsqc_folder_dataset.py: A dataset written by James (July 2022)
+        - Should be able to read any arbitrary dataset with pytorch data
+        - Only works as long as dataset is created using the example in ./notebooks/dataset_building/colin_data_preprocessor.ipynb
 
 - models:
     - baseline_double_transformer: hsqc+fc transformers CLS embedding -> fc layer
@@ -33,9 +36,11 @@ reconcile diverging workflows between colin and james.
     - A bunch of scratch work to test that everything works fine,  
     upon release, should only be notebooks useful for visualization (cleaned up),  
     and rest should be delted  
+    - ranked_transformer.py
+        - Colin's transformer with the ranking f1-score code
 
 - scripts:
-    - James' run initialization scripts, should probably put these in volume instead
+    - pull_dataset.sh: pulls a dataset from a persistent volume with data stored at /data/data
 
 - encoder: encoders to generate positional encodings for n-dimensional coordinates   
     (adapted from depthcharge to generalize to n-dimensions)  

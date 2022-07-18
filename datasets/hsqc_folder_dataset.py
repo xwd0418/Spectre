@@ -3,6 +3,19 @@ from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
 
 class HSQCFolderDataset(Dataset):
+    '''
+        Creates a folder-based dataset. Assumes that folder has the following structure: 
+
+        {dir}/{[train, val, or test]}/HSQC
+        - 0.pt
+        - 1.pt
+        - ...
+
+        {dir}/{[train, val, or test]}/{FP | HYUN_FP}
+        - 0.pt
+        - 1.pt
+        - ...
+    '''
     def __init__(self, dir="/workspace/smart4.5/tempdata/hyun_fp_data/hsqc_ms_pairs", split="train", do_hyun_fp=True):
         self.dir = os.path.join(dir, split)
         self.split = split
