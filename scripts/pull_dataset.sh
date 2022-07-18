@@ -12,5 +12,6 @@ if [ -f "$FILE" ]; then
     echo "Done Copying $FILE"
     exit 0
 else
+    echo "File $FILE does not exist in /data/data"
     exit 1
 fi

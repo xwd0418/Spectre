@@ -11,7 +11,7 @@ import logging, os, sys
 def main():
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
-    parser.add_argument("--epochs", type=int, default=80)
+    parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--lr", type=float, default=1e-5)
     args = vars(parser.parse_args())
 
@@ -20,7 +20,7 @@ def main():
     out_path = "/data/smart4.5"
     path1, path2 = "lightning_logs", "hsqc_only_ranked"
 
-    model = HsqcRankedTransformer(lr=lr)
+    model = HsqcRankedTransformer(lr=lr, n_layers=4, n_heads=4, dim_coords=(56, 56, 12))
     data_module = HsqcDataModule(batch_size=64)
 
     # === Init Logger ===
