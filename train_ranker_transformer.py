@@ -20,7 +20,7 @@ def main():
     out_path = "/data/smart4.5"
     path1, path2 = "lightning_logs", "hsqc_only_ranked"
 
-    model = HsqcRankedTransformer(lr=lr, n_layers=4, n_heads=4, dim_coords=(56, 56, 12))
+    model = HsqcRankedTransformer(lr=lr, n_layers=4, n_heads=4, dim_coords=(56, 56, 16))
     data_module = HsqcDataModule(batch_size=64)
 
     # === Init Logger ===
