@@ -1,7 +1,7 @@
 import torch, pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 from argparse import ArgumentParser
-
+from functools import reduce
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from models.ranked_transformer import HsqcRankedTransformer
@@ -20,15 +20,29 @@ def main():
     parser = ArgumentParser(add_help=True)
     parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--lr", type=float, default=1e-5)
-    parser.add_argument("--expname", type=str, default=f"experiment_{get_curr_time()}")
+
+    parser.add_argument("--layers", type=int, default=4)
+    parser.add_argument("--heads", type=int, default=4)
+    parser.add_argument("--modeldim", type=int, default=128)
+    parser.add_argument("--dropout", type=float, default=0.0)
+    parser.add_argument("--dimsplit", type=str, default="56:56:16")
+
+    parser.add_argument("--expname", type=str, default=f"experiment")
     args = vars(parser.parse_args())
 
-    lr, epochs = args["lr"], args["epochs"]
+    lr, epochs, expname = args["lr"], args["epochs"], args["expname"]
+    layers, heads = args["layers"], args["heads"]
+    modeldim, dropout, dimsplit = args["modeldim"], args["dropout"], args["dimsplit"]
+
+    dimsplit=tuple([int(v) for v in dimsplit.split(":")])
+    assert(sum(dimsplit)==modeldim)
+
+    hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in list(args.items())]))
 
     out_path = "/data/smart4.5"
-    path1, path2 = "lightning_logs", f"hsqc_only_ranked_4layers_4heads_{get_curr_time()}"
+    path1, path2 = "lightning_logs", f"{expname}_{hyparam_string}_{get_curr_time()}"
 
-    model = HsqcRankedTransformer(lr=lr, n_layers=4, n_heads=4, dim_coords=(56, 56, 16))
+    model = HsqcRankedTransformer(lr=lr, n_layers=layers, n_heads=heads, dim_model=modeldim, dropout=dropout, dim_coords=dimsplit)
     data_module = HsqcDataModule(batch_size=64)
 
     # === Init Logger ===
