@@ -165,12 +165,30 @@ class HsqcRankedTransformer(pl.LightningModule):
         cos = self.cos(labels, predicted)
         self.log("test/cosine_sim", torch.mean(cos).item())
 
+        # active bits
+        active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
+
         # f1 score
         predicted = predicted.cpu()
         labels = labels.cpu()
         f1 = np.mean(f1_score(predicted.flatten(), labels.flatten()))
         self.log("test/f1", f1)
-        return {"test_loss":loss, "test_f1":f1}
+
+        # ranking f1
+        predicted = predicted.type(torch.FloatTensor)
+        rank_res = self.ranker.batched_rank(predicted, labels)
+        cts = [1, 5, 10]
+        ranks = {f"rank_{allow}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
+        return {"test_loss": loss.item(), "test_cos": torch.mean(cos).item(), 
+            "test_f1": np.mean(f1), "perc_active_bits": active.item(), **ranks}
+
+    def test_step_end(self, test_step_outputs):
+        feats = validation_step_outputs[0].keys()
+        di = {}
+        for feat in feats:
+            di[f"test/mean_{feat}"] = np.mean([v[feat] for v in validation_step_outputs])
+        for k,v in di.items():
+            self.log(k, v)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
