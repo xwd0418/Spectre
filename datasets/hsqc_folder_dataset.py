@@ -54,7 +54,7 @@ class HsqcDataModule(pl.LightningDataModule):
             raise NotImplementedError("Predict setup not implemented")
 
     def train_dataloader(self):
-        return DataLoader(self.train, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=4)
+        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=4)
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=4)

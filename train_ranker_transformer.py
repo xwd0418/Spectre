@@ -28,19 +28,24 @@ def main():
     parser.add_argument("--dimsplit", type=str, default="56:56:16")
 
     parser.add_argument("--expname", type=str, default=f"experiment")
+    parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     args = vars(parser.parse_args())
 
-    lr, epochs, expname = args["lr"], args["epochs"], args["expname"]
+    lr, epochs, expname, foldername = args["lr"], args["epochs"], args["expname"], args["foldername"]
     layers, heads = args["layers"], args["heads"]
     modeldim, dropout, dimsplit = args["modeldim"], args["dropout"], args["dimsplit"]
 
     dimsplit=tuple([int(v) for v in dimsplit.split(":")])
     assert(sum(dimsplit)==modeldim)
 
-    hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in list(args.items())]))
+    del args["expname"]
+    del args["foldername"]
+    li_args = list(args.items())
 
+    hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in li_args])
+    print("Experiment", hyparam_string)
     out_path = "/data/smart4.5"
-    path1, path2 = "lightning_logs", f"{expname}_{hyparam_string}_{get_curr_time()}"
+    path1, path2 = foldername, f"{expname}_{hyparam_string}_{get_curr_time()}"
 
     model = HsqcRankedTransformer(lr=lr, n_layers=layers, n_heads=heads, dim_model=modeldim, dropout=dropout, dim_coords=dimsplit)
     data_module = HsqcDataModule(batch_size=64)
