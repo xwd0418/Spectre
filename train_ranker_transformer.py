@@ -5,7 +5,7 @@ from functools import reduce
 from pytorch_lightning.loggers import TensorBoardLogger
 
 from models.ranked_transformer import HsqcRankedTransformer
-from datasets.hsqc_folder_dataset import HsqcDataModule
+from datasets.hsqc_folder_dataset import FolderDataModule
 import logging, os, sys
 from datetime import datetime
 from pytz import timezone
@@ -48,7 +48,8 @@ def main():
     path1, path2 = foldername, f"{expname}_{hyparam_string}_{get_curr_time()}"
 
     model = HsqcRankedTransformer(lr=lr, n_layers=layers, n_heads=heads, dim_model=modeldim, dropout=dropout, dim_coords=dimsplit)
-    data_module = HsqcDataModule(batch_size=64)
+    my_dir = "/workspace/smart4.5/tempdata/hyun_fp_data/hsqc_ms_pairs"
+    data_module = FolderDataModule(dir=my_dir, do_hyun_fp=True, input_src="MS", batch_size=64)
 
     # === Init Logger ===
     logger = logging.getLogger("lightning")
