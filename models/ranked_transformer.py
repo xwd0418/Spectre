@@ -183,10 +183,10 @@ class HsqcRankedTransformer(pl.LightningModule):
             "test_f1": np.mean(f1), "perc_active_bits": active.item(), **ranks}
 
     def test_step_end(self, test_step_outputs):
-        feats = validation_step_outputs[0].keys()
+        feats = test_step_outputs[0].keys()
         di = {}
         for feat in feats:
-            di[f"test/mean_{feat}"] = np.mean([v[feat] for v in validation_step_outputs])
+            di[f"test/mean_{feat}"] = np.mean([v[feat] for v in test_step_outputs])
         for k,v in di.items():
             self.log(k, v)
 
