@@ -26,3 +26,9 @@ def FP_generator(SMILES,radi): # radi is radius for morgan fingerprint
         for i in bits:
             binary[(2048*r)+i] = 1
     return binary
+
+def canonical(SMILES):
+    from rdkit import Chem
+    mol = Chem.MolFromSmiles(SMILES)
+    smiles = Chem.MolToSmiles(mol, False) if mol is not None else None
+    return smiles
