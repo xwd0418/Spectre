@@ -2,7 +2,7 @@ import pytorch_lightning as pl
 import torch, torch.nn as nn
 from encoder import CoordinateEncoder
 from utils import ranker
-from sklearn.metrics import f1_score  
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np, os
 
 class HsqcRankedTransformer(pl.LightningModule):
@@ -36,23 +36,31 @@ class HsqcRankedTransformer(pl.LightningModule):
             self,
             lr=1e-3,
             dim_model=128,
-            dim_coords=(43,43,42),
+            dim_coords="43,43,42",
             n_heads=8,
             dim_feedforward=1024,
             n_layers=1,
             wavelength_bounds=None,
             dropout=0,
-            out_dim=6144
+            out_dim=6144,
+            save_params=True,
+            **kwargs
         ):
         super().__init__()
-        self.save_hyperparameters()
+        if save_params:
+            self.save_hyperparameters("lr", "dim_model", "dim_coords", "n_heads", "dim_feedforward", 
+                "n_layers", "wavelength_bounds", "dropout", "out_dim")
+            self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt")
+        dim_coords = tuple([int(v) for v in dim_coords.split(",")])
+        assert(sum(dim_coords)==dim_model)
+
         self.lr = lr
         self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         self.fc = nn.Linear(dim_model, out_dim)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
 
         assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt"))
-        self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt")
+        
         
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
@@ -71,6 +79,25 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.loss = nn.BCELoss()
         self.cos = nn.CosineSimilarity(dim=1)
     
+    @staticmethod
+    def add_model_specific_args(parent_parser, model_name=""):
+        parser = parent_parser.add_argument_group(model_name)
+        parser.add_argument(f"--{model_name}_lr", type=float, default=1e-3)
+        parser.add_argument(f"--{model_name}_dim_model", type=int, default=128)
+        parser.add_argument(f"--{model_name}_dim_coords", type=str, default="43,43,42")
+        parser.add_argument(f"--{model_name}_heads", type=int, default=8)
+        parser.add_argument(f"--{model_name}_layers", type=int, default=8)
+        parser.add_argument(f"--{model_name}_ff_dim", type=int, default=1024)
+        parser.add_argument(f"--{model_name}_wavelength_bounds", type=int, default=None)
+        parser.add_argument(f"--{model_name}_dropout", type=float, default=0)
+        parser.add_argument(f"--{model_name}_out_dim", type=int, default=6144)
+        return parent_parser
+    
+    @staticmethod
+    def prune_args(vals: dict, model_name=""):
+        items = [(k[len(model_name)+1:],v) for k,v in vals.items() if k.startswith(model_name)]
+        return dict(items)
+
     def encode(self, hsqc):
         """
         Returns
@@ -128,7 +155,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         predicted = (out >= 0.5)
         # cosine similarity
         cos = self.cos(labels, predicted)
-        self.log("val/cosine_sim", torch.mean(cos).item())
 
         # active bits
         active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
