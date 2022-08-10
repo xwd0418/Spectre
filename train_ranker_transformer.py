@@ -15,39 +15,30 @@ def get_curr_time():
     california_time = datetime.now(pst)
     return california_time.strftime("%m_%d_%Y_%H:%M")
 
-def data_mux(parser, model_type, do_hyun_fp, input_src, batch_size):
-    my_dir = "/workspace/smart4.5/tempdata/hyun_fp_data/hsqc_ms_pairs"
-    return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=input_src, batch_size=batch_size)
+def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size):
+    my_dir = f"/workspace/smart4.5/tempdata/hyun_fp_data/{data_src}"
+    if model_type == "double_transformer":
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size)
+    elif model_type == "hsqc_transformer":
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
+    elif model_type == "ms_transformer":
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size)
+    raise(f"No datamodule for model type {model_type}.")
 
-def register_parsers(parser):
-    sub = parser.add_subparsers(help="Sub-commands help")
-
-    dbl_tnsfm = sub.add_parser("double_transformer", help="Train a model")
-    DoubleTransformer.add_model_specific_args(dbl_tnsfm)
-    HsqcRankedTransformer.add_model_specific_args(dbl_tnsfm, "hsqc")
-    HsqcRankedTransformer.add_model_specific_args(dbl_tnsfm, "ms")
-
-    return sub
 
 def model_mux(parser, model_type):
     if model_type == "hsqc_transformer" or model_type == "ms_transformer":
         HsqcRankedTransformer.add_model_specific_args(parser)
         args = vars(parser.parse_args())
-        return HsqcRankedTransformer(*args) 
+        return HsqcRankedTransformer(**args) 
     elif model_type == "double_transformer":
         DoubleTransformer.add_model_specific_args(parser)
-        HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
-        HsqcRankedTransformer.add_model_specific_args(parser, "ms")
-        hsqc = HsqcRankedTransformer.prune_args(vars(parser.parse_args()), "hsqc")
-        hsqc_transformer = HsqcRankedTransformer(**hsqc)
-        ms = HsqcRankedTransformer.prune_args(vars(parser.parse_args()), "ms")
-        ms_transformer = HsqcRankedTransformer(**ms)
-        print("hsqc_args", hsqc)
-        print("ms_args", ms)
         kwargs = vars(parser.parse_args())
-        return DoubleTransformer(hsqc_transformer=hsqc_transformer, spec_transformer=ms_transformer, **kwargs) 
-    else:
-        raise(f"Model {model_type} does not exist")
+        eliminate = ["modelname", "debug", "epochs", "expname", "foldername", "datasrc", "inputs", "bs"]
+        for v in eliminate:
+            del kwargs[v]
+        return DoubleTransformer(**kwargs) 
+    raise(f"No model for model type {model_type}.")
 
 def init_logger(out_path, path1, path2):
     logger = logging.getLogger("lightning")
@@ -68,23 +59,28 @@ def main():
     parser = ArgumentParser(add_help=True)
 
     parser.add_argument("modelname", type=str)
+    parser.add_argument("--debug", type=bool, default=False)
     parser.add_argument("--epochs", type=int, default=120)
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
+    parser.add_argument("--datasrc", type=str, default=f"hsqc_ms_pairs")
+    parser.add_argument("--bs", type=int, default=64)
+    exclude = ["modelname", "debug", "expname", "foldername", "datasrc"] + ["hsqc_weights", "ms_weights"]
     args, _ = parser.parse_known_args()
     args = vars(args)
 
     model = model_mux(parser, args["modelname"])
-    data_module = data_mux(parser, args["modelname"], True, ["HSQC", "MS"], 64)
+    data_module = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
     print(parser.parse_args())
 
     li_args = list(args.items())
-    hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in li_args if hyparam not in ["modelname", "expname", "foldername"]])
+    hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in li_args if hyparam not in exclude])
     out_path = "/data/smart4.5"
-    path1, path2 = args["foldername"], f"{args['expname']}_{get_curr_time()}_{hyparam_string}"
+    path1, path2 = args["foldername"], args["expname"] if args["debug"] else f"{args['expname']}_{get_curr_time()}_{hyparam_string}"
 
     logger = init_logger(out_path, path1, path2)
-    logger.info(hyparam_string)
+    logger.info(f'path: {out_path}/{path1}/{path2}')
+    logger.info(f'hparam: {hyparam_string}')
     logger.info(li_args)
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)

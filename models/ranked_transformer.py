@@ -37,20 +37,23 @@ class HsqcRankedTransformer(pl.LightningModule):
             lr=1e-3,
             dim_model=128,
             dim_coords="43,43,42",
-            n_heads=8,
-            dim_feedforward=1024,
-            n_layers=1,
+            heads=8,
+            layers=1,
+            ff_dim=1024,
             wavelength_bounds=None,
             dropout=0,
             out_dim=6144,
             save_params=True,
-            **kwargs
+            module_only=False,
+            **kwargs,
         ):
         super().__init__()
         if save_params:
-            self.save_hyperparameters("lr", "dim_model", "dim_coords", "n_heads", "dim_feedforward", 
-                "n_layers", "wavelength_bounds", "dropout", "out_dim")
-            self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt")
+            self.save_hyperparameters(ignore=["save_params", "module_only"])
+        if not module_only:
+            self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
+            assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
+        
         dim_coords = tuple([int(v) for v in dim_coords.split(",")])
         assert(sum(dim_coords)==dim_model)
 
@@ -59,21 +62,18 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.fc = nn.Linear(dim_model, out_dim)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
 
-        assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt"))
-        
-        
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
             d_model=dim_model,
-            nhead=n_heads,
-            dim_feedforward=dim_feedforward,
+            nhead=heads,
+            dim_feedforward=ff_dim,
             batch_first=True,
             dropout=dropout,
         )
 
         self.transformer_encoder = torch.nn.TransformerEncoder(
             layer,
-            num_layers=n_layers,
+            num_layers=layers,
         )
 
         self.loss = nn.BCELoss()

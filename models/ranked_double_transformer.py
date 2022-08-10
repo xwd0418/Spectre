@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
-import torch, torch.nn as nn 
+import torch, torch.nn as nn
+from models.ranked_transformer import HsqcRankedTransformer 
 from models.spectra_transformer import SpectraTransformer 
 from models.hsqc_transformer import HsqcTransformer
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
@@ -27,24 +28,43 @@ class DoubleTransformer(pl.LightningModule):
     """
     def __init__(
             self,
-            hsqc_transformer,
-            spec_transformer,
             lr=1e-3,
             num_hidden=0, 
             fc_dim=128, 
             dropout=0,
             out_dim=6144,
             ranking_sets={
-                "hyunfp_pair_test": "./tempdata/hyun_pair_ranking_set_07_22/test_pair.pt",
-                "hyunfp_pair_all": "./tempdata/hyun_pair_ranking_set_07_22/all_pair.pt"
+                "editfp_val": "./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt",
             },
+            ms_dim_model=128,
+            ms_dim_coords="43,43,42",
+            ms_heads=8,
+            ms_layers=1,
+            ms_ff_dim=1024,
+            ms_wavelength_bounds=None,
+            ms_dropout=0,
+            ms_out_dim=6144,
+            hsqc_dim_model=128,
+            hsqc_dim_coords="43,43,42",
+            hsqc_heads=8,
+            hsqc_layers=1,
+            hsqc_ff_dim=1024,
+            hsqc_wavelength_bounds=None,
+            hsqc_dropout=0,
+            hsqc_out_dim=6144,
+            hsqc_weights=None,
+            ms_weights=None,
+            *args,
             **kwargs
         ):
         super().__init__()
-        self.save_hyperparameters("lr", "num_hidden", "fc_dim", "dropout", "out_dim")
+        params = locals().copy()
+        self.save_hyperparameters(ignore=["ranking_sets", "hsqc_weights", "ms_weights"])
         self.lr = lr
-        self.hsqc = hsqc_transformer
-        self.spec = spec_transformer 
+        hsqc = HsqcRankedTransformer.prune_args(params, "hsqc")
+        ms = HsqcRankedTransformer.prune_args(params, "ms")
+        self.hsqc = HsqcRankedTransformer(save_params=False, module_only=True, **hsqc)
+        self.spec = HsqcRankedTransformer(save_params=False, module_only=True, **ms)
         total_emb_dim = self.hsqc.fc.in_features+self.spec.fc.in_features
 
         if num_hidden > 0:
@@ -73,16 +93,13 @@ class DoubleTransformer(pl.LightningModule):
     @staticmethod
     def add_model_specific_args(parent_parser, model_name="tnsfm"):
         parser = parent_parser.add_argument_group(model_name)
-            # lr=1e-3,
-            # num_hidden=0, 
-            # fc_dim=128, 
-            # dropout=0,
-            # out_dim=6144,
         parser.add_argument(f"--lr", type=float, default=1e-3)
         parser.add_argument(f"--num_hidden", type=int, default=0)
         parser.add_argument(f"--fc_dim", type=int, default=128)
         parser.add_argument(f"--dropout", type=float, default=0)
         parser.add_argument(f"--out_dim", type=int, default=6144)
+        HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
+        HsqcRankedTransformer.add_model_specific_args(parser, "ms")
         return parent_parser
 
     def forward(self, hsqc, ms):
