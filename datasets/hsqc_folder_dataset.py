@@ -1,3 +1,4 @@
+import logging
 import torch, os, pytorch_lightning as pl, glob
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
@@ -28,6 +29,8 @@ class FolderDataset(Dataset):
             assert(os.path.exists(os.path.join(self.dir, src)))
 
         self.files = os.listdir(os.path.join(self.dir, "FP"))
+        logger = logging.getLogger("lightning")
+        logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},hyunfp={do_hyun_fp}")
     def __len__(self):
         return len(self.files)
 
