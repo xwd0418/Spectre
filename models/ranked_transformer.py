@@ -81,16 +81,17 @@ class HsqcRankedTransformer(pl.LightningModule):
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name=""):
+        model_name = model_name if len(model_name) == 0 else f"{model_name}_"
         parser = parent_parser.add_argument_group(model_name)
-        parser.add_argument(f"--{model_name}_lr", type=float, default=1e-3)
-        parser.add_argument(f"--{model_name}_dim_model", type=int, default=128)
-        parser.add_argument(f"--{model_name}_dim_coords", type=str, default="43,43,42")
-        parser.add_argument(f"--{model_name}_heads", type=int, default=8)
-        parser.add_argument(f"--{model_name}_layers", type=int, default=8)
-        parser.add_argument(f"--{model_name}_ff_dim", type=int, default=1024)
-        parser.add_argument(f"--{model_name}_wavelength_bounds", type=int, default=None)
-        parser.add_argument(f"--{model_name}_dropout", type=float, default=0)
-        parser.add_argument(f"--{model_name}_out_dim", type=int, default=6144)
+        parser.add_argument(f"--{model_name}lr", type=float, default=1e-3)
+        parser.add_argument(f"--{model_name}dim_model", type=int, default=128)
+        parser.add_argument(f"--{model_name}dim_coords", type=str, default="43,43,42")
+        parser.add_argument(f"--{model_name}heads", type=int, default=8)
+        parser.add_argument(f"--{model_name}layers", type=int, default=8)
+        parser.add_argument(f"--{model_name}ff_dim", type=int, default=1024)
+        parser.add_argument(f"--{model_name}wavelength_bounds", type=int, default=None)
+        parser.add_argument(f"--{model_name}dropout", type=float, default=0)
+        parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
         return parent_parser
     
     @staticmethod

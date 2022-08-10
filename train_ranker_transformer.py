@@ -27,14 +27,16 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size):
 
 
 def model_mux(parser, model_type):
+    eliminate = ["modelname", "debug", "expname", "foldername", "datasrc"]
     if model_type == "hsqc_transformer" or model_type == "ms_transformer":
         HsqcRankedTransformer.add_model_specific_args(parser)
-        args = vars(parser.parse_args())
-        return HsqcRankedTransformer(**args) 
+        kwargs = vars(parser.parse_args())
+        for v in eliminate:
+            del kwargs[v]
+        return HsqcRankedTransformer(**kwargs) 
     elif model_type == "double_transformer":
         DoubleTransformer.add_model_specific_args(parser)
         kwargs = vars(parser.parse_args())
-        eliminate = ["modelname", "debug", "epochs", "expname", "foldername", "datasrc", "inputs", "bs"]
         for v in eliminate:
             del kwargs[v]
         return DoubleTransformer(**kwargs) 
