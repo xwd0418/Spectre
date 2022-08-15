@@ -75,7 +75,8 @@ def main():
     data_module = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
     print(parser.parse_args())
 
-    li_args = list(args.items())
+    args_with_model, _ = parser.parse_known_args()
+    li_args = list(args_with_model.items())
     hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in li_args if hyparam not in exclude])
     out_path = "/data/smart4.5"
     path1, path2 = args["foldername"], args["expname"] if args["debug"] else f"{args['expname']}_{get_curr_time()}_{hyparam_string}"
@@ -87,7 +88,8 @@ def main():
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
-    trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback])
+    early_stopping = cb.EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=20)
+    trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping])
     trainer.fit(model, data_module)
 
 if __name__ == '__main__':
