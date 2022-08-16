@@ -7,6 +7,7 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from models.ranked_transformer import HsqcRankedTransformer
 from models.ranked_double_transformer import DoubleTransformer
 from datasets.hsqc_folder_dataset import FolderDataModule
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import logging, os, sys
 from datetime import datetime
 from pytz import timezone
@@ -88,7 +89,7 @@ def main():
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
-    early_stopping = cb.EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=20)
+    early_stopping = EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=20)
     trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping])
     trainer.fit(model, data_module)
 
