@@ -74,9 +74,9 @@ def main():
 
     model = model_mux(parser, args["modelname"])
     data_module = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
-    print(parser.parse_args())
 
     args_with_model, _ = parser.parse_known_args()
+    args_with_model = vars(args_with_model)
     li_args = list(args_with_model.items())
     hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in li_args if hyparam not in exclude])
     out_path = "/data/smart4.5"
