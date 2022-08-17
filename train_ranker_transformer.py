@@ -89,7 +89,7 @@ def main():
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
-    early_stopping = EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=20)
+    early_stopping = EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=30)
     trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping])
     trainer.fit(model, data_module)
 
