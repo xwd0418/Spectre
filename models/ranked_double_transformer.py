@@ -1,10 +1,8 @@
 import pytorch_lightning as pl
 import torch, torch.nn as nn
 from models.ranked_transformer import HsqcRankedTransformer 
-from models.spectra_transformer import SpectraTransformer 
-from models.hsqc_transformer import HsqcTransformer
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-import numpy as np, os
+import numpy as np, os, logging
 from utils import ranker
 
 class DoubleTransformer(pl.LightningModule):
@@ -33,9 +31,6 @@ class DoubleTransformer(pl.LightningModule):
             fc_dim=128, 
             dropout=0,
             out_dim=6144,
-            ranking_sets={
-                "editfp_val": "./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt",
-            },
             ms_dim_model=128,
             ms_dim_coords="43,43,42",
             ms_heads=8,
@@ -54,17 +49,30 @@ class DoubleTransformer(pl.LightningModule):
             hsqc_out_dim=6144,
             hsqc_weights=None,
             ms_weights=None,
-            *args,
+            ranking_sets={
+                "editfp_val": "./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt",
+            },
             **kwargs
         ):
         super().__init__()
         params = locals().copy()
-        self.save_hyperparameters(ignore=["ranking_sets", "hsqc_weights", "ms_weights"])
+        self.save_hyperparameters(ignore=["ranking_sets"])
+
         self.lr = lr
         hsqc = HsqcRankedTransformer.prune_args(params, "hsqc")
         ms = HsqcRankedTransformer.prune_args(params, "ms")
-        self.hsqc = HsqcRankedTransformer(save_params=False, module_only=True, **hsqc)
-        self.spec = HsqcRankedTransformer(save_params=False, module_only=True, **ms)
+        if hsqc_weights is not None:
+            self.hsqc = HsqcRankedTransformer.load_from_checkpoint(hsqc_weights)
+            print(f"[DoubleTransformer] Loading HSQC Model: {hsqc_weights}")
+        else:
+            self.hsqc = HsqcRankedTransformer(save_params=False, module_only=True, **hsqc)
+
+        if ms_weights:
+            self.spec = HsqcRankedTransformer.load_from_checkpoint(ms_weights)
+            print(f"[DoubleTransformer] Loading MS Model: {ms_weights}")
+        else:
+            self.spec = HsqcRankedTransformer(save_params=False, module_only=True, **ms)
+        
         total_emb_dim = self.hsqc.fc.in_features+self.spec.fc.in_features
 
         if num_hidden > 0:
@@ -98,6 +106,8 @@ class DoubleTransformer(pl.LightningModule):
         parser.add_argument(f"--fc_dim", type=int, default=128)
         parser.add_argument(f"--dropout", type=float, default=0)
         parser.add_argument(f"--out_dim", type=int, default=6144)
+        parser.add_argument(f"--hsqc_weights", type=str, default=None)
+        parser.add_argument(f"--ms_weights", type=int, default=None)
         HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
         HsqcRankedTransformer.add_model_specific_args(parser, "ms")
         return parent_parser

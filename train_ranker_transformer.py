@@ -16,6 +16,29 @@ def get_curr_time():
     california_time = datetime.now(pst)
     return california_time.strftime("%m_%d_%Y_%H:%M")
 
+ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc"] + ["hsqc_weights", "ms_weights"]
+GROUPS = [
+    set(["lr", "epochs", "bs"]),
+    set(["heads", "layers", "hsqc_heads", "hsqc_layers", "ms_heads", "ms_layers"])
+]
+def exp_string(expname, args):
+    def stringify(items, limit=True):
+        # max 8 params
+        if limit:
+            return "_".join(map(lambda x : f'{x[0]}={x[1]}', sorted(list(items), key=lambda x : x[0])[:8]))
+        else:
+            return "_".join(map(lambda x : f'{x[0]}={x[1]}', sorted(list(items), key=lambda x : x[0])))
+    all_grouped = set(reduce(lambda x, y: x.union(y), GROUPS))
+    filtered = [(hyparam, val) for hyparam, val in args if hyparam not in ALWAYS_EXCLUDE]
+    
+    grouped_params = [stringify(filter(lambda x: x[0] in g, filtered)) for g in GROUPS]
+    ungrouped_params = [stringify(filter(lambda x: x[0] not in all_grouped, filtered))]
+    ungrouped_params_unlimited = [stringify(filter(lambda x: x[0] not in all_grouped, filtered), limit=False)]
+
+    hierarchical = grouped_params + ungrouped_params
+    hierarchical_unlimited = grouped_params + ungrouped_params_unlimited
+    return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited)
+
 def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size):
     my_dir = f"/workspace/smart4.5/tempdata/hyun_fp_data/{data_src}"
     if model_type == "double_transformer":
@@ -68,7 +91,6 @@ def main():
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--datasrc", type=str, default=f"hsqc_ms_pairs")
     parser.add_argument("--bs", type=int, default=64)
-    exclude = ["modelname", "debug", "expname", "foldername", "datasrc"] + ["hsqc_weights", "ms_weights"]
     args, _ = parser.parse_known_args()
     args = vars(args)
 
@@ -78,14 +100,14 @@ def main():
     args_with_model, _ = parser.parse_known_args()
     args_with_model = vars(args_with_model)
     li_args = list(args_with_model.items())
-    hyparam_string = "_".join([f"{hyparam}={val}"for hyparam, val in li_args if hyparam not in exclude])
     out_path = "/data/smart4.5"
-    path1, path2 = args["foldername"], args["expname"] if args["debug"] else f"{args['expname']}_{get_curr_time()}_{hyparam_string}"
+    exp_name, hparam_string = exp_string(args["expname"], li_args)
+    path1, path2 = args["foldername"], args["expname"] if args["debug"] else exp_name
 
     logger = init_logger(out_path, path1, path2)
     logger.info(f'path: {out_path}/{path1}/{path2}')
-    logger.info(f'hparam: {hyparam_string}')
-    logger.info(li_args)
+    logger.info(f'hparam: {hparam_string}')
+    return
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
