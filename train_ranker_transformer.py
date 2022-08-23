@@ -107,7 +107,6 @@ def main():
     logger = init_logger(out_path, path1, path2)
     logger.info(f'path: {out_path}/{path1}/{path2}')
     logger.info(f'hparam: {hparam_string}')
-    return
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
