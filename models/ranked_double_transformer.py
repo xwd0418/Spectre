@@ -107,7 +107,7 @@ class DoubleTransformer(pl.LightningModule):
         parser.add_argument(f"--dropout", type=float, default=0)
         parser.add_argument(f"--out_dim", type=int, default=6144)
         parser.add_argument(f"--hsqc_weights", type=str, default=None)
-        parser.add_argument(f"--ms_weights", type=int, default=None)
+        parser.add_argument(f"--ms_weights", type=str, default=None)
         HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
         HsqcRankedTransformer.add_model_specific_args(parser, "ms")
         return parent_parser
