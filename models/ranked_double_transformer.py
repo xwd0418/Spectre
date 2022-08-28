@@ -1,7 +1,6 @@
 import pytorch_lightning as pl
 import torch, torch.nn as nn
 from models.ranked_transformer import HsqcRankedTransformer 
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np, os, logging
 from utils import ranker
 
@@ -31,6 +30,7 @@ class DoubleTransformer(pl.LightningModule):
             fc_dim=128, 
             dropout=0,
             out_dim=6144,
+            pos_weight=1.0,
             ms_dim_model=128,
             ms_dim_coords="43,43,42",
             ms_heads=8,
@@ -77,17 +77,15 @@ class DoubleTransformer(pl.LightningModule):
 
         if num_hidden > 0:
             fc_layers = [nn.Linear(total_emb_dim, fc_dim), nn.ReLU(), nn.Dropout(dropout)]
-            for i in range(num_hidden):
+            for _ in range(num_hidden):
                 fc_layers.append(nn.Linear(fc_dim, fc_dim))
                 fc_layers.append(nn.ReLU())
                 fc_layers.append(nn.Dropout(dropout))
             fc_layers.append(nn.Linear(fc_dim, out_dim))
-            fc_layers.append(nn.Sigmoid())
             self.fc = nn.Sequential(*fc_layers)
         else:
             self.fc = nn.Sequential(
                 nn.Linear(total_emb_dim, out_dim),
-                nn.Sigmoid()
             )
 
         self.rankers = {}
@@ -95,8 +93,7 @@ class DoubleTransformer(pl.LightningModule):
             assert(os.path.exists(v))
             self.rankers[k] = ranker.RankingSet(file_path=v)
 
-        self.loss = nn.BCELoss()
-        self.cos = nn.CosineSimilarity(dim=1)
+        self.loss = self.loss = nn.BCEWithLogitsLoss()
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name="tnsfm"):
@@ -108,6 +105,7 @@ class DoubleTransformer(pl.LightningModule):
         parser.add_argument(f"--out_dim", type=int, default=6144)
         parser.add_argument(f"--hsqc_weights", type=str, default=None)
         parser.add_argument(f"--ms_weights", type=str, default=None)
+        parser.add_argument(f"--pos_weight", type=float, default=1.0)
         HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
         HsqcRankedTransformer.add_model_specific_args(parser, "ms")
         return parent_parser

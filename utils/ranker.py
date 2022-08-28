@@ -11,10 +11,11 @@ class RankingSet():
         '''
         self.debug=debug
         if store is not None:
-            self.data = F.normalize(store, dim=1, p=2.0)
+            self.data = F.normalize(store, dim=1, p=2.0).cuda()
         else:
             with open(file_path, "rb") as f:
-                self.data = F.normalize(torch.load(f).type(torch.FloatTensor), dim=1, p=2.0)
+                self.data = F.normalize(torch.load(f).type(torch.FloatTensor), dim=1, p=2.0).cuda()
+                print(f"Ranking Set size: {self.data.size()}")
 
     def batched_rank(self, queries, truths):
         '''
@@ -28,27 +29,15 @@ class RankingSet():
         with torch.no_grad():
             q = queries.size()[0]
             n = self.data.size()[0]
-            queries = F.normalize(queries, dim=1, p=2.0)
-            truths = F.normalize(truths, dim=1, p=2.0)
+            queries = F.normalize(queries, dim=1, p=2.0).cuda()
+            truths = F.normalize(truths, dim=1, p=2.0).cuda()
 
-            thresh = torch.stack([torch.dot(queries[i,:], truths[i,:]) for i in range(q)]) # (q)
+            thresh = torch.stack([torch.dot(queries[i,:], truths[i,:]) for i in range(q)]).cuda() # (q)
 
             query_products = self.data @ queries.T # (n x 6144) * (6144 x q) = (n, q)
-            truth_products = self.data @ truths.T
+            truth_products = self.data @ truths.T # (n, q)
 
-            if self.debug:
-                print(query_products)
-                print(truth_products)
-                print(thresh)
-
-            outs = torch.zeros(q)
-            for i in range(q):
-                equals_ones = torch.isclose(truth_products[:,i], torch.ones(n)) # num samples equalling truth
-                greater = query_products[:,i] >= thresh[i] # num products greater than threshold
-                if self.debug:
-                    print(equals_ones)
-                    print(greater)
-                count_1s = sum(equals_ones)
-                count_greater = sum(greater)
-                outs[i] = count_greater - count_1s
-            return outs
+            # we want to subtract off any samples in which the truth
+            ct_ones = torch.sum(torch.isclose(truth_products, torch.ones(n, q).cuda()), dim = 0) # (q)
+            ct_greater = torch.sum(query_products > thresh, dim = 0) # ((n, q) >= (q)) -> (q)
+            return ct_greater - ct_ones

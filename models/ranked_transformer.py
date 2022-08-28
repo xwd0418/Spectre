@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 import torch, torch.nn as nn
 from encoder import CoordinateEncoder
 from utils import ranker
+from models import compute_metrics
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np, os
 
@@ -45,6 +46,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             out_dim=6144,
             save_params=True,
             module_only=False,
+            pos_weight=1.0,
             **kwargs,
         ):
         super().__init__()
@@ -76,8 +78,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             num_layers=layers,
         )
 
-        self.loss = nn.BCELoss()
-        self.cos = nn.CosineSimilarity(dim=1)
+        self.loss = nn.BCEWithLogitsLoss()
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name=""):
@@ -92,6 +93,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}wavelength_bounds", type=int, default=None)
         parser.add_argument(f"--{model_name}dropout", type=float, default=0)
         parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
+        parser.add_argument(f"--{model_name}pos_weight", type=float, default=1.0)
         return parent_parser
     
     @staticmethod
@@ -136,7 +138,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             are the same length.
         """
         out = self.encode(hsqc)
-        out = torch.sigmoid(self.fc(out[:,:1,:].squeeze(1))) # extracts cls token
+        out = self.fc(out[:,:1,:].squeeze(1)) # extracts cls token
         return out
     
     def training_step(self, batch, batch_idx):
@@ -150,28 +152,9 @@ class HsqcRankedTransformer(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, labels = batch
         out = self.forward(x)
-
         loss = self.loss(out, labels)
+        return compute_metrics.cm(out, labels, self.ranker, loss)
 
-        predicted = (out >= 0.5)
-        # cosine similarity
-        cos = self.cos(labels, predicted)
-
-        # active bits
-        active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
-
-        # f1 score
-        predicted = predicted.cpu()
-        labels = labels.cpu()
-        f1 = f1_score(predicted.flatten(), labels.flatten())
-
-        # ranking f1
-        predicted = predicted.type(torch.FloatTensor)
-        rank_res = self.ranker.batched_rank(predicted, labels)
-        cts = [1, 5, 10]
-        ranks = {f"rank_{allow}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
-        return {"ce_loss": loss.item(), "cos": torch.mean(cos).item(), 
-            "f1": np.mean(f1), "perc_active_bits": active.item(), **ranks}
 
     def validation_epoch_end(self, validation_step_outputs):
         feats = validation_step_outputs[0].keys()
@@ -179,43 +162,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         for feat in feats:
             di[f"val/mean_{feat}"] = np.mean([v[feat] for v in validation_step_outputs])
         for k,v in di.items():
-            self.log(k, v)
-
-    def test_step(self, batch, batch_idx):
-        x, labels = batch
-        out = self.forward(x)
-        loss = self.loss(out, labels)
-        self.log("test/loss", loss)
-
-        predicted = (out >= 0.5)
-        # cosine similarity
-        cos = self.cos(labels, predicted)
-        self.log("test/cosine_sim", torch.mean(cos).item())
-
-        # active bits
-        active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
-
-        # f1 score
-        predicted = predicted.cpu()
-        labels = labels.cpu()
-        f1 = np.mean(f1_score(predicted.flatten(), labels.flatten()))
-        self.log("test/f1", f1)
-
-        # ranking f1
-        predicted = predicted.type(torch.FloatTensor)
-        rank_res = self.ranker.batched_rank(predicted, labels)
-        cts = [1, 5, 10]
-        ranks = {f"rank_{allow}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
-        return {"test_loss": loss.item(), "test_cos": torch.mean(cos).item(), 
-            "test_f1": np.mean(f1), "perc_active_bits": active.item(), **ranks}
-
-    def test_step_end(self, test_step_outputs):
-        feats = test_step_outputs[0].keys()
-        di = {}
-        for feat in feats:
-            di[f"test/mean_{feat}"] = np.mean([v[feat] for v in test_step_outputs])
-        for k,v in di.items():
-            self.log(k, v)
+            self.log(k, v, on_epoch=True)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.lr)
