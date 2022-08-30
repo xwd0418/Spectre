@@ -1,7 +1,8 @@
 import pytorch_lightning as pl
 import torch, torch.nn as nn
 from models.ranked_transformer import HsqcRankedTransformer 
-import numpy as np, os, logging
+import numpy as np
+from models import compute_metrics
 from utils import ranker
 
 class DoubleTransformer(pl.LightningModule):
@@ -31,6 +32,7 @@ class DoubleTransformer(pl.LightningModule):
             dropout=0,
             out_dim=6144,
             pos_weight=1.0,
+            weight_decay=0.0,
             ms_dim_model=128,
             ms_dim_coords="43,43,42",
             ms_heads=8,
@@ -49,16 +51,15 @@ class DoubleTransformer(pl.LightningModule):
             hsqc_out_dim=6144,
             hsqc_weights=None,
             ms_weights=None,
-            ranking_sets={
-                "editfp_val": "./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt",
-            },
+            ranking_set="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt",
             **kwargs
         ):
         super().__init__()
         params = locals().copy()
-        self.save_hyperparameters(ignore=["ranking_sets"])
+        self.save_hyperparameters(ignore=["ranking_set"])
 
         self.lr = lr
+        self.weight_decay = weight_decay
         hsqc = HsqcRankedTransformer.prune_args(params, "hsqc")
         ms = HsqcRankedTransformer.prune_args(params, "ms")
         if hsqc_weights is not None:
@@ -88,12 +89,9 @@ class DoubleTransformer(pl.LightningModule):
                 nn.Linear(total_emb_dim, out_dim),
             )
 
-        self.rankers = {}
-        for k,v in ranking_sets.items():
-            assert(os.path.exists(v))
-            self.rankers[k] = ranker.RankingSet(file_path=v)
+        self.ranker = ranker.RankingSet(file_path=ranking_set)
 
-        self.loss = self.loss = nn.BCEWithLogitsLoss()
+        self.loss = self.loss = nn.BCEWithLogitsLoss(pos_weight = torch.ones(out_dim) * pos_weight)
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name="tnsfm"):
@@ -106,6 +104,7 @@ class DoubleTransformer(pl.LightningModule):
         parser.add_argument(f"--hsqc_weights", type=str, default=None)
         parser.add_argument(f"--ms_weights", type=str, default=None)
         parser.add_argument(f"--pos_weight", type=float, default=1.0)
+        parser.add_argument(f"--weight_decay", type=float, default=0.0)
         HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
         HsqcRankedTransformer.add_model_specific_args(parser, "ms")
         return parent_parser
@@ -130,31 +129,7 @@ class DoubleTransformer(pl.LightningModule):
         hsqc, ms, fp = batch
         out = self.forward(hsqc, ms)
         loss = self.loss(out, fp)
-
-        predicted = (out >= 0.5)
-        # cosine similarity
-        cos = self.cos(fp, predicted)
-        # active bits
-        active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
-        # f1 score
-        predicted = predicted.cpu()
-        labels = fp.cpu()
-        f1 = f1_score(labels.flatten(), predicted.flatten())
-        precision = precision_score(labels.flatten(), predicted.flatten())
-        recall = recall_score(labels.flatten(), predicted.flatten())
-        accuracy = accuracy_score(labels.flatten(), predicted.flatten())
-
-        # ranking f1
-        predicted = predicted.type(torch.FloatTensor)
-        ranks = {}
-        for k,v in self.rankers.items():
-            rank_res = v.batched_rank(predicted, labels)
-            cts = [1, 5, 10]
-            local_ranks = {f"rank_{allow}_{k}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
-            ranks.update(local_ranks)
-        return {"ce_loss": loss.item(), "cos": torch.mean(cos).item(), 
-            "f1": np.mean(f1), "precision": np.mean(precision), "recall": np.mean(recall), 
-            "accuracy": np.mean(accuracy), "perc_active_bits": active.item(), **ranks}
+        return compute_metrics.cm(out, fp, self.ranker, loss)
     
     def validation_epoch_end(self, validation_step_outputs):
         feats = validation_step_outputs[0].keys()
@@ -162,45 +137,7 @@ class DoubleTransformer(pl.LightningModule):
         for feat in feats:
             di[f"val/mean_{feat}"] = np.mean([v[feat] for v in validation_step_outputs])
         for k,v in di.items():
-            self.log(k, v)
-
-    def test_step(self, batch, batch_idx):
-        hsqc, ms, fp = batch
-        out = self.forward(hsqc, ms)
-        loss = self.loss(out, fp)
-
-        predicted = (out >= 0.5)
-        # cosine similarity
-        cos = self.cos(fp, predicted)
-        # active bits
-        active = torch.mean(torch.sum(predicted, axis=1) / 6144.0)
-        # f1 score
-        predicted = predicted.cpu()
-        labels = fp.cpu()
-        f1 = f1_score(labels.flatten(), predicted.flatten())
-        precision = precision_score(labels.flatten(), predicted.flatten())
-        recall = precision_score(labels.flatten(), predicted.flatten())
-        accuracy = accuracy_score(labels.flatten(), predicted.flatten())
-
-        # ranking f1
-        predicted = predicted.type(torch.FloatTensor)
-        ranks = {}
-        for k,v in self.rankers.items():
-            rank_res = v.batched_rank(predicted, labels)
-            cts = [1, 5, 10, 20]
-            local_ranks = {f"rank_{allow}_{k}": torch.sum(rank_res < allow)/len(rank_res) for allow in cts}
-            ranks.update(local_ranks)
-        return {"ce_loss": loss.item(), "cos": torch.mean(cos).item(), 
-            "f1": np.mean(f1), "precision": np.mean(precision), "recall": np.mean(recall), 
-            "accuracy": np.mean(accuracy), "perc_active_bits": active.item(), **ranks}
-    
-    def test_step_end(self, test_step_outputs):
-        feats = test_step_outputs[0].keys()
-        di = {}
-        for feat in feats:
-            di[f"test/mean_{feat}"] = np.mean([v[feat] for v in test_step_outputs])
-        for k,v in di.items():
-            self.log(k, v)
+            self.log(k, v, on_epoch=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
