@@ -47,6 +47,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             save_params=True,
             module_only=False,
             pos_weight=1.0,
+            weight_decay=0.0,
             **kwargs,
         ):
         super().__init__()
@@ -60,6 +61,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         assert(sum(dim_coords)==dim_model)
 
         self.lr = lr
+        self.weight_decay = weight_decay
+
         self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         self.fc = nn.Linear(dim_model, out_dim)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
@@ -72,13 +75,11 @@ class HsqcRankedTransformer(pl.LightningModule):
             batch_first=True,
             dropout=dropout,
         )
-
         self.transformer_encoder = torch.nn.TransformerEncoder(
             layer,
             num_layers=layers,
         )
-
-        self.loss = nn.BCEWithLogitsLoss()
+        self.loss = nn.BCEWithLogitsLoss(pos_weight=torch.ones(out_dim) * pos_weight)
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name=""):
@@ -94,6 +95,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}dropout", type=float, default=0)
         parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
         parser.add_argument(f"--{model_name}pos_weight", type=float, default=1.0)
+        parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
         return parent_parser
     
     @staticmethod
@@ -165,4 +167,4 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.log(k, v, on_epoch=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr)
+        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
