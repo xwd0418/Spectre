@@ -19,7 +19,7 @@ class RankingSet():
         
         if retrieve_path:
             with open(retrieve_path, "rb") as f:
-                self.retrieve = pickle.load(f)
+                self.lookup = pickle.load(f)
             
     @staticmethod
     def round(fp):
@@ -32,19 +32,20 @@ class RankingSet():
     @staticmethod
     def normalized_to_nonzero(fp):
         hi = torch.max(fp)
-        return torch.nonzero(torch.isclose(fp == hi))[:,0]
+        nonzero = torch.nonzero(torch.isclose(fp, hi))
+        return tuple(nonzero[:,0].tolist())
 
     def retrieve(self, query, n=10):
-        if not self.retrive:
+        if not self.lookup:
             raise Exception("No retrieval dict")
         query = F.normalize(query, dim=0, p=2.0).to(self.device).unsqueeze(0)
-        query_products = self.data @ query.T # (n x 6144) * (6144 x 1) = n x 1
+        query_products = (self.data @ query.T).flatten() # (n x 6144) * (6144 x 1) = n x 1
 
-        fps, _ = torch.topk(query_products, k=n)
+        _, idxs = torch.topk(query_products, k=n)
         out = []
-        for fp in fps:
-            nonzero = self.normalized_to_nonzero(fp)
-            out.append(self.retrieve.get(nonzero, None))
+        for idx in idxs:
+            nonzero = self.normalized_to_nonzero(self.data[idx])
+            out.append(self.lookup.get(nonzero, None))
         return out
 
     def batched_rank(self, queries, truths):
