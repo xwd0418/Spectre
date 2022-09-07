@@ -1,8 +1,8 @@
-import torch, torch.nn.functional as F
+import torch, torch.nn.functional as F, pickle
 from sklearn.preprocessing import normalize
 
 class RankingSet():
-    def __init__(self, store=None, file_path=None, debug=False, device = "cuda"):
+    def __init__(self, store=None, file_path=None, retrieve_path=None,debug=False, device = "cuda"):
         '''
             Creates a ranking set. Assumes the file specified at file_path is a pickle file of 
             a numpy array of fingerprints.
@@ -16,6 +16,36 @@ class RankingSet():
         else:
             with open(file_path, "rb") as f:
                 self.data = F.normalize(torch.load(f).type(torch.FloatTensor), dim=1, p=2.0).to(device)
+        
+        if retrieve_path:
+            with open(retrieve_path, "rb") as f:
+                self.retrieve = pickle.load(f)
+            
+    @staticmethod
+    def round(fp):
+        hi = torch.max(fp)
+        where = torch.where(fp == hi)
+        fp = torch.zeros(6144)
+        fp[where] = 1
+        return fp
+
+    @staticmethod
+    def normalized_to_nonzero(fp):
+        hi = torch.max(fp)
+        return torch.nonzero(torch.isclose(fp == hi))[:,0]
+
+    def retrieve(self, query, n=10):
+        if not self.retrive:
+            raise Exception("No retrieval dict")
+        query = F.normalize(query, dim=0, p=2.0).to(self.device).unsqueeze(0)
+        query_products = self.data @ query.T # (n x 6144) * (6144 x 1) = n x 1
+
+        fps, _ = torch.topk(query_products, k=n)
+        out = []
+        for fp in fps:
+            nonzero = self.normalized_to_nonzero(fp)
+            out.append(self.retrieve.get(nonzero, None))
+        return out
 
     def batched_rank(self, queries, truths):
         '''
