@@ -21,6 +21,7 @@ def cm(out, fp, ranker, loss, thresh = 0.0, device="cuda"):
     cts = [1, 5, 10]
     # strictly less as batched_rank returns number of items STRICTLY greater
     ranks = {f"rank_{allow}": torch.sum(rank_res < allow).item()/len(rank_res) for allow in cts}
+    mean_rank = torch.mean(rank_res.float()).item()
     return {
         "ce_loss": loss.item(),
         "cos": torch.mean(cos).item(),
@@ -29,6 +30,7 @@ def cm(out, fp, ranker, loss, thresh = 0.0, device="cuda"):
         "precision": np.mean(precision), 
         "recall": np.mean(recall), 
         "accuracy": np.mean(accuracy),
+        "mean_rank": mean_rank,
         **ranks
     }
 
