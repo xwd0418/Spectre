@@ -90,8 +90,7 @@ class DoubleTransformer(pl.LightningModule):
             )
 
         self.ranker = ranker.RankingSet(file_path=ranking_set)
-
-        self.loss = self.loss = nn.BCEWithLogitsLoss(pos_weight = torch.ones(out_dim) * pos_weight)
+        self.loss = nn.BCEWithLogitsLoss(pos_weight = torch.ones(out_dim) * pos_weight)
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name="tnsfm"):
@@ -127,9 +126,9 @@ class DoubleTransformer(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         hsqc, ms, fp = batch
-        out = self.forward(hsqc, ms)
+        out = self.forward(hsqc, ms) # logits
         loss = self.loss(out, fp)
-        return compute_metrics.cm(out, fp, self.ranker, loss)
+        return compute_metrics.cm(out, fp, self.ranker, loss, thresh = 0.0)
     
     def validation_epoch_end(self, validation_step_outputs):
         feats = validation_step_outputs[0].keys()

@@ -155,7 +155,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         x, labels = batch
         out = self.forward(x)
         loss = self.loss(out, labels)
-        return compute_metrics.cm(out, labels, self.ranker, loss)
+        return compute_metrics.cm(out, labels, self.ranker, loss, thresh = 0.0)
 
 
     def validation_epoch_end(self, validation_step_outputs):

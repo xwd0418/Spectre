@@ -3,8 +3,8 @@ from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_sc
 
 do_cos = nn.CosineSimilarity(dim=1)
 
-def cm(out, fp, ranker, loss, device="cuda"):
-    pred = (out >= 0.5).type(torch.FloatTensor).to(device)
+def cm(out, fp, ranker, loss, thresh = 0.0, device="cuda"):
+    pred = (out >= thresh).type(torch.FloatTensor).to(device)
     pred_cpu = pred.cpu()
     labels = fp.cpu()
     # cos
