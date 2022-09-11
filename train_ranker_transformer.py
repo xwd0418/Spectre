@@ -57,17 +57,21 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size):
         return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size), [(64, 50, 2)]
     raise(f"No datamodule for model type {model_type}.")
 
-
+def apply_args(parser, model_type):
+    if model_type == "hsqc_transformer" or model_type == "ms_transformer":
+        HsqcRankedTransformer.add_model_specific_args(parser)
+    elif model_type == "double_transformer":
+        DoubleTransformer.add_model_specific_args(parser)
+    else:
+        raise(f"No model for model type {model_type}.")
 def model_mux(parser, model_type):
     eliminate = ["modelname", "debug", "expname", "foldername", "datasrc"]
     if model_type == "hsqc_transformer" or model_type == "ms_transformer":
-        HsqcRankedTransformer.add_model_specific_args(parser)
         kwargs = vars(parser.parse_args())
         for v in eliminate:
             del kwargs[v]
         return HsqcRankedTransformer(**kwargs) 
     elif model_type == "double_transformer":
-        DoubleTransformer.add_model_specific_args(parser)
         kwargs = vars(parser.parse_args())
         for v in eliminate:
             del kwargs[v]
@@ -102,8 +106,8 @@ def main():
     parser.add_argument("--patience", type=int, default=30)
     args = vars(parser.parse_known_args()[0])
 
-    model = model_mux(parser, args["modelname"])
-    data_module, dummy_dimensions = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
+    apply_args(parser, args["modelname"])
+    data_module, _ = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
     args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args_with_model.items())
 
@@ -116,10 +120,13 @@ def main():
     logger.info(f'path: {out_path}/{path1}/{path2}')
     logger.info(f'hparam: {hparam_string}')
 
+    model = model_mux(parser, args["modelname"])
+
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
     early_stopping = EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=patience)
-    trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping])
+    lr_monitor = cb.LearningRateMonitor(logging_interval="step")
+    trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping, lr_monitor])
     trainer.fit(model, data_module)
 
 if __name__ == '__main__':

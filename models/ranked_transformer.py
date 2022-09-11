@@ -1,3 +1,4 @@
+import logging
 import pytorch_lightning as pl
 import torch, torch.nn as nn
 from encoder import CoordinateEncoder
@@ -5,6 +6,8 @@ from utils import ranker
 from models import compute_metrics
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np, os
+
+from utils.lr_scheduler import NoamOpt
 
 class HsqcRankedTransformer(pl.LightningModule):
     """A Transformer encoder for input HSQC.
@@ -48,6 +51,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             module_only=False,
             pos_weight=1.0,
             weight_decay=0.0,
+            scheduler=None, # None, "attention"
             **kwargs,
         ):
         super().__init__()
@@ -66,6 +70,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         self.fc = nn.Linear(dim_model, out_dim)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
+        self.scheduler = scheduler
+        self.dim_model = dim_model
 
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
@@ -80,6 +86,9 @@ class HsqcRankedTransformer(pl.LightningModule):
             num_layers=layers,
         )
         self.loss = nn.BCEWithLogitsLoss(pos_weight=torch.ones(out_dim) * pos_weight)
+
+        self.out_logger = logging.getLogger("lightning")
+        self.out_logger.info("[RankedTransformer] Initialized")
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name=""):
@@ -96,6 +105,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
         parser.add_argument(f"--{model_name}pos_weight", type=float, default=1.0)
         parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
+        parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
         return parent_parser
     
     @staticmethod
@@ -167,4 +177,16 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.log(k, v, on_epoch=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        if not self.scheduler:
+            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        elif self.scheduler == "attention":
+            optim = torch.optim.Adam(self.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9, weight_decay=self.weight_decay)
+            scheduler = NoamOpt(self.dim_model, 4000, optim)
+            return {
+                "optimizer": optim,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "step",
+                    "frequency": 1,
+                }
+            }
