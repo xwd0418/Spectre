@@ -11,17 +11,21 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import logging, os, sys
 from datetime import datetime
 from pytz import timezone
+
 def get_curr_time():
     pst = timezone("PST8PDT")
     california_time = datetime.now(pst)
     return california_time.strftime("%m_%d_%Y_%H:%M")
 
-ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc"] + ["hsqc_weights", "ms_weights"]
+ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc", "patience"] + ["hsqc_weights", "ms_weights"]
 GROUPS = [
     set(["lr", "epochs", "bs"]),
     set(["heads", "layers", "hsqc_heads", "hsqc_layers", "ms_heads", "ms_layers"])
 ]
 def exp_string(expname, args):
+    """
+        Gets an experiment string with a format (expname_[time started]_[some hyperparameters])
+    """
     def stringify(items, limit=True):
         # max 8 params
         if limit:
@@ -40,13 +44,17 @@ def exp_string(expname, args):
     return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited)
 
 def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size):
+    """
+        constructs data module based on model_tyle, and also outputs dimensions of dummy data
+        (for graph visualization)
+    """
     my_dir = f"/workspace/smart4.5/tempdata/hyun_fp_data/{data_src}"
     if model_type == "double_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size)
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size), [(64, 40, 3), (64, 50, 2)]
     elif model_type == "hsqc_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size), [(64, 40, 3)]
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size)
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size), [(64, 50, 2)]
     raise(f"No datamodule for model type {model_type}.")
 
 
@@ -91,18 +99,18 @@ def main():
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--datasrc", type=str, default=f"hsqc_ms_pairs")
     parser.add_argument("--bs", type=int, default=64)
-    args, _ = parser.parse_known_args()
-    args = vars(args)
+    parser.add_argument("--patience", type=int, default=30)
+    args = vars(parser.parse_known_args()[0])
 
     model = model_mux(parser, args["modelname"])
-    data_module = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
-
-    args_with_model, _ = parser.parse_known_args()
-    args_with_model = vars(args_with_model)
+    data_module, dummy_dimensions = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
+    args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args_with_model.items())
-    out_path = "/data/smart4.5"
-    exp_name, hparam_string = exp_string(args["expname"], li_args)
+
+    out_path, (exp_name, hparam_string)  = "/data/smart4.5", exp_string(args["expname"], li_args)
     path1, path2 = args["foldername"], args["expname"] if args["debug"] else exp_name
+
+    patience = args["patience"]
 
     logger = init_logger(out_path, path1, path2)
     logger.info(f'path: {out_path}/{path1}/{path2}')
@@ -110,7 +118,7 @@ def main():
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor="val/mean_ce_loss", mode="min", save_last=True)
-    early_stopping = EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=30)
+    early_stopping = EarlyStopping(monitor="val/mean_ce_loss", mode="min", patience=patience)
     trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping])
     trainer.fit(model, data_module)
 
