@@ -1,0 +1,1 @@
+MODEL_LOGGING_IGNORE = ["kwargs", "__class__", "self"]
