@@ -5,6 +5,8 @@ import numpy as np
 from models import compute_metrics
 from utils import ranker
 
+from utils.lr_scheduler import NoamOpt
+
 class DoubleTransformer(pl.LightningModule):
     """ A baseline implementation of both hsqc and ms transformers
     Parameters
@@ -51,7 +53,7 @@ class DoubleTransformer(pl.LightningModule):
             hsqc_out_dim=6144,
             hsqc_weights=None,
             ms_weights=None,
-            ranking_set="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt",
+            scheduler=None, # None, "attention"
             **kwargs
         ):
         super().__init__()
@@ -89,7 +91,9 @@ class DoubleTransformer(pl.LightningModule):
                 nn.Linear(total_emb_dim, out_dim),
             )
 
-        self.ranker = ranker.RankingSet(file_path=ranking_set)
+        self.scheduler = scheduler
+        self.dim_model = max(hsqc_dim_model, ms_dim_model)
+        self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
         self.loss = nn.BCEWithLogitsLoss(pos_weight = torch.ones(out_dim) * pos_weight)
     
     @staticmethod
@@ -104,6 +108,7 @@ class DoubleTransformer(pl.LightningModule):
         parser.add_argument(f"--ms_weights", type=str, default=None)
         parser.add_argument(f"--pos_weight", type=float, default=1.0)
         parser.add_argument(f"--weight_decay", type=float, default=0.0)
+        parser.add_argument(f"--scheduler", type=str, default=None)
         HsqcRankedTransformer.add_model_specific_args(parser, "hsqc")
         HsqcRankedTransformer.add_model_specific_args(parser, "ms")
         return parent_parser
@@ -139,4 +144,16 @@ class DoubleTransformer(pl.LightningModule):
             self.log(k, v, on_epoch=True)
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
+        if not self.scheduler:
+            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+        elif self.scheduler == "attention":
+            optim = torch.optim.Adam(self.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9, weight_decay=self.weight_decay)
+            scheduler = NoamOpt(self.dim_model, 4000, optim)
+            return {
+                "optimizer": optim,
+                "lr_scheduler": {
+                    "scheduler": scheduler,
+                    "interval": "step",
+                    "frequency": 1,
+                }
+            }
