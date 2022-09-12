@@ -1,9 +1,10 @@
+import logging
 import pytorch_lightning as pl
 import torch, torch.nn as nn
 from models.ranked_transformer import HsqcRankedTransformer 
 import numpy as np
 from models import compute_metrics
-from utils import ranker
+from utils import ranker, constants
 
 from utils.lr_scheduler import NoamOpt
 
@@ -58,6 +59,10 @@ class DoubleTransformer(pl.LightningModule):
         ):
         super().__init__()
         params = locals().copy()
+        self.out_logger = logging.getLogger("lightning")
+        for k,v in params.items():
+            if k not in constants.MODEL_LOGGING_IGNORE:
+                self.out_logger.info(f"Hparam: [{k}], value: [{v}]")
         self.save_hyperparameters(ignore=["ranking_set"])
 
         self.lr = lr
@@ -65,13 +70,13 @@ class DoubleTransformer(pl.LightningModule):
         hsqc = HsqcRankedTransformer.prune_args(params, "hsqc")
         ms = HsqcRankedTransformer.prune_args(params, "ms")
         if hsqc_weights is not None:
-            self.hsqc = HsqcRankedTransformer.load_from_checkpoint(hsqc_weights)
+            self.hsqc = HsqcRankedTransformer.load_from_checkpoint(hsqc_weights, strict=False, module_only = True)
             print(f"[DoubleTransformer] Loading HSQC Model: {hsqc_weights}")
         else:
             self.hsqc = HsqcRankedTransformer(save_params=False, module_only=True, **hsqc)
 
         if ms_weights:
-            self.spec = HsqcRankedTransformer.load_from_checkpoint(ms_weights)
+            self.spec = HsqcRankedTransformer.load_from_checkpoint(ms_weights, strict=False, module_only = True)
             print(f"[DoubleTransformer] Loading MS Model: {ms_weights}")
         else:
             self.spec = HsqcRankedTransformer(save_params=False, module_only=True, **ms)

@@ -2,7 +2,7 @@ import logging
 import pytorch_lightning as pl
 import torch, torch.nn as nn
 from encoder import CoordinateEncoder
-from utils import ranker
+from utils import ranker, constants
 from models import compute_metrics
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np, os
@@ -55,11 +55,18 @@ class HsqcRankedTransformer(pl.LightningModule):
             **kwargs,
         ):
         super().__init__()
+        params = locals().copy()
+        self.out_logger = logging.getLogger("lightning")
+
         if save_params:
             self.save_hyperparameters(ignore=["save_params", "module_only"])
+
         if not module_only:
             self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
             assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
+            for k,v in params.items():
+                if k not in constants.MODEL_LOGGING_IGNORE:
+                    self.out_logger.info(f"Hparam: [{k}], value: [{v}]")
         
         dim_coords = tuple([int(v) for v in dim_coords.split(",")])
         assert(sum(dim_coords)==dim_model)
@@ -87,7 +94,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         )
         self.loss = nn.BCEWithLogitsLoss(pos_weight=torch.ones(out_dim) * pos_weight)
 
-        self.out_logger = logging.getLogger("lightning")
         self.out_logger.info("[RankedTransformer] Initialized")
     
     @staticmethod
