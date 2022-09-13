@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "/workspace/smart4.5"
+    ]
+}
