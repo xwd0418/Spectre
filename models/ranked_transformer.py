@@ -59,15 +59,14 @@ class HsqcRankedTransformer(pl.LightningModule):
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
 
-        if save_params:
-            self.save_hyperparameters(ignore=["save_params", "module_only"])
-
         if not module_only:
             self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
             assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
             for k,v in params.items():
                 if k not in constants.MODEL_LOGGING_IGNORE:
                     self.out_logger.info(f"Hparam: [{k}], value: [{v}]")
+            if save_params:
+                self.save_hyperparameters(ignore=["save_params", "module_only"])
         
         dim_coords = tuple([int(v) for v in dim_coords.split(",")])
         assert(sum(dim_coords)==dim_model)
@@ -79,6 +78,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
         elif coord_enc == "sce":
             self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+            self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
         else:
             raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
 
