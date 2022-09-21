@@ -4,6 +4,8 @@ from torch.utils.data import DataLoader, Dataset
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.loggers import TensorBoardLogger
 
+events = []
+
 class DummyModule(pl.LightningModule):
     def __init__(self):
         super().__init__()
@@ -19,14 +21,17 @@ class DummyModule(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         loss = self.loss(self.forward(x), y)
+        events.append("train_step")
         return loss
     def validation_step(self, batch, batch_idx):
         x, y = batch
         loss = self.loss(self.forward(x), y)
+        events.append("val_step")
         return {"loss": loss}
     def validation_epoch_end(self, validation_step_outputs):
         self.log('val/my_loss', self.fn(self.e))
         print("\nerrr", self.e, self.fn(self.e), "\n")
+        events.append("val_epoch_end")
         self.e += 1
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=1e-3)
@@ -35,7 +40,7 @@ class DS(Dataset):
     def __init__(self):
         super().__init__()
     def __len__(self):
-        return 10
+        return 600
     def __getitem__(self, i):
         return torch.tensor([i]).float(), torch.tensor([i, i, i]).float()
 class DM(pl.LightningDataModule):
@@ -48,19 +53,20 @@ class DM(pl.LightningDataModule):
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
     def train_dataloader(self):
-        return DataLoader(self.train, shuffle=True, batch_size=64, num_workers=4)
+        return DataLoader(self.train, shuffle=True, batch_size=5, num_workers=4)
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=64, num_workers=4)
     def test_dataloader(self):
         return DataLoader(self.test, batch_size=64, num_workers=4)
 
 def main():
+    print(events)
     model, dm = DummyModule(), DM()
     tbl = TensorBoardLogger(save_dir=".", name="path1", version="v1")
     cb = EarlyStopping(monitor="val/my_loss", mode="min", verbose=True, patience=5)
     trainer = pl.Trainer(max_epochs=40, gpus=0, logger = tbl, callbacks=[cb])
     trainer.fit(model, dm)
-
+    print(events)
 
 if __name__ == '__main__':
     main()
