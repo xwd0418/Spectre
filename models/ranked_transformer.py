@@ -1,7 +1,7 @@
 import logging
 import pytorch_lightning as pl
 import torch, torch.nn as nn
-from encoder import CoordinateEncoder
+from encoder import CoordinateEncoder, SignCoordinateEncoder
 from utils import ranker, constants
 from models import compute_metrics
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
@@ -44,6 +44,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             heads=8,
             layers=1,
             ff_dim=1024,
+            coord_enc="ce",
             wavelength_bounds=None,
             dropout=0,
             out_dim=6144,
@@ -74,7 +75,13 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.lr = lr
         self.weight_decay = weight_decay
 
-        self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+        if coord_enc == "ce":
+            self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+        elif coord_enc == "sce":
+            self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+        else:
+            raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
+
         self.fc = nn.Linear(dim_model, out_dim)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
         self.scheduler = scheduler
@@ -106,12 +113,13 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}heads", type=int, default=8)
         parser.add_argument(f"--{model_name}layers", type=int, default=8)
         parser.add_argument(f"--{model_name}ff_dim", type=int, default=1024)
-        parser.add_argument(f"--{model_name}wavelength_bounds", type=int, default=None)
+        parser.add_argument(f"--{model_name}wavelength_bounds", type=float, default=None, nargs='+', action='append')
         parser.add_argument(f"--{model_name}dropout", type=float, default=0)
         parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
         parser.add_argument(f"--{model_name}pos_weight", type=float, default=1.0)
         parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
         parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
+        parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
         return parent_parser
     
     @staticmethod

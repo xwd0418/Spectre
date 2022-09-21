@@ -17,7 +17,7 @@ def get_curr_time():
     california_time = datetime.now(pst)
     return california_time.strftime("%m_%d_%Y_%H:%M")
 
-ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc", "patience"] + ["hsqc_weights", "ms_weights"]
+ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc", "patience", "ds"] + ["hsqc_weights", "ms_weights"]
 GROUPS = [
     set(["lr", "epochs", "bs"]),
     set(["heads", "layers", "hsqc_heads", "hsqc_layers", "ms_heads", "ms_layers"])
@@ -43,18 +43,22 @@ def exp_string(expname, args):
     hierarchical_unlimited = grouped_params + ungrouped_params_unlimited
     return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited)
 
-def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size):
+def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
     """
         constructs data module based on model_tyle, and also outputs dimensions of dummy data
         (for graph visualization)
     """
     my_dir = f"/workspace/smart4.5/tempdata/hyun_fp_data/{data_src}"
+    signed_dir = f"/workspace/smart4.5/tempdata/bounded_hyun_fp_data/{data_src}"
     if model_type == "double_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size), [(64, 40, 3), (64, 50, 2)]
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size)
     elif model_type == "hsqc_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size), [(64, 40, 3)]
+        if ds == "signed_intensity":
+            print("==== USING SIGNED HSQC DATA ====")
+            return FolderDataModule(dir=signed_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size), [(64, 50, 2)]
+        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size)
     raise(f"No datamodule for model type {model_type}.")
 
 def apply_args(parser, model_type):
@@ -104,10 +108,11 @@ def main():
     parser.add_argument("--datasrc", type=str, default=f"hsqc_ms_pairs")
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--patience", type=int, default=30)
+    parser.add_argument("--ds", type=str, default="")
     args = vars(parser.parse_known_args()[0])
 
     apply_args(parser, args["modelname"])
-    data_module, _ = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"])
+    data_module = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"], args["ds"])
     args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args_with_model.items())
 
