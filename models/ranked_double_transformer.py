@@ -100,6 +100,8 @@ class DoubleTransformer(pl.LightningModule):
         self.dim_model = max(hsqc_dim_model, ms_dim_model)
         self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
         self.loss = nn.BCEWithLogitsLoss(pos_weight = torch.ones(out_dim) * pos_weight)
+
+        self.out_logger.info("[RankedDoubleTransformer] Initialized")
     
     @staticmethod
     def add_model_specific_args(parent_parser, model_name="tnsfm"):
@@ -138,7 +140,7 @@ class DoubleTransformer(pl.LightningModule):
         hsqc, ms, fp = batch
         out = self.forward(hsqc, ms) # logits
         loss = self.loss(out, fp)
-        return compute_metrics.cm(out, fp, self.ranker, loss, thresh = 0.0)
+        return compute_metrics.cm(out, fp, self.ranker, loss, self.loss, thresh = 0.0)
     
     def validation_epoch_end(self, validation_step_outputs):
         feats = validation_step_outputs[0].keys()

@@ -58,7 +58,7 @@ class FolderDataModule(pl.LightningDataModule):
         self.collate_fn = pad
     
     def setup(self, stage):
-        if stage == "fit" or stage is None:
+        if stage == "fit" or stage == "validate" or stage is None:
             self.train = FolderDataset(dir=self.dir, do_hyun_fp=self.do_hyun_fp, input_src = self.input_src, split="train")
             self.val = FolderDataset(dir=self.dir, do_hyun_fp=self.do_hyun_fp, input_src = self.input_src,split="val")
         if stage == "test":
