@@ -58,8 +58,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         super().__init__()
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
+        self.out_logger.info("[RankedTransformer] Started Initializing")
 
-        if not module_only:
+        if not module_only: # if you don't want to initialize the seperate rankers
             self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
             assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
             for k,v in params.items():
@@ -71,22 +72,25 @@ class HsqcRankedTransformer(pl.LightningModule):
         dim_coords = tuple([int(v) for v in dim_coords.split(",")])
         assert(sum(dim_coords)==dim_model)
 
-        self.lr = lr
-        self.weight_decay = weight_decay
-
+        # ranked encoder
         if coord_enc == "ce":
             self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+            self.out_logger.info("[RankedTransformer] using CoordinateEncoder")
         elif coord_enc == "sce":
             self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
             self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
         else:
             raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
 
-        self.fc = nn.Linear(dim_model, out_dim)
-        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
+        self.loss = nn.BCEWithLogitsLoss(pos_weight=torch.ones(out_dim) * pos_weight)
+        self.lr = lr
+        self.weight_decay = weight_decay
         self.scheduler = scheduler
         self.dim_model = dim_model
 
+        # === All Parameters ===
+        self.fc = nn.Linear(dim_model, out_dim)
+        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
             d_model=dim_model,
@@ -99,7 +103,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             layer,
             num_layers=layers,
         )
-        self.loss = nn.BCEWithLogitsLoss(pos_weight=torch.ones(out_dim) * pos_weight)
+        # === END Parameters ===
 
         self.out_logger.info("[RankedTransformer] Initialized")
     
@@ -179,7 +183,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         x, labels = batch
         out = self.forward(x)
         loss = self.loss(out, labels)
-        return compute_metrics.cm(out, labels, self.ranker, loss, thresh = 0.0)
+        return compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh = 0.0)
 
 
     def validation_epoch_end(self, validation_step_outputs):
