@@ -60,12 +60,13 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.out_logger = logging.getLogger("lightning")
         self.out_logger.info("[RankedTransformer] Started Initializing")
 
+        self.out_logger.info(f"[ranked_transformer] ==== ")
+        for k,v in params.items():
+            if k not in constants.MODEL_LOGGING_IGNORE:
+                self.out_logger.info(f"[ranked_transformer] Hparam: ({k}), value: ({v})")
         if not module_only: # if you don't want to initialize the seperate rankers
             self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
             assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
-            for k,v in params.items():
-                if k not in constants.MODEL_LOGGING_IGNORE:
-                    self.out_logger.info(f"Hparam: [{k}], value: [{v}]")
             if save_params:
                 self.save_hyperparameters(ignore=["save_params", "module_only"])
         

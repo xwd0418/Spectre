@@ -38,6 +38,7 @@ class DoubleTransformer(pl.LightningModule):
             weight_decay=0.0,
             ms_dim_model=128,
             ms_dim_coords="43,43,42",
+            ms_coord_enc="ce",
             ms_heads=8,
             ms_layers=1,
             ms_ff_dim=1024,
@@ -46,6 +47,7 @@ class DoubleTransformer(pl.LightningModule):
             ms_out_dim=6144,
             hsqc_dim_model=128,
             hsqc_dim_coords="43,43,42",
+            hsqc_coord_enc="ce",
             hsqc_heads=8,
             hsqc_layers=1,
             hsqc_ff_dim=1024,
@@ -60,9 +62,10 @@ class DoubleTransformer(pl.LightningModule):
         super().__init__()
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
+        self.out_logger.info(f"[ranked_double_transformer] ==== ")
         for k,v in params.items():
             if k not in constants.MODEL_LOGGING_IGNORE:
-                self.out_logger.info(f"Hparam: [{k}], value: [{v}]")
+                self.out_logger.info(f"[ranked_double_transformer] Hparam: ({k}), value: ({v})")
         self.save_hyperparameters(ignore=["ranking_set"])
 
         self.lr = lr
