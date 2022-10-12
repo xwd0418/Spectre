@@ -43,17 +43,21 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
     my_dir = f"/workspace/smart4.5/tempdata/hyun_fp_data/{data_src}"
     signed_dir = f"/workspace/smart4.5/tempdata/bounded_hyun_fp_data/{data_src}" # a different dataset that signs hsqc intensities
 
+    
+    if ds == "signed_intensity":
+        choice = signed_dir
+        logger.info("[Main] ==== Using SIGNED DATA ====")
+    else:
+        choice = signed_dir
+        logger.info("[Main] ==== Using Normal DATA ====")
+
+
     if model_type == "double_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size)
     elif model_type == "hsqc_transformer":
-        if ds == "signed_intensity":
-            logger.info("[Main] ==== Using SIGNED HSQC DATA ====")
-            return FolderDataModule(dir=signed_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
-        else:
-            logger.info("[Main] ==== Using Normal HSQC DATA ====")
-            return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=my_dir, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size)
     raise(f"No datamodule for model type {model_type}.")
 
 def apply_args(parser, model_type):
@@ -146,8 +150,8 @@ def main():
 
     # Trainer and start
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
-    checkpoint_callback = cb.ModelCheckpoint(monitor=args["metric"], mode="min", save_last=True)
-    early_stopping = EarlyStopping(monitor=args["metric"], mode="min", patience=args["patience"])
+    checkpoint_callback = cb.ModelCheckpoint(monitor=args["metric"], mode=args["metricmode"], save_last=True, save_top_k = 3)
+    early_stopping = EarlyStopping(monitor=args["metric"], mode=args["metricmode"], patience=args["patience"])
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping, lr_monitor])
     if args["validate"]:
