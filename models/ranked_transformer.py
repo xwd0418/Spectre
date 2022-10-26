@@ -53,17 +53,17 @@ class HsqcRankedTransformer(pl.LightningModule):
             pos_weight=1.0,
             weight_decay=0.0,
             scheduler=None, # None, "attention"
+            freeze_weights=False,
             **kwargs,
         ):
         super().__init__()
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
         self.out_logger.info("[RankedTransformer] Started Initializing")
-
-        self.out_logger.info(f"[ranked_transformer] ==== ")
         for k,v in params.items():
             if k not in constants.MODEL_LOGGING_IGNORE:
-                self.out_logger.info(f"[ranked_transformer] Hparam: ({k}), value: ({v})")
+                self.out_logger.info(f"\t[RankedTransformer] Hparam: ({k}), value: ({v})")
+
         if not module_only: # if you don't want to initialize the seperate rankers
             self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
             assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
@@ -77,7 +77,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         if coord_enc == "ce":
             self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
             self.out_logger.info("[RankedTransformer] using CoordinateEncoder")
-        elif coord_enc == "sce":
+        elif coord_enc == "sce": # when using sce, you use 1 less wavelength bound
             self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
             self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
         else:
@@ -106,6 +106,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         )
         # === END Parameters ===
 
+        if freeze_weights:
+            self.out_logger.info("[RankedTransformer] Freezing Weights")
+            for parameter in self.parameters():
+                parameter.requires_grad = False
         self.out_logger.info("[RankedTransformer] Initialized")
     
     @staticmethod
@@ -125,6 +129,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
         parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
         parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
+        parser.add_argument(f"--{model_name}freeze_weights", type=bool, default=False)
         return parent_parser
     
     @staticmethod

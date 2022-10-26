@@ -62,14 +62,13 @@ class DoubleTransformer(pl.LightningModule):
         super().__init__()
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
-        self.out_logger.info(f"[ranked_double_transformer] ==== ")
+        self.out_logger.info(f"[RankedDoubleTransformer] ==== ")
         for k,v in params.items():
             if k not in constants.MODEL_LOGGING_IGNORE:
-                self.out_logger.info(f"[ranked_double_transformer] Hparam: ({k}), value: ({v})")
-        self.save_hyperparameters(ignore=["ranking_set"])
+                self.out_logger.info(f"[RankedDoubleTransformer] Hparam: ({k}), value: ({v})")
+        self.save_hyperparameters()
 
-        self.lr = lr
-        self.weight_decay = weight_decay
+        # Init both encoders
         hsqc = HsqcRankedTransformer.prune_args(params, "hsqc")
         ms = HsqcRankedTransformer.prune_args(params, "ms")
         if hsqc_weights is not None:
@@ -77,15 +76,14 @@ class DoubleTransformer(pl.LightningModule):
             print(f"[DoubleTransformer] Loading HSQC Model: {hsqc_weights}")
         else:
             self.hsqc = HsqcRankedTransformer(save_params=False, module_only=True, **hsqc)
-
         if ms_weights:
             self.spec = HsqcRankedTransformer.load_from_checkpoint(ms_weights, strict=False, module_only = True)
             print(f"[DoubleTransformer] Loading MS Model: {ms_weights}")
         else:
             self.spec = HsqcRankedTransformer(save_params=False, module_only=True, **ms)
         
+        # Init hidden layers
         total_emb_dim = self.hsqc.fc.in_features+self.spec.fc.in_features
-
         if num_hidden > 0:
             fc_layers = [nn.Linear(total_emb_dim, fc_dim), nn.ReLU(), nn.Dropout(dropout)]
             for _ in range(num_hidden):
@@ -99,6 +97,8 @@ class DoubleTransformer(pl.LightningModule):
                 nn.Linear(total_emb_dim, out_dim),
             )
 
+        self.lr = lr
+        self.weight_decay = weight_decay
         self.scheduler = scheduler
         self.dim_model = max(hsqc_dim_model, ms_dim_model)
         self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")

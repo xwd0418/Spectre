@@ -32,7 +32,8 @@ def exp_string(expname, args):
 
     hierarchical = grouped_params + ungrouped_params
     hierarchical_unlimited = grouped_params + ungrouped_params_unlimited
-    return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited)
+    # limited hyperparameter experiment name, all hyperparameter string, expname + time
+    return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited), f"{expname}_[{get_curr_time()}]"
 
 def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
     """
@@ -42,11 +43,14 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
     logger = logging.getLogger("lightning")
     my_dir = f"/workspace/smart4.5/tempdata/hyun_fp_data/{data_src}"
     signed_dir = f"/workspace/smart4.5/tempdata/bounded_hyun_fp_data/{data_src}" # a different dataset that signs hsqc intensities
-
+    smaller_ms_dir = f"/workspace/smart4.5/tempdata/smaller_ms/{data_src}"
     
     if ds == "signed_intensity":
         choice = signed_dir
         logger.info("[Main] ==== Using SIGNED DATA ====")
+    elif ds == "smaller_ms":
+        choice = smaller_ms_dir
+        logger.info("[Main] ==== Using SMALLER MS ====")
     else:
         choice = signed_dir
         logger.info("[Main] ==== Using Normal DATA ====")
@@ -72,7 +76,8 @@ def model_mux(parser, model_type, weights, freeze):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
     for v in EXCLUDE_FROM_MODEL_ARGS:
-        del kwargs[v]
+        if v in kwargs:
+            del kwargs[v]
 
     model_class = None
     if model_type == "hsqc_transformer" or model_type == "ms_transformer":
@@ -113,16 +118,18 @@ def main():
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
     parser.add_argument("modelname", type=str)
-    parser.add_argument("--debug", type=bool, default=False)
+    parser.add_argument("--name_type", type=int, default=0)
     parser.add_argument("--epochs", type=int, default=120)
-    parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
+    parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"hsqc_ms_pairs")
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--patience", type=int, default=30)
     parser.add_argument("--ds", type=str, default="")
+    # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_ce_loss")
     parser.add_argument("--metricmode", type=str, default="max")
+
     parser.add_argument("--load_all_weights", type=str, default="")
     parser.add_argument("--freeze", type=bool, default=False)
     parser.add_argument("--validate", type=bool, default=False)
@@ -136,22 +143,30 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path, (exp_name, hparam_string) = "/data/smart4.5", exp_string(args["expname"], li_args)
-    path1, path2 = args["foldername"], args["expname"] if args["debug"] else exp_name
+    out_path, (exp_name, hparam_string, exp_time_string) = "/data/smart4.5", exp_string(args["expname"], li_args)
+    path1 = args["foldername"]
+    if args["name_type"] == 0: # full hyperparameter string
+        path2 = exp_name
+    elif args["name_type"] == 1: # only experiment name and time
+        path2 = exp_time_string
+    else: # only experiment name parameter
+        path2 = args["expname"]
 
     # Logger setup
     my_logger = init_logger(out_path, path1, path2)
-    my_logger.info(f'path: {out_path}/{path1}/{path2}')
-    my_logger.info(f'hparam: {hparam_string}')
+    my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
+    my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
 
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"])
     data_module = data_mux(parser, args["modelname"], args["datasrc"], True, args["bs"], args["ds"])
 
-    # Trainer and start
+    # Trainer, callbacks
+    metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
+
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
-    checkpoint_callback = cb.ModelCheckpoint(monitor=args["metric"], mode=args["metricmode"], save_last=True, save_top_k = 3)
-    early_stopping = EarlyStopping(monitor=args["metric"], mode=args["metricmode"], patience=args["patience"])
+    checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 3)
+    early_stopping = EarlyStopping(monitor=metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=tbl, callbacks=[checkpoint_callback, early_stopping, lr_monitor])
     if args["validate"]:
