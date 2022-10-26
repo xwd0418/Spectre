@@ -56,4 +56,4 @@ reconcile diverging workflows between colin and james.
 
 ### Running
 Basic testing command
-- `python train_ranker_transformer.py hsqc_transformer --debug True --foldername debug --expname debug --epochs 2`
+- `python train_ranker_transformer.py hsqc_transformer --name_type 2 --foldername debug --expname debug --epochs 2`
