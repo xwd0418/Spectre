@@ -549,3 +549,4 @@ tempdata/
 core.*
 ignore/
 path1/
+lightning_logs/
