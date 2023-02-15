@@ -85,7 +85,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         else:
             raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
 
-        self.loss = nn.BCEWithLogitsLoss(pos_weight=torch.ones(out_dim) * pos_weight)
+        self.loss = nn.BCEWithLogitsLoss()
         self.lr = lr
         self.weight_decay = weight_decay
         self.scheduler = scheduler
@@ -161,7 +161,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1)
 
-        points = torch.cat([latent, points], dim=1)
+        points = torch.cat([latent, points], dim=1).to(self.device)
+        mask = mask.to(self.device)
+        # print(points.dtype, mask.dtype, points.device, mask.device, points.shape, mask.shape)
+
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out
 
@@ -182,6 +185,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     
     def training_step(self, batch, batch_idx):
         x, labels = batch
+        labels = labels.type(torch.cuda.FloatTensor)
         out = self.forward(x)
         loss = self.loss(out, labels)
 
@@ -190,6 +194,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         x, labels = batch
+        labels = labels.type(torch.cuda.FloatTensor)
         out = self.forward(x)
         loss = self.loss(out, labels)
         return compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh = 0.0)

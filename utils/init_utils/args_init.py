@@ -31,3 +31,4 @@ def training_args(parser):
 
   # data args
   parser.add_argument("--data_len", type=int, default=None)
+  parser.add_argument("--batch_size", type=int, default=32)
