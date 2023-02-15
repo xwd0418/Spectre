@@ -27,11 +27,13 @@ def main():
 
     # Logger setup
     my_logger = loggers_init.init_logger(out_path, path1, path2)
-    my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
+    my_logger.info(f'[Main - Logger] Output Path: {out_path}/{path1}/{path2}')
 
     # Model and Data setup
     model = models_init.model_mux(parser, args["modelname"])
-    data_module = data_init.data_mux(parser, args["data_len"])
+    batch_size = args["batch_size"]
+    data_module = data_init.data_mux(parser, len_override=args["data_len"], batch_size=batch_size)
+    my_logger.info(f"[Main - Data] Initialized.")
 
     # All callbacks
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
