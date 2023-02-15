@@ -7,6 +7,7 @@ MODEL_LOGGING_IGNORE = ["kwargs", "__class__", "self"]
 # ignore when generating hyperparmaeter strings
 ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc", "patience", "ds", "metric", "validate"] + \
   ["hsqc_weights", "ms_weights", "freeze", "load_all_weights"]
+
 # priorities for hyperparameter strings
 GROUPS = [
     set(["lr", "epochs", "bs"]),

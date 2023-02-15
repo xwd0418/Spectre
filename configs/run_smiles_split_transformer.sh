@@ -1,0 +1,1 @@
+python train_concise.py hsqc_transformer --foldername new_split --expname experiment1

@@ -50,6 +50,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             out_dim=6144,
             save_params=True,
             module_only=False,
+            ranking_set_path="",
             pos_weight=1.0,
             weight_decay=0.0,
             scheduler=None, # None, "attention"
@@ -60,13 +61,14 @@ class HsqcRankedTransformer(pl.LightningModule):
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
         self.out_logger.info("[RankedTransformer] Started Initializing")
+
         for k,v in params.items():
             if k not in constants.MODEL_LOGGING_IGNORE:
                 self.out_logger.info(f"\t[RankedTransformer] Hparam: ({k}), value: ({v})")
 
         if not module_only: # if you don't want to initialize the seperate rankers
-            self.ranker = ranker.RankingSet(file_path="./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt")
-            assert(os.path.exists("./tempdata/hyun_pair_ranking_set_07_22/val_pair.pt"))
+            assert(os.path.exists(ranking_set_path))
+            self.ranker = ranker.RankingSet(file_path=ranking_set_path)
             if save_params:
                 self.save_hyperparameters(ignore=["save_params", "module_only"])
         
@@ -130,6 +132,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
         parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
         parser.add_argument(f"--{model_name}freeze_weights", type=bool, default=False)
+        parser.add_argument(f"--{model_name}ranking_set_path", type=str, default="")
         return parent_parser
     
     @staticmethod
