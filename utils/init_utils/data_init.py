@@ -13,7 +13,7 @@ def data_mux(parser, len_override = None, batch_size = 32):
   logger = logging.getLogger("lightning")
 
   SMILES_dataset_path = "tempdata/SMILES_dataset"
-  features = ["HSQC", "HYUN_FP"]
+  features = ["HSQC", "R2-6144FP"]
   feature_handlers = [pad, None]
   gim = GenericIndexedModule(SMILES_dataset_path, features, feature_handlers, 
     batch_size = batch_size, len_override = len_override)
