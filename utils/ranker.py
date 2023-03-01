@@ -122,7 +122,7 @@ class RankingSet():
 
       # ((n, q) > (1, q)) -> (n, q) -> (1, q)
       ct_greater = torch.sum(
-          (query_products > thresh) & match_mask & equality_mask, dim=0, keepdim=True
+          (query_products > thresh) & match_mask & equality_mask, dim=0, keepdim=True, dtype=torch.int
       )
 
       if self.debug:
