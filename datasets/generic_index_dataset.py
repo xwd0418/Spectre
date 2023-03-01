@@ -58,7 +58,10 @@ def build_collate_fn(feature_handlers):
       out = [None] * len(feat_columns)
       for idx, (handler, feat_column) in enumerate(zip(feature_handlers, feat_columns)):
           if handler is None:
-              out[idx] = torch.stack(feat_column, dim=0)
+              if type(feat_column[0]) is not torch.Tensor:
+                out[idx] = feat_column
+              else:
+                out[idx] = torch.stack(feat_column, dim=0)
           else:
               out[idx] = handler(feat_column)
       return out
