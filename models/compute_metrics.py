@@ -1,44 +1,49 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+from torchmetrics.classification import BinaryRecall, BinaryPrecision, BinaryF1Score
 
 do_cos = nn.CosineSimilarity(dim=1)
+do_f1 = BinaryF1Score()
+do_recall = BinaryRecall()
+do_precision = BinaryPrecision()
+do_accuracy = BinaryAccuracy()
 
-def cm(out, fp, ranker, loss, loss_fn, thresh=0.0, device="cuda"):
-  pred = (out >= thresh).type(torch.FloatTensor).to(device)
-  pred_cpu = pred.cpu()
-  labels = fp.cpu()
+def cm(model_output, fp_label, ranker, loss, loss_fn, thresh=0.0, device="cuda"):
+  # Fingeprint prediction
+  fp_pred = model_output >= thresh
+
   # cos
-  cos = do_cos(fp, pred)
+  cos = do_cos(fp_label, fp_pred)
   # bit activity
-  active = torch.mean(torch.sum(pred, axis=1))
+  active = torch.mean(torch.sum(fp_pred, axis=1))
   # bit metrics
-  f1 = f1_score(labels.flatten(), pred_cpu.flatten())
-  precision = precision_score(labels.flatten(), pred_cpu.flatten())
-  recall = recall_score(labels.flatten(), pred_cpu.flatten())
-  accuracy = accuracy_score(labels.flatten(), pred_cpu.flatten())
+  f1 = do_f1(fp_pred, fp_label)
+  precision = do_precision(fp_pred, fp_label)
+  recall = do_recall(fp_pred, fp_label)
+  accuracy = do_accuracy(fp_pred, fp_label)
 
-  if thresh == 0.5:  # probabiltiies
+  if torch.isclose(thresh, 0.5):  # probabiltiies
     pos_contr = torch.where(
-        fp == 0, torch.zeros_like(fp, dtype=torch.float), out)
+        fp_label == 0, torch.zeros_like(fp_label, dtype=torch.float), model_output)
     neg_contr = torch.where(
-        fp == 1, torch.ones_like(fp, dtype=torch.float), out)
-  elif thresh == 0.0:  # logits
+        fp_label == 1, torch.ones_like(fp_label, dtype=torch.float), model_output)
+  elif torch.isclose(thresh, 0.0):  # logits
     pos_contr = torch.where(
-        fp == 0, -999 * torch.ones_like(fp, dtype=torch.float), out)
+        fp_label == 0, -999 * torch.ones_like(fp_label, dtype=torch.float), model_output)
     neg_contr = torch.where(
-        fp == 1, 999 * torch.ones_like(fp, dtype=torch.float), out)
+        fp_label == 1, 999 * torch.ones_like(fp_label, dtype=torch.float), model_output)
   else:
     raise (f"Weird Threshold {thresh}")
 
-  pos_loss = loss_fn(pos_contr, fp)
-  neg_loss = loss_fn(neg_contr, fp)
+  pos_loss = loss_fn(pos_contr, fp_label)
+  neg_loss = loss_fn(neg_contr, fp_label)
 
   # === Do Ranking ===
-  rank_res = ranker.batched_rank(pred, fp)
+  rank_res = ranker.batched_rank(fp_pred, fp_label)
   cts = [1, 5, 10]
   # strictly less as batched_rank returns number of items STRICTLY greater
+  print(rank_res)
   ranks = {
       f"rank_{allow}": torch.sum(rank_res < allow).item() / torch.numel(rank_res)
       for allow in cts

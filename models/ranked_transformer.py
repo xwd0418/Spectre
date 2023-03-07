@@ -1,224 +1,235 @@
 import logging
 import pytorch_lightning as pl
-import torch, torch.nn as nn
+import torch
+import torch.nn as nn
 from encoder import CoordinateEncoder, SignCoordinateEncoder
 from utils import ranker, constants
 from models import compute_metrics
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
-import numpy as np, os
+import numpy as np
+import os
 
 from utils.lr_scheduler import NoamOpt
 
 class HsqcRankedTransformer(pl.LightningModule):
-    """A Transformer encoder for input HSQC.
+  """A Transformer encoder for input HSQC.
+  Parameters
+  ----------
+  lr : float, optional
+      The model's learning rate
+  dim_model : int, optional
+      The latent dimensionality to represent points on the HSQC
+  dim_coords : tuple, optional
+      A tuple (x,y,z) where x, y, and z are the number of dimensions to represent the
+      each dimension of the hsqc coordinates. Must sum to dim_model
+  n_head : int, optional
+      The number of attention heads in each layer. ``dim_model`` must be
+      divisible by ``n_head``.
+  dim_feedforward : int, optional
+      The dimensionality of the fully connected layers in the Transformer
+      layers of the model.
+  n_layers : int, optional
+      The number of Transformer layers.
+  wavelength_bounds : list(tuple), optional
+      A list of tuples of (minimum, maximum) wavelengths for
+      each dimension to be encoded 
+  dropout : float, optional
+      The dropout probability for all layers.
+  out_dim : int, optional
+      The final output dimensionality of the model
+  """
+
+  def __init__(
+      self,
+      lr=1e-3,
+      dim_model=128,
+      dim_coords="43,43,42",
+      heads=8,
+      layers=8,
+      ff_dim=1024,
+      coord_enc="ce",
+      wavelength_bounds=None,
+      dropout=0,
+      out_dim=6144,
+      save_params=True,
+      module_only=False,
+      ranking_set_path="",
+      pos_weight=1.0,
+      weight_decay=0.0,
+      scheduler=None,  # None, "attention"
+      freeze_weights=False,
+      **kwargs,
+  ):
+    super().__init__()
+    params = locals().copy()
+    self.out_logger = logging.getLogger("lightning")
+    self.out_logger.info("[RankedTransformer] Started Initializing")
+
+    for k, v in params.items():
+      if k not in constants.MODEL_LOGGING_IGNORE:
+        self.out_logger.info(
+            f"\t[RankedTransformer] Hparam: ({k}), value: ({v})")
+
+    # if you don't want to initialize the seperate rankers. Useful if using it as a module
+    # in a higher-level double transformer
+    if not module_only:
+      assert (os.path.exists(ranking_set_path))
+      self.ranker = ranker.RankingSet(file_path=ranking_set_path)
+      if save_params:
+        self.save_hyperparameters(ignore=["save_params", "module_only"])
+
+    dim_coords = tuple([int(v) for v in dim_coords.split(",")])
+    assert (sum(dim_coords) == dim_model)
+
+    # ranked encoder
+    if coord_enc == "ce":
+      self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+      self.out_logger.info("[RankedTransformer] using CoordinateEncoder")
+    elif coord_enc == "sce":  # when using sce, you use 1 less wavelength bound
+      self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
+      self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
+    else:
+      raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
+
+    self.loss = nn.BCEWithLogitsLoss()
+    self.lr = lr
+    self.weight_decay = weight_decay
+    self.scheduler = scheduler
+    self.dim_model = dim_model
+
+    # === All Parameters ===
+    self.fc = nn.Linear(dim_model, out_dim)
+    self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
+    # The Transformer layers:
+    layer = torch.nn.TransformerEncoderLayer(
+        d_model=dim_model,
+        nhead=heads,
+        dim_feedforward=ff_dim,
+        batch_first=True,
+        dropout=dropout,
+    )
+    self.transformer_encoder = torch.nn.TransformerEncoder(
+        layer,
+        num_layers=layers,
+    )
+    # === END Parameters ===
+
+    if freeze_weights:
+      self.out_logger.info("[RankedTransformer] Freezing Weights")
+      for parameter in self.parameters():
+        parameter.requires_grad = False
+    self.out_logger.info("[RankedTransformer] Initialized")
+
+  @staticmethod
+  def add_model_specific_args(parent_parser, model_name=""):
+    model_name = model_name if len(model_name) == 0 else f"{model_name}_"
+    parser = parent_parser.add_argument_group(model_name)
+    parser.add_argument(f"--{model_name}lr", type=float, default=1e-3)
+    parser.add_argument(f"--{model_name}dim_model", type=int, default=128)
+    parser.add_argument(f"--{model_name}dim_coords",
+                        type=str, default="43,43,42")
+    parser.add_argument(f"--{model_name}heads", type=int, default=8)
+    parser.add_argument(f"--{model_name}layers", type=int, default=8)
+    parser.add_argument(f"--{model_name}ff_dim", type=int, default=1024)
+    parser.add_argument(f"--{model_name}wavelength_bounds",
+                        type=float, default=None, nargs='+', action='append')
+    parser.add_argument(f"--{model_name}dropout", type=float, default=0)
+    parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
+    parser.add_argument(f"--{model_name}pos_weight", type=float, default=1.0)
+    parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
+    parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
+    parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
+    parser.add_argument(f"--{model_name}freeze_weights",
+                        type=bool, default=False)
+    parser.add_argument(f"--{model_name}ranking_set_path", type=str, default="")
+    return parent_parser
+
+  @staticmethod
+  def prune_args(vals: dict, model_name=""):
+    items = [(k[len(model_name) + 1:], v)
+             for k, v in vals.items() if k.startswith(model_name)]
+    return dict(items)
+
+  def encode(self, hsqc):
+    """
+    Returns
+    -------
+    latent : torch.Tensor of shape (n_spectra, n_peaks + 1, dim_model)
+        The latent representations for the spectrum and each of its
+        peaks.
+    mem_mask : torch.Tensor
+        The memory mask specifying which elements were padding in X.
+    """
+    zeros = ~hsqc.sum(dim=2).bool()
+    mask = [
+        torch.tensor([[False]] * hsqc.shape[0]).type_as(zeros),
+        zeros,
+    ]
+    mask = torch.cat(mask, dim=1)
+    points = self.enc(hsqc)
+
+    # Add the spectrum representation to each input:
+    latent = self.latent.expand(points.shape[0], -1, -1)
+
+    points = torch.cat([latent, points], dim=1).to(self.device)
+    mask = mask.to(self.device)
+    # print(points.dtype, mask.dtype, points.device, mask.device, points.shape, mask.shape)
+
+    out = self.transformer_encoder(points, src_key_padding_mask=mask)
+    return out
+
+  def forward(self, hsqc):
+    """The forward pass.
     Parameters
     ----------
-    lr : float, optional
-        The model's learning rate
-    dim_model : int, optional
-        The latent dimensionality to represent points on the HSQC
-    dim_coords : tuple, optional
-        A tuple (x,y,z) where x, y, and z are the number of dimensions to represent the
-        each dimension of the hsqc coordinates. Must sum to dim_model
-    n_head : int, optional
-        The number of attention heads in each layer. ``dim_model`` must be
-        divisible by ``n_head``.
-    dim_feedforward : int, optional
-        The dimensionality of the fully connected layers in the Transformer
-        layers of the model.
-    n_layers : int, optional
-        The number of Transformer layers.
-    wavelength_bounds : list(tuple), optional
-        A list of tuples of (minimum, maximum) wavelengths for
-        each dimension to be encoded 
-    dropout : float, optional
-        The dropout probability for all layers.
-    out_dim : int, optional
-        The final output dimensionality of the model
+    hsqc: torch.Tensor of shape (batch_size, n_points, 3)
+        The hsqc to embed. Axis 0 represents an hsqc, axis 1
+        contains the coordinates in the hsqc, and axis 2 is essentially is
+        a 3-tuple specifying the coordinate's x, y, and z value. These
+        should be zero-padded, such that all of the hsqc in the batch
+        are the same length.
     """
-    def __init__(
-            self,
-            lr=1e-3,
-            dim_model=128,
-            dim_coords="43,43,42",
-            heads=8,
-            layers=1,
-            ff_dim=1024,
-            coord_enc="ce",
-            wavelength_bounds=None,
-            dropout=0,
-            out_dim=6144,
-            save_params=True,
-            module_only=False,
-            ranking_set_path="",
-            pos_weight=1.0,
-            weight_decay=0.0,
-            scheduler=None, # None, "attention"
-            freeze_weights=False,
-            **kwargs,
-        ):
-        super().__init__()
-        params = locals().copy()
-        self.out_logger = logging.getLogger("lightning")
-        self.out_logger.info("[RankedTransformer] Started Initializing")
+    out = self.encode(hsqc)
+    out = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token
+    return out
 
-        for k,v in params.items():
-            if k not in constants.MODEL_LOGGING_IGNORE:
-                self.out_logger.info(f"\t[RankedTransformer] Hparam: ({k}), value: ({v})")
+  def training_step(self, batch, batch_idx):
+    x, labels = batch
+    labels = labels.type(torch.cuda.BoolTensor)
+    out = self.forward(x)
+    loss = self.loss(out, labels)
 
-        if not module_only: # if you don't want to initialize the seperate rankers
-            assert(os.path.exists(ranking_set_path))
-            self.ranker = ranker.RankingSet(file_path=ranking_set_path)
-            if save_params:
-                self.save_hyperparameters(ignore=["save_params", "module_only"])
-        
-        dim_coords = tuple([int(v) for v in dim_coords.split(",")])
-        assert(sum(dim_coords)==dim_model)
+    self.log("tr/loss", loss)
+    return loss
 
-        # ranked encoder
-        if coord_enc == "ce":
-            self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
-            self.out_logger.info("[RankedTransformer] using CoordinateEncoder")
-        elif coord_enc == "sce": # when using sce, you use 1 less wavelength bound
-            self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
-            self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
-        else:
-            raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
+  def validation_step(self, batch, batch_idx):
+    x, labels = batch
+    labels = labels.type(torch.cuda.BoolTensor)
+    out = self.forward(x)
+    loss = self.loss(out, labels)
+    return compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh=0.0)
 
-        self.loss = nn.BCEWithLogitsLoss()
-        self.lr = lr
-        self.weight_decay = weight_decay
-        self.scheduler = scheduler
-        self.dim_model = dim_model
+  def validation_epoch_end(self, validation_step_outputs):
+    feats = validation_step_outputs[0].keys()
+    di = {}
+    for feat in feats:
+      di[f"val/mean_{feat}"] = np.mean([v[feat]
+                                       for v in validation_step_outputs])
+    for k, v in di.items():
+      self.log(k, v, on_epoch=True)
 
-        # === All Parameters ===
-        self.fc = nn.Linear(dim_model, out_dim)
-        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
-        # The Transformer layers:
-        layer = torch.nn.TransformerEncoderLayer(
-            d_model=dim_model,
-            nhead=heads,
-            dim_feedforward=ff_dim,
-            batch_first=True,
-            dropout=dropout,
-        )
-        self.transformer_encoder = torch.nn.TransformerEncoder(
-            layer,
-            num_layers=layers,
-        )
-        # === END Parameters ===
-
-        if freeze_weights:
-            self.out_logger.info("[RankedTransformer] Freezing Weights")
-            for parameter in self.parameters():
-                parameter.requires_grad = False
-        self.out_logger.info("[RankedTransformer] Initialized")
-    
-    @staticmethod
-    def add_model_specific_args(parent_parser, model_name=""):
-        model_name = model_name if len(model_name) == 0 else f"{model_name}_"
-        parser = parent_parser.add_argument_group(model_name)
-        parser.add_argument(f"--{model_name}lr", type=float, default=1e-3)
-        parser.add_argument(f"--{model_name}dim_model", type=int, default=128)
-        parser.add_argument(f"--{model_name}dim_coords", type=str, default="43,43,42")
-        parser.add_argument(f"--{model_name}heads", type=int, default=8)
-        parser.add_argument(f"--{model_name}layers", type=int, default=8)
-        parser.add_argument(f"--{model_name}ff_dim", type=int, default=1024)
-        parser.add_argument(f"--{model_name}wavelength_bounds", type=float, default=None, nargs='+', action='append')
-        parser.add_argument(f"--{model_name}dropout", type=float, default=0)
-        parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
-        parser.add_argument(f"--{model_name}pos_weight", type=float, default=1.0)
-        parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
-        parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
-        parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
-        parser.add_argument(f"--{model_name}freeze_weights", type=bool, default=False)
-        parser.add_argument(f"--{model_name}ranking_set_path", type=str, default="")
-        return parent_parser
-    
-    @staticmethod
-    def prune_args(vals: dict, model_name=""):
-        items = [(k[len(model_name)+1:],v) for k,v in vals.items() if k.startswith(model_name)]
-        return dict(items)
-
-    def encode(self, hsqc):
-        """
-        Returns
-        -------
-        latent : torch.Tensor of shape (n_spectra, n_peaks + 1, dim_model)
-            The latent representations for the spectrum and each of its
-            peaks.
-        mem_mask : torch.Tensor
-            The memory mask specifying which elements were padding in X.
-        """
-        zeros = ~hsqc.sum(dim=2).bool()
-        mask = [
-            torch.tensor([[False]] * hsqc.shape[0]).type_as(zeros),
-            zeros,
-        ]
-        mask = torch.cat(mask, dim=1)
-        points = self.enc(hsqc)
-
-        # Add the spectrum representation to each input:
-        latent = self.latent.expand(points.shape[0], -1, -1)
-
-        points = torch.cat([latent, points], dim=1).to(self.device)
-        mask = mask.to(self.device)
-        # print(points.dtype, mask.dtype, points.device, mask.device, points.shape, mask.shape)
-
-        out = self.transformer_encoder(points, src_key_padding_mask=mask)
-        return out
-
-    def forward(self, hsqc):
-        """The forward pass.
-        Parameters
-        ----------
-        hsqc: torch.Tensor of shape (batch_size, n_points, 3)
-            The hsqc to embed. Axis 0 represents an hsqc, axis 1
-            contains the coordinates in the hsqc, and axis 2 is essentially is
-            a 3-tuple specifying the coordinate's x, y, and z value. These
-            should be zero-padded, such that all of the hsqc in the batch
-            are the same length.
-        """
-        out = self.encode(hsqc)
-        out = self.fc(out[:,:1,:].squeeze(1)) # extracts cls token
-        return out
-    
-    def training_step(self, batch, batch_idx):
-        x, labels = batch
-        labels = labels.type(torch.cuda.FloatTensor)
-        out = self.forward(x)
-        loss = self.loss(out, labels)
-
-        self.log("tr/loss", loss)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        x, labels = batch
-        labels = labels.type(torch.cuda.FloatTensor)
-        out = self.forward(x)
-        loss = self.loss(out, labels)
-        return compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh = 0.0)
-
-
-    def validation_epoch_end(self, validation_step_outputs):
-        feats = validation_step_outputs[0].keys()
-        di = {}
-        for feat in feats:
-            di[f"val/mean_{feat}"] = np.mean([v[feat] for v in validation_step_outputs])
-        for k,v in di.items():
-            self.log(k, v, on_epoch=True)
-
-    def configure_optimizers(self):
-        if not self.scheduler:
-            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
-        elif self.scheduler == "attention":
-            optim = torch.optim.Adam(self.parameters(), lr=0, betas=(0.9, 0.98), eps=1e-9, weight_decay=self.weight_decay)
-            scheduler = NoamOpt(self.dim_model, 4000, optim)
-            return {
-                "optimizer": optim,
-                "lr_scheduler": {
-                    "scheduler": scheduler,
-                    "interval": "step",
-                    "frequency": 1,
-                }
-            }
+  def configure_optimizers(self):
+    if not self.scheduler:
+      return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+    elif self.scheduler == "attention":
+      optim = torch.optim.Adam(self.parameters(), lr=0, betas=(
+          0.9, 0.98), eps=1e-9, weight_decay=self.weight_decay)
+      scheduler = NoamOpt(self.dim_model, 4000, optim)
+      return {
+          "optimizer": optim,
+          "lr_scheduler": {
+              "scheduler": scheduler,
+              "interval": "step",
+              "frequency": 1,
+          }
+      }
