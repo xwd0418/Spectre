@@ -1,0 +1,29 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug train_concise",
+      "type": "python",
+      "request": "launch",
+      "program": "train_concise.py",
+      "args": [
+        "hsqc_transformer",
+        "--foldername",
+        "debug",
+        "--expname",
+        "debug",
+        "--ranking_set_path",
+        "/workspace/smart4.5/tempdata/SMILES_ranking_sets/val/rankingset.pt",
+        "--data_len",
+        "200",
+        "--epochs",
+        "4"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
