@@ -195,7 +195,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
   def training_step(self, batch, batch_idx):
     x, labels = batch
-    labels = labels.type(torch.cuda.BoolTensor)
+    labels = labels.type(torch.cuda.FloatTensor)
     out = self.forward(x)
     loss = self.loss(out, labels)
 
@@ -204,7 +204,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
   def validation_step(self, batch, batch_idx):
     x, labels = batch
-    labels = labels.type(torch.cuda.BoolTensor)
+    labels = labels.type(torch.cuda.FloatTensor)
     out = self.forward(x)
     loss = self.loss(out, labels)
     return compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh=0.0)
