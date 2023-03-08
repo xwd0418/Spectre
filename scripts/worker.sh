@@ -5,7 +5,7 @@ do
   if [[ "$line" != *"ignore"* ]]
   then
     echo "===Running script $line"
-    source $line
+    # source $line
     status=$?
     if [[ $status == 123 ]]
     then
