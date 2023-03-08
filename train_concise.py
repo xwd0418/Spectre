@@ -5,11 +5,13 @@ import torch
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 from utils.init_utils import args_init, data_init, loggers_init, models_init
+from utils import marker
 from models.extras.best_results_logger import BestResultLogger
 
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
+from pathlib import Path
 from argparse import ArgumentParser
 
 def main():
@@ -17,17 +19,23 @@ def main():
   args_init.training_args(parser)
   args = vars(parser.parse_known_args()[0])
 
+  # Tensorboard setup
+  out_path = "/data/smart4.5"
+  path1 = args["foldername"]  # lightning_logs
+  path2 = args["expname"]
+  marker_path = Path(out_path) / path1 / path2 / "marker"
+  if marker.has_marker(marker_path):
+    print("Experiment in progress / done")
+    exit(123)
+  os.makedirs(Path(out_path) / path1 / path2, exist_ok=True)
+  marker.place_marker(marker_path)
+
   # general args
   args_init.apply_args(parser, args["modelname"])
 
   # Model args
   args_with_model = vars(parser.parse_known_args()[0])
   li_args = list(args_with_model.items())
-
-  # Tensorboard setup
-  out_path = "/data/smart4.5"
-  path1 = args["foldername"]  # lightning_logs
-  path2 = args["expname"]
 
   # Logger setup
   my_logger = loggers_init.init_logger(out_path, path1, path2)
