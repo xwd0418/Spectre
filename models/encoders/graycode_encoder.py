@@ -27,7 +27,8 @@ class GraycodeEncoder(torch.nn.Module):
     assert (sum(dim_coords) == dim_model)
     self.positional_encoders = []
     self.dim_coords = dim_coords
-    assert (not torch.isclose(resolution, 0))
+    assert (resolution is not None)
+    assert (not np.isclose(resolution, 0))
     self.resolution = resolution
 
   def forward(self, X):
@@ -42,12 +43,28 @@ class GraycodeEncoder(torch.nn.Module):
         The encoded coordinates
     """
     assert (X.shape[2] == len(self.dim_coords))
-    embeddings = []
-    for dim, encoder in enumerate(self.positional_encoders):
-      values = X[:,:,[dim]]
-      b_s, n_c, _ = values.size()
-      bufsize = torch.zeros((b_s, n_c, self.dim_coords[dim]))
-      mask = 2**torch.arange(self.dim_coords[dim])[None, None, :]
-      embeddings.append(encoder(X[:, :, [dim]]))
+    
+    # Stack together many (b_s, n_c, d) tensors
+    encodings = []
+    device = X.device
+    for dim, dim_size in enumerate(self.dim_coords):
+      raw_values = X[:,:,[dim]].divide(self.resolution).round().type(torch.int32)
+      b_s, n_c, _ = raw_values.size()
+      
+      # Encoded Sign
+      encodings.append(torch.where(raw_values > 0, 1, 0))
+      raw_values = torch.abs(raw_values)
+      # Element-Wise Graycode
+      for b in range(b_s):
+        for c in range(n_c):
+          raw_values[b,c,0] = graycode.tc_to_gray_code(abs(raw_values[b,c,0]))
+      
+      mask = 2**torch.arange(dim_size - 1)[None, None, :].to(device)
+      # broadcast [b_s, n_c, 1] with [1,1,dim_size]
+      encoded_values = raw_values.bitwise_and(mask).ne(0).type(torch.int32)
+      
+      # Encoded Values
+      encodings.append(encoded_values)
 
-    return torch.cat(embeddings, dim=2)
+    final = torch.cat(encodings, dim=2)
+    return final

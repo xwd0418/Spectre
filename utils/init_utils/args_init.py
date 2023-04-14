@@ -15,8 +15,9 @@ def training_args(parser):
   # string that is basically a constant
   parser.add_argument("modelname", type=str)
   
-  # name_type == 0
   parser.add_argument("--epochs", type=int, default=120)
+  # Force the experiment to start (ignore marker checking)
+  parser.add_argument("--force_start", type=bool, default=False)
 
   # logging args
   parser.add_argument("--foldername", type=str, default=f"lightning_logs")

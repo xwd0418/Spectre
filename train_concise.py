@@ -24,7 +24,7 @@ def main():
   path1 = args["foldername"]  # lightning_logs
   path2 = args["expname"]
   marker_path = Path(out_path) / path1 / path2 / "marker"
-  if marker.has_marker(marker_path):
+  if not args["force_start"] and marker.has_marker(marker_path):
     print("Experiment in progress / done")
     exit(123)
   os.makedirs(Path(out_path) / path1 / path2, exist_ok=True)
@@ -60,7 +60,7 @@ def main():
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
 
   # Create trainer instance
-  trainer = pl.Trainer(max_epochs=args["epochs"], gpus=1, logger=[tbl, brl], callbacks=[
+  trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", devices = 1, logger=[tbl, brl], callbacks=[
                        checkpoint_callback, early_stopping, lr_monitor])
 
   my_logger.info("[Main] Begin Training!")

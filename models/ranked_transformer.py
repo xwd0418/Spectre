@@ -3,6 +3,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 from encoder import CoordinateEncoder, SignCoordinateEncoder
+from models.encoders.graycode_encoder import GraycodeEncoder
 from utils import ranker, constants
 from models import compute_metrics
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
@@ -49,6 +50,7 @@ class HsqcRankedTransformer(pl.LightningModule):
       ff_dim=1024,
       coord_enc="ce",
       wavelength_bounds=None,
+      gce_resolution=1,
       dropout=0,
       out_dim=6144,
       save_params=True,
@@ -88,6 +90,9 @@ class HsqcRankedTransformer(pl.LightningModule):
     elif coord_enc == "sce":  # when using sce, you use 1 less wavelength bound
       self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
       self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
+    elif coord_enc == "gce":
+      self.enc = GraycodeEncoder(dim_model, dim_coords, gce_resolution)
+      self.out_logger.info("[RankedTransformer] using GraycodeEncoder")
     else:
       raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
 
@@ -96,6 +101,8 @@ class HsqcRankedTransformer(pl.LightningModule):
     self.weight_decay = weight_decay
     self.scheduler = scheduler
     self.dim_model = dim_model
+    
+    self.validation_step_outputs = []
 
     # === All Parameters ===
     self.fc = nn.Linear(dim_model, out_dim)
@@ -139,6 +146,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
     parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
     parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
+    parser.add_argument(f"--{model_name}gce_resolution", type=float, default=1)
     parser.add_argument(f"--{model_name}freeze_weights",
                         type=bool, default=False)
     parser.add_argument(f"--{model_name}ranking_set_path", type=str, default="")
@@ -207,16 +215,19 @@ class HsqcRankedTransformer(pl.LightningModule):
     labels = labels.type(torch.cuda.FloatTensor)
     out = self.forward(x)
     loss = self.loss(out, labels)
-    return compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh=0.0)
+    metrics = compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh=0.0)
+    self.validation_step_outputs.append(metrics)
+    return metrics
 
-  def validation_epoch_end(self, validation_step_outputs):
-    feats = validation_step_outputs[0].keys()
+  def on_validation_epoch_end(self):
+    feats = self.validation_step_outputs[0].keys()
     di = {}
     for feat in feats:
       di[f"val/mean_{feat}"] = np.mean([v[feat]
-                                       for v in validation_step_outputs])
+                                       for v in self.validation_step_outputs])
     for k, v in di.items():
       self.log(k, v, on_epoch=True)
+    self.validation_step_outputs.clear()
 
   def configure_optimizers(self):
     if not self.scheduler:
