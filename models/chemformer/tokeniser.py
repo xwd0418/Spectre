@@ -226,7 +226,6 @@ class MolEncTokeniser:
 
     tokens = self._regex_match(sents1)
     m_tokens, token_masks = self._mask_tokens(tokens, empty_mask=not mask)
-
     sent_masks = None
     if sents2 is not None:
       sents2_tokens = self._regex_match(sents2)
@@ -238,6 +237,7 @@ class MolEncTokeniser:
           m_tokens, sents2_m_tokens, self.sep_token)
       token_masks, _ = self._concat_sentences(token_masks, sents2_masks, False)
 
+    # Prepend to sequence of tokens
     tokens = [[self.begin_token] + ts + [self.end_token] for ts in tokens]
     m_tokens = [[self.begin_token] + ts + [self.end_token] for ts in m_tokens]
     token_masks = [[False] + ts + [False] for ts in token_masks]

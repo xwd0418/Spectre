@@ -415,7 +415,7 @@ class BARTModel(_AbsTransformerModel):
         if v.dtype == torch.int64:
           print("==> Decoded: ", self.decode_tokens(v.T))
         print("==> value")
-        print(indent(v[:5][:5], prefix="\t"))
+        print(indent(str(v[:5][:5]), prefix="\t"))
 
     encoder_input = x["encoder_input"]
     decoder_input = x["decoder_input"]
@@ -433,6 +433,11 @@ class BARTModel(_AbsTransformerModel):
 
     print("=== Memory ===")
     print(memory.size())
+    print("=== Decoder Embs ===")
+    print(decoder_embs.size())
+    print("=== tgt_mask ===")
+    print(tgt_mask.size())
+    print(indent(str(tgt_mask[:5][:5]), prefix="\t"))
 
     model_output = self.decoder(
         decoder_embs,
