@@ -142,6 +142,9 @@ class Uspto50(ReactionDataset):
     products = df["products_mol"].tolist()
     type_tokens = df["reaction_type"].tolist()
 
+    print("Uspto50 __init()__: ")
+    print(f"[DS] {type(df)} {len(df)}")
+
     super().__init__(reactants, products, items=type_tokens,
                      transform=self._prepare_strings, aug_prob=aug_prob)
 

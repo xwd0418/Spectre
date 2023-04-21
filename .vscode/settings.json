@@ -1,5 +1,7 @@
 {
     "python.analysis.extraPaths": [
         "/workspace/smart4.5"
-    ]
+    ],
+    "notebook.output.textLineLimit": 500,
+    "notebook.output.scrolling": true
 }

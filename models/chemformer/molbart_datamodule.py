@@ -215,6 +215,7 @@ class FineTuneReactionDataModule(_AbsDataModule):
       return collate_output
 
     reacts_smiles, prods_smiles = tuple(zip(*batch))
+
     reacts_output = self.tokeniser.tokenise(reacts_smiles, pad=True)
     prods_output = self.tokeniser.tokenise(prods_smiles, pad=True)
 
