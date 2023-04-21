@@ -7,6 +7,7 @@ import torch.nn as nn
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import OneCycleLR
 from functools import partial
+from textwrap import indent
 
 from models.chemformer.molbart_utils import (
     PreNormEncoderLayer,
@@ -134,10 +135,6 @@ class _AbsTransformerModel(pl.LightningModule):
     }
     return val_outputs
 
-  def validation_epoch_end(self, outputs):
-    avg_outputs = self._avg_dicts(outputs)
-    self._log_dict(avg_outputs)
-
   def test_step(self, batch, batch_idx):
     self.eval()
 
@@ -181,10 +178,6 @@ class _AbsTransformerModel(pl.LightningModule):
           f"Unknown test sampling algorithm, {self.test_sampling_alg}")
 
     return test_outputs
-
-  def test_epoch_end(self, outputs):
-    avg_outputs = self._avg_dicts(outputs)
-    self._log_dict(avg_outputs)
 
   def configure_optimizers(self):
     params = self.parameters()
@@ -342,6 +335,7 @@ class BARTModel(_AbsTransformerModel):
       activation,
       num_steps,
       max_seq_len,
+      my_tokeniser,
       schedule="cycle",
       warm_up_steps=None,
       dropout=0.1,
@@ -365,6 +359,7 @@ class BARTModel(_AbsTransformerModel):
         **kwargs
     )
 
+    self.my_tokeniser = my_tokeniser
     self.sampler = decode_sampler
     self.val_sampling_alg = "greedy"
     self.test_sampling_alg = "beam"
@@ -387,6 +382,10 @@ class BARTModel(_AbsTransformerModel):
 
     self._init_params()
 
+  def decode_tokens(self, v):
+    tokens = self.my_tokeniser.convert_ids_to_tokens(v)
+    return self.my_tokeniser.detokenise(tokens)
+
   def forward(self, x):
     """ Apply SMILES strings to model
 
@@ -406,6 +405,18 @@ class BARTModel(_AbsTransformerModel):
         Output from model (dict containing key "token_output" and "model_output")
     """
 
+    print("\n=== Describing forward input ===")
+    for k, v in x.items():
+      print(f"==> Key: {k}")
+      print(
+          f"==> Value: {type(v)}")
+      if type(v) is torch.Tensor:
+        print(f"==> Size: {v.size()} {v.type()} {v.dtype}")
+        if v.dtype == torch.int64:
+          print("==> Decoded: ", self.decode_tokens(v.T))
+        print("==> value")
+        print(indent(v[:5][:5], prefix="\t"))
+
     encoder_input = x["encoder_input"]
     decoder_input = x["decoder_input"]
     encoder_pad_mask = x["encoder_pad_mask"].transpose(0, 1)
@@ -419,6 +430,10 @@ class BARTModel(_AbsTransformerModel):
         seq_len, device=encoder_embs.device)
 
     memory = self.encoder(encoder_embs, src_key_padding_mask=encoder_pad_mask)
+
+    print("=== Memory ===")
+    print(memory.size())
+
     model_output = self.decoder(
         decoder_embs,
         memory,

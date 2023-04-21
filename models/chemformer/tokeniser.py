@@ -326,12 +326,14 @@ class MolEncTokeniser:
   def convert_ids_to_tokens(self, token_ids):
     tokens_list = []
     for ids in token_ids:
-      for token_id in ids:
+      tokens = [None] * len(ids)
+      for idx, token_id in enumerate(ids):
+        if type(token_id) is torch.Tensor:
+          token_id = int(token_id.item())
         token = self.decode_vocab.get(token_id)
         if token is None:
           raise ValueError(f"Token id {token_id} is not recognised")
-
-      tokens = [self.decode_vocab.get(token_id) for token_id in ids]
+        tokens[idx] = token
       tokens_list.append(tokens)
 
     return tokens_list

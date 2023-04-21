@@ -2,13 +2,17 @@ import logging
 import pytorch_lightning as pl
 import torch
 import torch.nn as nn
-from encoder import CoordinateEncoder, SignCoordinateEncoder
-from models.encoders.graycode_encoder import GraycodeEncoder
+
 from utils import ranker, constants
 from models import compute_metrics
+from models.encoders.encoder_factory import build_encoder
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np
 import os
+
+from models.chemformer.molbart_utils import (
+    PreNormDecoderLayer
+)
 
 from utils.lr_scheduler import NoamOpt
 
@@ -60,6 +64,7 @@ class HsqcRankedTransformer(pl.LightningModule):
       weight_decay=0.0,
       scheduler=None,  # None, "attention"
       freeze_weights=False,
+      *args,
       **kwargs,
   ):
     super().__init__()
@@ -80,28 +85,17 @@ class HsqcRankedTransformer(pl.LightningModule):
       if save_params:
         self.save_hyperparameters(ignore=["save_params", "module_only"])
 
-    dim_coords = tuple([int(v) for v in dim_coords.split(",")])
-    assert (sum(dim_coords) == dim_model)
-
     # ranked encoder
-    if coord_enc == "ce":
-      self.enc = CoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
-      self.out_logger.info("[RankedTransformer] using CoordinateEncoder")
-    elif coord_enc == "sce":  # when using sce, you use 1 less wavelength bound
-      self.enc = SignCoordinateEncoder(dim_model, dim_coords, wavelength_bounds)
-      self.out_logger.info("[RankedTransformer] using SignCoordinateEncoder")
-    elif coord_enc == "gce":
-      self.enc = GraycodeEncoder(dim_model, dim_coords, gce_resolution)
-      self.out_logger.info("[RankedTransformer] using GraycodeEncoder")
-    else:
-      raise NotImplementedError(f"Encoder type {coord_enc} not implemented")
+    self.enc = build_encoder(
+        coord_enc, dim_model, dim_coords, wavelength_bounds, gce_resolution)
+    self.out_logger.info(f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
     self.loss = nn.BCEWithLogitsLoss()
     self.lr = lr
     self.weight_decay = weight_decay
     self.scheduler = scheduler
     self.dim_model = dim_model
-    
+
     self.validation_step_outputs = []
 
     # === All Parameters ===
@@ -215,7 +209,8 @@ class HsqcRankedTransformer(pl.LightningModule):
     labels = labels.type(torch.cuda.FloatTensor)
     out = self.forward(x)
     loss = self.loss(out, labels)
-    metrics = compute_metrics.cm(out, labels, self.ranker, loss, self.loss, thresh=0.0)
+    metrics = compute_metrics.cm(
+        out, labels, self.ranker, loss, self.loss, thresh=0.0)
     self.validation_step_outputs.append(metrics)
     return metrics
 
@@ -244,3 +239,59 @@ class HsqcRankedTransformer(pl.LightningModule):
               "frequency": 1,
           }
       }
+
+class Moonshot(HsqcRankedTransformer):
+  """
+    Only parameters, no sampling
+  """
+
+  def __init__(self,
+               pad_token_idx,
+               vocab_size,
+               d_model,
+               num_layers,
+               num_heads,
+               d_feedforward,
+               activation,
+               dropout=0.1,
+               *args,
+               **kwargs):
+    super().__init__(*args, **kwargs)
+
+    dec_norm = nn.LayerNorm(d_model)
+    dec_layer = PreNormDecoderLayer(
+        d_model, num_heads, d_feedforward, dropout, activation)
+    self.decoder = nn.TransformerDecoder(dec_layer, num_layers, norm=dec_norm)
+
+    self.token_fc = nn.Linear(d_model, vocab_size)
+    self.loss_fn = nn.CrossEntropyLoss(
+        reduction="none", ignore_index=pad_token_idx)
+    self.log_softmax = nn.LogSoftmax(dim=2)
+
+  def forward(self, hsqc):
+    pass
+
+  def training_step(self, batch, batch_idx):
+    x, labels = batch
+    labels = labels.type(torch.cuda.FloatTensor)
+    out = self.forward(x)
+    loss = self.loss(out, labels)
+
+    self.log("tr/loss", loss)
+    return loss
+
+  def validation_step(self, batch, batch_idx):
+    x, labels = batch
+    labels = labels.type(torch.cuda.FloatTensor)
+    out = self.forward(x)
+    loss = self.loss(out, labels)
+    metrics = compute_metrics.cm(
+        out, labels, self.ranker, loss, self.loss, thresh=0.0)
+    self.validation_step_outputs.append(metrics)
+    return metrics
+
+  @staticmethod
+  def add_model_specific_args(parent_parser, model_name=""):
+    HsqcRankedTransformer.add_model_specific_args(parent_parser, model_name)
+
+    return parent_parser
