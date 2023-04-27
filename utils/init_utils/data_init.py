@@ -9,10 +9,9 @@ from models.chemformer.utils import REGEX
 from models.chemformer.tokeniser import MolEncTokeniser
 
 def apply_args(parser: ArgumentParser):
-  parser.add_argument("--data_path", type=str)
-  parser.add_argument("--feats", dest="feats", action="store",
+  parser.add_argument("--feats", action="store",
                       type=str, nargs="*", default=["HSQC", "R2-6144FP"])
-  parser.add_argument("--feats_handlers", dest="feats_handlers", action="store",
+  parser.add_argument("--feats_handlers", action="store",
                       type=str, nargs="*", default=["pad", "None"])
   parser.add_argument("--ds_path", type=str, default="tempdata/SMILES_dataset")
   parser.add_argument("--token_file", type=str,

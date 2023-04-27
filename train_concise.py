@@ -51,11 +51,11 @@ def main():
 
   # Model and Data setup
   batch_size = args["batch_size"]
-  model = models_init.model_mux(parser, args["modelname"])
+  model = models_init.model_mux(args, args["modelname"])
   data_module = data_init.data_mux(
       args["feats"], args["feats_handlers"], args["ds_path"],
-      token_file=args.get("token_file", None),
-      len_override=args["data_len"], batch_size=batch_size)
+      token_file=args.get("token_file"),
+      len_override=args.get("data_len"), batch_size=batch_size)
   my_logger.info(f"[Main - Data] Initialized.")
 
   # All callbacks

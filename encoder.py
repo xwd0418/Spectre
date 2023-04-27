@@ -168,12 +168,12 @@ class SignCoordinateEncoder(torch.nn.Module):
         p = PositionalEncoder(dim_model=dim,
                               min_wavelength=min_wavelength,
                               max_wavelength=max_wavelength)
-        self.logger.warning(
-            f"Pushed an encoder with bounds {min_wavelength}, {max_wavelength}")
-        self.logger.warning(
-            f"Sin wavelengths: {str(np.round(2 * torch.pi / p.sin_terms, 3))}")
-        self.logger.warning(
-            f"Cos wavelengths: {str(np.round(2 * torch.pi / p.cos_terms, 3))}")
+        # self.logger.warning(
+        #     f"Pushed an encoder with bounds {min_wavelength}, {max_wavelength}")
+        # self.logger.warning(
+        #     f"Sin wavelengths: {str(np.round(2 * torch.pi / p.sin_terms, 3))}")
+        # self.logger.warning(
+        #     f"Cos wavelengths: {str(np.round(2 * torch.pi / p.cos_terms, 3))}")
       else:
         p = PositionalEncoder(dim_model=dim)
         self.logger.warning(

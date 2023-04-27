@@ -27,11 +27,12 @@ def training_args(parser):
   parser.add_argument("--expname", type=str, default=f"experiment")
 
   parser.add_argument("--bs", type=int, default=64)
-  parser.add_argument("--patience", type=int, default=30)
+
 
   # for early stopping/model saving
   parser.add_argument("--metric", type=str, default="val/mean_ce_loss")
   parser.add_argument("--metricmode", type=str, default="max")
+  parser.add_argument("--patience", type=int, default=30)
 
   # data args
   parser.add_argument("--data_len", type=int, default=None)
