@@ -54,6 +54,9 @@ reconcile diverging workflows between colin and james.
 - train: james' script to train hsqc resnet + mass spec encoder  
     NEEDS TO BE UPDATED TO USE NEW COORDINATE ENCODER/SpectraTransformer  
 
+### Config Format
+
+
 ### Running
 Basic testing command
 - `python train_ranker_transformer.py hsqc_transformer --name_type 2 --foldername debug --expname debug --epochs 2`
