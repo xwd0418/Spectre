@@ -4,8 +4,10 @@ import sys
 import torch
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
-from utils.init_utils import args_init, data_init, loggers_init, models_init
-from utils import marker
+from utils.init_utils import (
+    args_init, data_init, loggers_init, models_init
+)
+from utils import marker, config
 from models.extras.best_results_logger import BestResultLogger
 
 from pytorch_lightning.loggers import TensorBoardLogger
@@ -18,12 +20,22 @@ def main():
   parser = ArgumentParser(add_help=True)
   args_init.training_args(parser)
   args = vars(parser.parse_known_args()[0])
+  is_config = False
+  if args["config"]:
+    args = config.load_single_config(args["config"])
+    is_config = True
 
   # Tensorboard setup
   out_path = "/data/smart4.5"
   path1 = args["foldername"]  # lightning_logs
   path2 = args["expname"]
   marker_path = Path(out_path) / path1 / path2 / "marker"
+
+  # Logger setup
+  my_logger = loggers_init.init_logger(out_path, path1, path2)
+  my_logger.info(f'[Main - Logger] Output Path: {out_path}/{path1}/{path2}')
+
+  # marking experiment as done
   if not args["force_start"] and marker.has_marker(marker_path):
     print("Experiment in progress / done")
     exit(123)
@@ -36,10 +48,6 @@ def main():
   # Model args
   args_with_model = vars(parser.parse_known_args()[0])
   li_args = list(args_with_model.items())
-
-  # Logger setup
-  my_logger = loggers_init.init_logger(out_path, path1, path2)
-  my_logger.info(f'[Main - Logger] Output Path: {out_path}/{path1}/{path2}')
 
   # Model and Data setup
   model = models_init.model_mux(parser, args["modelname"])
@@ -60,7 +68,7 @@ def main():
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
 
   # Create trainer instance
-  trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", devices = 1, logger=[tbl, brl], callbacks=[
+  trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", devices=1, logger=[tbl, brl], callbacks=[
                        checkpoint_callback, early_stopping, lr_monitor])
 
   my_logger.info("[Main] Begin Training!")

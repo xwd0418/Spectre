@@ -547,7 +547,6 @@ MigrationBackup/
 # James stuff
 tempdata/
 core.*
-ignore/
 path1/
 lightning_logs/
 tb_logs/
