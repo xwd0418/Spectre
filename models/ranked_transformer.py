@@ -48,7 +48,7 @@ class HsqcRankedTransformer(pl.LightningModule):
       self,
       lr=1e-3,
       dim_model=128,
-      dim_coords="43,43,42",
+      dim_coords=[43, 43, 42],
       heads=8,
       layers=8,
       ff_dim=1024,
@@ -128,7 +128,8 @@ class HsqcRankedTransformer(pl.LightningModule):
     parser.add_argument(f"--{model_name}lr", type=float, default=1e-5)
     parser.add_argument(f"--{model_name}dim_model", type=int, default=128)
     parser.add_argument(f"--{model_name}dim_coords",
-                        type=str, default="43,43,42")
+                        type=int, default=[43, 43, 42],
+                        nargs="*", action="store")
     parser.add_argument(f"--{model_name}heads", type=int, default=8)
     parser.add_argument(f"--{model_name}layers", type=int, default=8)
     parser.add_argument(f"--{model_name}ff_dim", type=int, default=512)
