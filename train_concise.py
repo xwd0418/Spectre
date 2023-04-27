@@ -42,18 +42,20 @@ def main():
   os.makedirs(Path(out_path) / path1 / path2, exist_ok=True)
   marker.place_marker(marker_path)
 
-  # general args
-  args_init.apply_args(parser, args["modelname"])
-
-  # Model args
-  args_with_model = vars(parser.parse_known_args()[0])
-  li_args = list(args_with_model.items())
+  if not is_config:
+    # general args
+    args_init.apply_args(parser, args["modelname"])
+    # Model args
+    data_init.apply_args(parser)
+    args = vars(parser.parse_known_args())
 
   # Model and Data setup
-  model = models_init.model_mux(parser, args["modelname"])
   batch_size = args["batch_size"]
+  model = models_init.model_mux(parser, args["modelname"])
   data_module = data_init.data_mux(
-      parser, len_override=args["data_len"], batch_size=batch_size)
+      args["feats"], args["feats_handlers"], args["ds_path"],
+      token_file=args.get("token_file", None),
+      len_override=args["data_len"], batch_size=batch_size)
   my_logger.info(f"[Main - Data] Initialized.")
 
   # All callbacks
@@ -67,13 +69,14 @@ def main():
       monitor=metric, mode=metricmode, patience=patience)
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
 
-  # Create trainer instance
-  trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", devices=1, logger=[tbl, brl], callbacks=[
-                       checkpoint_callback, early_stopping, lr_monitor])
+  if args.get("actually_run", True):
+    # Create trainer instance
+    trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", devices=1, logger=[tbl, brl], callbacks=[
+        checkpoint_callback, early_stopping, lr_monitor])
 
-  my_logger.info("[Main] Begin Training!")
-  trainer.fit(model, data_module)
-  my_logger.info("[Main] Done Training!")
+    my_logger.info("[Main] Begin Training!")
+    trainer.fit(model, data_module)
+    my_logger.info("[Main] Done Training!")
 
 
 if __name__ == '__main__':
