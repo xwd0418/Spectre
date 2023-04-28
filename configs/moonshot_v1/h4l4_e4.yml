@@ -1,0 +1,41 @@
+--- 
+manifest:
+  type: single
+args:
+  foldername: moonshot_v1
+  expname: h4l4_e-4
+  load_path: tempdata/chemformer/model.ckpt
+  modelname: moonshot
+  seed: 1337
+
+  load_override:
+    # model args
+    module_only: True
+    dim_model: 512
+    dim_coords: [224, 224, 64]
+    coord_enc: sce
+    wavelength_bounds: [[0.01, 250], [0.01, 250]]
+    gce_resolution: 0.1
+    heads: 4
+    layers: 4
+    lr: 1.0e-4
+
+  # control args
+  actually_run: True
+  force_start: False
+
+  # trainer args
+  epochs: 200
+  batch_size: 64
+
+  # tb_args
+  metric: val/mean_loss
+  metricmode: min
+  patience: 30
+
+  # data_args
+  feats: [HSQC, SMILES]
+  feats_handlers: [pad, tokenise]
+  token_file: tempdata/chemformer/bart_vocab.txt
+  ds_path: tempdata/SMILES_dataset
+  num_workers: 16
