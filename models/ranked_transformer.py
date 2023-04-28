@@ -3,6 +3,7 @@ import pytorch_lightning as pl
 import torch
 import math
 import torch.nn as nn
+import torch.nn.functional as F
 
 from utils import ranker, constants
 from models import compute_metrics
@@ -428,17 +429,40 @@ class Moonshot(HsqcRankedTransformer):
     perp = torch.pow(log_probs.exp(), exp)
     return perp.mean()
 
+  def _calc_my_perplexity(self, batch_input, model_output):
+    target_ids = batch_input["target"]  # bs, seq_len
+    target_mask = batch_input["target_mask"]  # bs, seq_len
+    vocab_dist_output = model_output["token_output"]  # seq_len, bs, vocab_size
+
+    inv_target_mask = ~(target_mask > 0)  # bs, seq_len
+
+    l_probs = F.log_softmax(vocab_dist_output, dim=2)
+    target_l_probs = l_probs.transpose(
+        0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)  # bs, seq_len
+    target_l_probs = target_l_probs * inv_target_mask
+    target_l_probs = target_l_probs.sum(dim=1)
+
+    seq_lengths = inv_target_mask.sum(dim=1)
+    neg_normalized_l_probs = -target_l_probs / seq_lengths
+    perplexity = torch.pow(2, neg_normalized_l_probs)
+
+    return perplexity.mean(), neg_normalized_l_probs.mean()
+
   def training_step(self, batch, batch_idx):
     _, collated_smiles = batch
 
     out = self.forward(batch)
     loss = self._calc_loss(collated_smiles, out)
-    perplexity = self._calc_perplexity(collated_smiles, out)
+    with torch.no_grad():
+      perplexity = self._calc_perplexity(collated_smiles, out)
+      my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
 
     self.log("tr/loss", loss)
     metrics = {
         "loss": loss.detach().item(),
-        "perplexity": perplexity.detach().item()
+        "perplexity": perplexity.detach().item(),
+        "my_perplexity": my_perplexity.detach().item(),
+        "my_nnll": my_nnll.detach().item()
     }
     self.training_step_outputs.append(metrics)
     return loss
@@ -449,9 +473,12 @@ class Moonshot(HsqcRankedTransformer):
     out = self.forward(batch)
     loss = self._calc_loss(collated_smiles, out)
     perplexity = self._calc_perplexity(collated_smiles, out)
+    my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
     metrics = {
         "loss": loss.detach().item(),
-        "perplexity": perplexity.detach().item()
+        "perplexity": perplexity.detach().item(),
+        "my_perplexity": my_perplexity.detach().item(),
+        "my_nnll": my_nnll.detach().item()
     }
     self.validation_step_outputs.append(metrics)
     return metrics
