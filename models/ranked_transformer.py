@@ -6,6 +6,9 @@ import torch.nn as nn
 from utils import ranker, constants
 from models import compute_metrics
 from models.encoders.encoder_factory import build_encoder
+from models.extras.transformer_stuff import (
+    generate_square_subsequent_mask
+)
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 import numpy as np
 import os
@@ -171,7 +174,7 @@ class HsqcRankedTransformer(pl.LightningModule):
       ]
       mask = torch.cat(mask, dim=1)
       mask = mask.to(self.device)
-      
+
     points = self.enc(hsqc)
     # Add the spectrum representation to each input:
     latent = self.latent.expand(points.shape[0], -1, -1)
@@ -258,7 +261,7 @@ class Moonshot(HsqcRankedTransformer):
     super().__init__(*args, **kwargs)
 
     self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
-    
+
     dec_norm = nn.LayerNorm(d_model)
     dec_layer = PreNormDecoderLayer(
         d_model, num_heads, d_feedforward, dropout, activation)
@@ -269,59 +272,43 @@ class Moonshot(HsqcRankedTransformer):
         reduction="none", ignore_index=pad_token_idx)
     self.log_softmax = nn.LogSoftmax(dim=2)
 
-  def _generate_square_subsequent_mask(self, sz, device="cpu"):
-    """ 
-    Method copied from Pytorch nn.Transformer.
-    Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-    Unmasked positions are filled with float(0.0).
-    Essentially creaes a Lower-Triangular Matrix of Zeros (including diagonal), where upper triangle (excluding diagonal) is -inf
-
-    Args:
-        sz (int): Size of mask to generate
-
-    Returns:
-        torch.Tensor: Square autoregressive mask for decode 
-    
-    """
-
-    mask = (torch.triu(torch.ones((sz, sz), device=device)) == 1).transpose(0, 1)
-    mask = mask.float().masked_fill(mask == 0, float('-inf')
-                                    ).masked_fill(mask == 1, float(0.0))
-    return mask
-
   def forward(self, batch):
     # I use (batch_size, seq_len convention)
+    # see datasets/dataset_utils.py:tokenise_and_mask
     hsqc, collated_smiles = batch
 
     decoder_inputs = collated_smiles["decoder_inputs"]
     decoder_mask = collated_smiles["decoder_mask"]
-    
+
     b_s, s_l = decoder_mask.size()
-    tgt_mask = self._generate_square_subsequent_mask(s_l, device=self.device)
+    tgt_mask = generate_square_subsequent_mask(s_l, device=self.device)
 
     decoder_embs = self.emb(decoder_inputs)
-    memory, encoder_mask = self.encode(hsqc)
-    
+    memory, encoder_key_padding_mask = self.encode(hsqc)
+
     decoder_embs, memory = decoder_embs.transpose(0, 1), memory.transpose(0, 1)
-    print(f"{decoder_inputs.size()=}")
-    print(f"{decoder_mask.size()=}")
-    print(f"{tgt_mask.size()=}")
-    print(f"{decoder_embs.size()=}")
-    print(f"{memory.size()=}")
-    print(f"{encoder_mask.size()=}")
-    
+    # print(f"{decoder_inputs.size()=}")
+    # print(f"{decoder_mask.size()=}")
+    # print(f"{tgt_mask.size()=}")
+    # print(f"{decoder_embs.size()=}")
+    # print(f"{memory.size()=}")
+    # print(f"{encoder_mask.size()=}")
+
     model_output = self.decoder(
         decoder_embs,
         memory,
-        tgt_mask = tgt_mask,
-        tgt_key_padding_mask = decoder_mask,
-        memory_key_padding_mask = encoder_mask
+        tgt_mask=tgt_mask,  # prevent cheating mask
+        tgt_key_padding_mask=decoder_mask,  # padding mask
+        memory_key_padding_mask=encoder_key_padding_mask  # padding mask
     )
-    
+
     token_output = self.token_fc(model_output)
+
+    if torch.any(torch.isnan(token_output)) or torch.any(torch.isinf(token_output)):
+      print("panik")
     return {
-      "model_output": model_output,
-      "token_output": token_output,
+        "model_output": model_output,
+        "token_output": token_output,
     }
 
   def _calc_loss(self, batch_input, model_output):
@@ -335,31 +322,16 @@ class Moonshot(HsqcRankedTransformer):
         loss (singleton tensor),
     """
 
-    tokens = batch_input["target"]
-    pad_mask = batch_input["target_mask"]
+    target = batch_input["target"]
+    target_mask = batch_input["target_mask"]
     token_output = model_output["token_output"]
-
-    token_mask_loss = self._calc_mask_loss(token_output, tokens, pad_mask)
-
-    return token_mask_loss
-
-  def _calc_mask_loss(self, token_output, target, target_mask):
-    """ Calculate the loss for the token prediction task
-
-    Args:
-        token_output (Tensor of shape (seq_len, batch_size, vocab_size)): token output from transformer
-        target (Tensor of shape (seq_len, batch_size)): Original (unmasked) SMILES token ids from the tokeniser
-        target_mask (Tensor of shape (seq_len, batch_size)): Pad mask for target tokens
-
-    Output:
-        loss (singleton Tensor): Loss computed using cross-entropy,
-    """
 
     seq_len, batch_size = tuple(target.size())
 
     token_pred = token_output.reshape((seq_len * batch_size, -1)).float()
-    loss = self.loss_fn(token_pred, target.reshape(-1)
-                        ).reshape((seq_len, batch_size))
+    loss = self.loss_fn(
+        token_pred, target.reshape(-1)
+    ).reshape((seq_len, batch_size))
 
     inv_target_mask = ~(target_mask > 0)
     num_tokens = inv_target_mask.sum()
@@ -369,25 +341,20 @@ class Moonshot(HsqcRankedTransformer):
 
   def training_step(self, batch, batch_idx):
     _, collated_smiles = batch
-    labels = collated_smiles["target"].type(torch.float64)
-    
-    out = self.forward(batch)
-    
-    loss = self._calc_loss(collated_smiles, out)
 
+    out = self.forward(batch)
+    loss = self._calc_loss(collated_smiles, out)
     self.log("tr/loss", loss)
+
     return loss
 
   def validation_step(self, batch, batch_idx):
     _, collated_smiles = batch
-    labels = collated_smiles["target"].type(torch.float64)
-    
-    out = self.forward(batch)
 
+    out = self.forward(batch)
     loss = self._calc_loss(collated_smiles, out)
-    
     metrics = {
-      "loss": loss.detach().item()
+        "loss": loss.detach().item()
     }
     self.validation_step_outputs.append(metrics)
     return metrics
@@ -395,5 +362,4 @@ class Moonshot(HsqcRankedTransformer):
   @staticmethod
   def add_model_specific_args(parent_parser, model_name=""):
     HsqcRankedTransformer.add_model_specific_args(parent_parser, model_name)
-
     return parent_parser

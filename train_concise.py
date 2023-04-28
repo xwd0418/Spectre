@@ -35,6 +35,11 @@ def main():
   my_logger = loggers_init.init_logger(out_path, path1, path2)
   my_logger.info(f'[Main - Logger] Output Path: {out_path}/{path1}/{path2}')
 
+  # seed
+  if args.get("seed"):
+    pl.utilities.seed.isolate_rng(args.get("seed"))
+    my_logger.info(f"[Main] Using seed {args.get('seed')}")
+
   # marking experiment as done
   if not args["force_start"] and marker.has_marker(marker_path):
     print("Experiment in progress / done")
@@ -55,7 +60,8 @@ def main():
   data_module = data_init.data_mux(
       args["feats"], args["feats_handlers"], args["ds_path"],
       token_file=args.get("token_file"),
-      len_override=args.get("data_len"), batch_size=batch_size)
+      len_override=args.get("data_len"), batch_size=batch_size,
+      num_workers=args["num_workers"])
   my_logger.info(f"[Main - Data] Initialized.")
 
   # All callbacks

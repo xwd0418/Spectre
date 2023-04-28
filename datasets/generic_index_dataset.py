@@ -56,7 +56,7 @@ class GenericIndexedDataset(Dataset):
         feats[idx2] = self.indexed_features[feature][idx]
     return feats
 
-def build_collate_fn(feature_handlers, tokeniser):
+def build_collate_fn(feature_handlers):
   def collate(batch):
     feat_columns = tuple(zip(*batch))
     out = [None] * len(feat_columns)
@@ -67,19 +67,18 @@ def build_collate_fn(feature_handlers, tokeniser):
         else:
           out[idx] = torch.stack(feat_column, dim=0)
       else:
-        out[idx] = handler(feat_column, tokeniser=tokeniser)
+        out[idx] = handler(feat_column)
     return out
   return collate
 
 class GenericIndexedModule(pl.LightningDataModule):
-  def __init__(self, dir, features, feature_handlers, batch_size: int = 32, num_workers=4, len_override=None, molbart_tokeniser=None):
+  def __init__(self, dir, features, feature_handlers, batch_size: int = 32, num_workers=4, len_override=None):
     super().__init__()
     self.dir = dir
     self.features = features
     self.feature_handlers = feature_handlers
     self.batch_size = batch_size
-    self.molbart_tokeniser = molbart_tokeniser
-    self.collate_fn = build_collate_fn(feature_handlers, molbart_tokeniser)
+    self.collate_fn = build_collate_fn(feature_handlers)
     self.num_workers = num_workers
     self.len_override = len_override
 

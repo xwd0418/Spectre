@@ -156,8 +156,7 @@ class SignCoordinateEncoder(torch.nn.Module):
     self.logger = logging.getLogger("lightning")
     assert (sum(dim_coords) == dim_model)
     if wavelength_bounds:
-      assert (len(wavelength_bounds) == len(dim_coords) or
-              len(wavelength_bounds) == len(dim_coords) - 1)
+      assert (len(wavelength_bounds) == len(dim_coords) - 1)
     self.sign_embedding_dims = dim_model - sum(dim_coords[:-1])
     self.positional_encoders = []
     self.dim_coords = dim_coords
@@ -200,6 +199,6 @@ class SignCoordinateEncoder(torch.nn.Module):
       embeddings.append(encoder(X[:, :, [dim]]))
     if self.sign_embedding_dims:
       signs = torch.where(
-          X[:, :, [-1] * self.sign_embedding_dims] >= 0, 1, 0).float()
+          X[:, :, [-1] * self.sign_embedding_dims] >= 0, 1, -1).float()
       embeddings.append(signs)
     return torch.cat(embeddings, dim=2)
