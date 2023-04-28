@@ -8,10 +8,10 @@ do
     if [[ "$line" == *".sh" ]]
     then
       echo "Ima source dis shit $line"
-      # source $line
+      source $line
     else
       echo "Ima python dis shit $line"
-      # python train_concise.py --config $line
+      python train_concise.py --config $line
     fi
     status=$?
     if [[ $status == 123 ]]
