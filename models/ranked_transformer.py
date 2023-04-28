@@ -1,6 +1,7 @@
 import logging
 import pytorch_lightning as pl
 import torch
+import math
 import torch.nn as nn
 
 from utils import ranker, constants
@@ -100,6 +101,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     self.dim_model = dim_model
 
     self.validation_step_outputs = []
+    self.training_step_outputs = []
 
     # === All Parameters ===
     self.fc = nn.Linear(dim_model, out_dim)
@@ -216,6 +218,17 @@ class HsqcRankedTransformer(pl.LightningModule):
     self.validation_step_outputs.append(metrics)
     return metrics
 
+  def on_train_epoch_end(self):
+    if self.training_step_outputs:
+      feats = self.training_step_outputs[0].keys()
+      di = {}
+      for feat in feats:
+        di[f"tr/mean_{feat}"] = np.mean([v[feat]
+                                        for v in self.training_step_outputs])
+      for k, v in di.items():
+        self.log(k, v, on_epoch=True)
+      self.training_step_outputs.clear()
+
   def on_validation_epoch_end(self):
     feats = self.validation_step_outputs[0].keys()
     di = {}
@@ -254,11 +267,28 @@ class Moonshot(HsqcRankedTransformer):
                num_layers,
                num_heads,
                d_feedforward,
+               # lr,
+               # weight_decay,
                activation,
+               # num_steps,
+               max_seq_len,
+               # schedule,
+               # warm_up_steps,
                dropout=0.1,
                *args,
                **kwargs):
     super().__init__(*args, **kwargs)
+
+    # _AbsTransformerModel
+    self.pad_token_idx = pad_token_idx
+    self.vocab_size = vocab_size
+    self.d_model = d_model
+    self.num_layers = num_layers
+    self.num_heads = num_heads
+    self.d_feedforward = d_feedforward
+    self.activation = activation
+    self.dropout = nn.Dropout(dropout)
+    self.max_seq_len = max_seq_len
 
     self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
 
@@ -272,6 +302,38 @@ class Moonshot(HsqcRankedTransformer):
         reduction="none", ignore_index=pad_token_idx)
     self.log_softmax = nn.LogSoftmax(dim=2)
 
+    self.register_buffer("pos_emb", self._positional_embs())
+
+  # Ripped from chemformer
+  def _construct_input(self, token_ids, sentence_masks=None):
+    seq_len, _ = tuple(token_ids.size())
+    token_embs = self.emb(token_ids)
+
+    # Scaling the embeddings like this is done in other transformer libraries
+    token_embs = token_embs * math.sqrt(self.d_model)
+
+    positional_embs = self.pos_emb[:seq_len, :].unsqueeze(0).transpose(0, 1)
+    embs = token_embs + positional_embs
+    embs = self.dropout(embs)
+    return embs
+
+  # Ripped from chemformer
+  def _positional_embs(self):
+    """ Produces a tensor of positional embeddings for the model
+
+    Returns a tensor of shape (self.max_seq_len, self.d_model) filled with positional embeddings,
+    which are created from sine and cosine waves of varying wavelength
+    """
+
+    encs = torch.tensor(
+        [dim / self.d_model for dim in range(0, self.d_model, 2)])
+    encs = 10000 ** encs
+    encs = [(torch.sin(pos / encs), torch.cos(pos / encs))
+            for pos in range(self.max_seq_len)]
+    encs = [torch.stack(enc, dim=1).flatten()[:self.d_model] for enc in encs]
+    encs = torch.stack(encs)
+    return encs
+
   def forward(self, batch):
     # I use (batch_size, seq_len convention)
     # see datasets/dataset_utils.py:tokenise_and_mask
@@ -283,10 +345,15 @@ class Moonshot(HsqcRankedTransformer):
     b_s, s_l = decoder_mask.size()
     tgt_mask = generate_square_subsequent_mask(s_l, device=self.device)
 
-    decoder_embs = self.emb(decoder_inputs)
+    decoder_embs = self._construct_input(decoder_inputs)
     memory, encoder_key_padding_mask = self.encode(hsqc)
 
+    # embs, memory need seq_len, batch_size convention
     decoder_embs, memory = decoder_embs.transpose(0, 1), memory.transpose(0, 1)
+
+    if not torch.all(torch.isfinite(memory)):
+      print(f"panik, not all memory is finite")
+
     # print(f"{decoder_inputs.size()=}")
     # print(f"{decoder_mask.size()=}")
     # print(f"{tgt_mask.size()=}")
@@ -301,6 +368,9 @@ class Moonshot(HsqcRankedTransformer):
         tgt_key_padding_mask=decoder_mask,  # padding mask
         memory_key_padding_mask=encoder_key_padding_mask  # padding mask
     )
+
+    if not torch.all(torch.isfinite(model_output)):
+      print(f"panik, not all model output is finite")
 
     token_output = self.token_fc(model_output)
 
@@ -339,13 +409,38 @@ class Moonshot(HsqcRankedTransformer):
 
     return loss
 
+  def _calc_perplexity(self, batch_input, model_output):
+    target_ids = batch_input["target"]  # bs, seq_len
+    target_mask = batch_input["target_mask"]  # bs, seq_len
+    vocab_dist_output = model_output["token_output"]  # seq_len, bs
+
+    inv_target_mask = ~(target_mask > 0)
+
+    # choose probabilities of token indices
+    # logits = log_probabilities
+    log_probs = vocab_dist_output.transpose(
+        0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)
+    log_probs = log_probs * inv_target_mask
+    log_probs = log_probs.sum(dim=1)
+
+    seq_lengths = inv_target_mask.sum(dim=1)
+    exp = - (1 / seq_lengths)
+    perp = torch.pow(log_probs.exp(), exp)
+    return perp.mean()
+
   def training_step(self, batch, batch_idx):
     _, collated_smiles = batch
 
     out = self.forward(batch)
     loss = self._calc_loss(collated_smiles, out)
-    self.log("tr/loss", loss)
+    perplexity = self._calc_perplexity(collated_smiles, out)
 
+    self.log("tr/loss", loss)
+    metrics = {
+        "loss": loss.detach().item(),
+        "perplexity": perplexity.detach().item()
+    }
+    self.training_step_outputs.append(metrics)
     return loss
 
   def validation_step(self, batch, batch_idx):
@@ -353,8 +448,10 @@ class Moonshot(HsqcRankedTransformer):
 
     out = self.forward(batch)
     loss = self._calc_loss(collated_smiles, out)
+    perplexity = self._calc_perplexity(collated_smiles, out)
     metrics = {
-        "loss": loss.detach().item()
+        "loss": loss.detach().item(),
+        "perplexity": perplexity.detach().item()
     }
     self.validation_step_outputs.append(metrics)
     return metrics
