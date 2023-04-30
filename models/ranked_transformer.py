@@ -21,37 +21,22 @@ from models.chemformer.molbart_utils import (
 
 from utils.lr_scheduler import NoamOpt
 
+RANKED_TNSFMER_ARGS = [
+    "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
+    # exclude save_params
+    "gce_resolution", "r_dropout", "out_dim", "ranking_set_path",
+    "lr", "scheduler", "freeze_weights"
+]
+
 class HsqcRankedTransformer(pl.LightningModule):
   """A Transformer encoder for input HSQC.
   Parameters
   ----------
-  lr : float, optional
-      The model's learning rate
-  dim_model : int, optional
-      The latent dimensionality to represent points on the HSQC
-  dim_coords : tuple, optional
-      A tuple (x,y,z) where x, y, and z are the number of dimensions to represent the
-      each dimension of the hsqc coordinates. Must sum to dim_model
-  n_head : int, optional
-      The number of attention heads in each layer. ``dim_model`` must be
-      divisible by ``n_head``.
-  dim_feedforward : int, optional
-      The dimensionality of the fully connected layers in the Transformer
-      layers of the model.
-  n_layers : int, optional
-      The number of Transformer layers.
-  wavelength_bounds : list(tuple), optional
-      A list of tuples of (minimum, maximum) wavelengths for
-      each dimension to be encoded 
-  dropout : float, optional
-      The dropout probability for all layers.
-  out_dim : int, optional
-      The final output dimensionality of the model
   """
 
   def __init__(
       self,
-      lr=1e-3,
+      # model args
       dim_model=128,
       dim_coords=[43, 43, 42],
       heads=8,
@@ -60,35 +45,36 @@ class HsqcRankedTransformer(pl.LightningModule):
       coord_enc="ce",
       wavelength_bounds=None,
       gce_resolution=1,
-      dropout=0,
+      r_dropout=0,
       out_dim=6144,
+      # other business logic stuff
       save_params=True,
-      module_only=False,
       ranking_set_path="",
-      pos_weight=1.0,
-      weight_decay=0.0,
+      # training args
+      lr=1e-3,
       scheduler=None,  # None, "attention"
       freeze_weights=False,
       *args,
       **kwargs,
   ):
+    print("\n\n\nRanked Transformer callin super")
     super().__init__()
     params = locals().copy()
     self.out_logger = logging.getLogger("lightning")
     self.out_logger.info("[RankedTransformer] Started Initializing")
 
+    # logging print
     for k, v in params.items():
-      if k not in constants.MODEL_LOGGING_IGNORE:
-        self.out_logger.info(
-            f"\t[RankedTransformer] Hparam: ({k}), value: ({v})")
+      if k in RANKED_TNSFMER_ARGS:
+        self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
 
-    # if you don't want to initialize the seperate rankers. Useful if using it as a module
-    # in a higher-level double transformer
-    if not module_only:
+    # don't set ranking set if you just want to treat it as a module
+    if ranking_set_path:
       assert (os.path.exists(ranking_set_path))
       self.ranker = ranker.RankingSet(file_path=ranking_set_path)
-      if save_params:
-        self.save_hyperparameters(ignore=["save_params", "module_only"])
+
+    if save_params:
+      self.save_hyperparameters(*RANKED_TNSFMER_ARGS)
 
     # ranked encoder
     self.enc = build_encoder(
@@ -97,7 +83,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     self.loss = nn.BCEWithLogitsLoss()
     self.lr = lr
-    self.weight_decay = weight_decay
+
     self.scheduler = scheduler
     self.dim_model = dim_model
 
@@ -106,14 +92,16 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     # === All Parameters ===
     self.fc = nn.Linear(dim_model, out_dim)
+    # (1, 1, dim_model)
     self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
+
     # The Transformer layers:
     layer = torch.nn.TransformerEncoderLayer(
         d_model=dim_model,
         nhead=heads,
         dim_feedforward=ff_dim,
         batch_first=True,
-        dropout=dropout,
+        dropout=r_dropout,
     )
     self.transformer_encoder = torch.nn.TransformerEncoder(
         layer,
@@ -202,7 +190,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
   def training_step(self, batch, batch_idx):
     x, labels = batch
-    labels = labels.type(torch.cuda.FloatTensor)
+    labels = labels.type(torch.float32)
     out = self.forward(x)
     loss = self.loss(out, labels)
 
@@ -211,7 +199,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
   def validation_step(self, batch, batch_idx):
     x, labels = batch
-    labels = labels.type(torch.cuda.FloatTensor)
+    labels = labels.type(torch.float32)
     out = self.forward(x)
     loss = self.loss(out, labels)
     metrics = compute_metrics.cm(
@@ -242,10 +230,10 @@ class HsqcRankedTransformer(pl.LightningModule):
 
   def configure_optimizers(self):
     if not self.scheduler:
-      return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+      return torch.optim.Adam(self.parameters(), lr=self.lr)
     elif self.scheduler == "attention":
       optim = torch.optim.Adam(self.parameters(), lr=0, betas=(
-          0.9, 0.98), eps=1e-9, weight_decay=self.weight_decay)
+          0.9, 0.98), eps=1e-9)
       scheduler = NoamOpt(self.dim_model, 4000, optim)
       return {
           "optimizer": optim,
@@ -255,6 +243,12 @@ class HsqcRankedTransformer(pl.LightningModule):
               "frequency": 1,
           }
       }
+
+
+MOONSHOT_ARGS = [
+    "pad_token_idx", "vocab_size", "d_model", "num_layers", "num_heads", "d_feedforward",
+    "activation", "max_seq_len", "dropout"
+]
 
 class Moonshot(HsqcRankedTransformer):
   """
@@ -291,22 +285,28 @@ class Moonshot(HsqcRankedTransformer):
     self.dropout = nn.Dropout(dropout)
     self.max_seq_len = max_seq_len
 
+    # BART stuff
     self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
-
     dec_norm = nn.LayerNorm(d_model)
     dec_layer = PreNormDecoderLayer(
         d_model, num_heads, d_feedforward, dropout, activation)
     self.decoder = nn.TransformerDecoder(dec_layer, num_layers, norm=dec_norm)
-
     self.token_fc = nn.Linear(d_model, vocab_size)
     self.loss_fn = nn.CrossEntropyLoss(
         reduction="none", ignore_index=pad_token_idx)
     self.log_softmax = nn.LogSoftmax(dim=2)
-
     self.register_buffer("pos_emb", self._positional_embs())
 
+    self.save_hyperparameters(*MOONSHOT_ARGS)
+
   # Ripped from chemformer
-  def _construct_input(self, token_ids, sentence_masks=None):
+  def _construct_input(self, token_ids):
+    """
+      Expects tokens in (seq_len, b_s) format
+
+    Returns:
+      (seq_len, b_s, d_model) embedding (with dropout applied)
+    """
     seq_len, _ = tuple(token_ids.size())
     token_embs = self.emb(token_ids)
 
@@ -335,52 +335,61 @@ class Moonshot(HsqcRankedTransformer):
     encs = torch.stack(encs)
     return encs
 
-  def forward(self, batch):
-    # I use (batch_size, seq_len convention)
-    # see datasets/dataset_utils.py:tokenise_and_mask
-    hsqc, collated_smiles = batch
+  def decode(self, memory, encoder_mask, decoder_inputs, decoder_mask):
+    """
 
-    decoder_inputs = collated_smiles["decoder_inputs"]
-    decoder_mask = collated_smiles["decoder_mask"]
+    Args:
+        memory: (b_s, seq_len, dim_model)
+        encoder_padding_mask : (b_s, seq_len)
+        decoder_inputs: (seq_len, b_s)
+        decoder_mask: (b_s, seq_len)
 
-    b_s, s_l = decoder_mask.size()
+    Returns:
+        {
+          model_output: (s_l, b_s, d_model)
+          token_output: (s_l, b_s, vocab_size)
+        }
+    """
+    _, s_l = decoder_mask.size()
+
+    # (s_l, s_l)
     tgt_mask = generate_square_subsequent_mask(s_l, device=self.device)
-
+    # (b_s, s_l, dim)
     decoder_embs = self._construct_input(decoder_inputs)
-    memory, encoder_key_padding_mask = self.encode(hsqc)
 
     # embs, memory need seq_len, batch_size convention
+    # (s_l, b_s, dim), (s_l, b_s, dim)
     decoder_embs, memory = decoder_embs.transpose(0, 1), memory.transpose(0, 1)
-
-    if not torch.all(torch.isfinite(memory)):
-      print(f"panik, not all memory is finite")
-
-    # print(f"{decoder_inputs.size()=}")
-    # print(f"{decoder_mask.size()=}")
-    # print(f"{tgt_mask.size()=}")
-    # print(f"{decoder_embs.size()=}")
-    # print(f"{memory.size()=}")
-    # print(f"{encoder_mask.size()=}")
 
     model_output = self.decoder(
         decoder_embs,
         memory,
         tgt_mask=tgt_mask,  # prevent cheating mask
         tgt_key_padding_mask=decoder_mask,  # padding mask
-        memory_key_padding_mask=encoder_key_padding_mask  # padding mask
+        memory_key_padding_mask=encoder_mask  # padding mask
     )
-
-    if not torch.all(torch.isfinite(model_output)):
-      print(f"panik, not all model output is finite")
 
     token_output = self.token_fc(model_output)
 
-    if torch.any(torch.isnan(token_output)) or torch.any(torch.isinf(token_output)):
-      print("panik")
     return {
         "model_output": model_output,
         "token_output": token_output,
     }
+
+  def forward(self, batch):
+    # I use (batch_size, seq_len convention)
+    # see datasets/dataset_utils.py:tokenise_and_mask
+    hsqc, collated_smiles = batch
+
+    # encoder
+    # (b_s, seq_len, dim_model), (b_s, seq_len)
+    memory, encoder_mask = self.encode(hsqc)
+
+    # decode
+    decoder_inputs = collated_smiles["decoder_inputs"]
+    decoder_mask = collated_smiles["decoder_mask"]
+
+    return self.decode(memory, encoder_mask, decoder_inputs, decoder_mask)
 
   def _calc_loss(self, batch_input, model_output):
     """ Calculate the loss for the model
@@ -393,11 +402,13 @@ class Moonshot(HsqcRankedTransformer):
         loss (singleton tensor),
     """
 
-    target = batch_input["target"]
-    target_mask = batch_input["target_mask"]
-    token_output = model_output["token_output"]
+    target = batch_input["target"]  # (b_s, s_l)
+    target_mask = batch_input["target_mask"]  # (b_s, s_l)
+    token_output = model_output["token_output"]  # (s_l, b_s, vocab_size)
 
-    seq_len, batch_size = tuple(target.size())
+    assert (target.size()[0] == token_output.size()[1])
+
+    batch_size, seq_len = tuple(target.size())
 
     token_pred = token_output.reshape((seq_len * batch_size, -1)).float()
     loss = self.loss_fn(
@@ -436,7 +447,7 @@ class Moonshot(HsqcRankedTransformer):
 
     inv_target_mask = ~(target_mask > 0)  # bs, seq_len
 
-    l_probs = F.log_softmax(vocab_dist_output, dim=2)
+    l_probs = F.log_softmax(vocab_dist_output, dim=2)  # seq_len, bs, vocab_size
     target_l_probs = l_probs.transpose(
         0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)  # bs, seq_len
     target_l_probs = target_l_probs * inv_target_mask
@@ -448,6 +459,18 @@ class Moonshot(HsqcRankedTransformer):
 
     return perplexity.mean(), neg_normalized_l_probs.mean()
 
+  def _predicted_accuracy(self, batch_input, model_output):
+    target_ids = batch_input["target"]  # bs, seq_len
+    target_mask = batch_input["target_mask"]  # bs, seq_len
+    inv_mask = ~target_mask
+    predicted_logits = model_output["token_output"]  # seq_len, bs, vocab_size
+
+    predicted_ids = torch.argmax(
+        predicted_logits, dim=2).transpose(0, 1)  # bs, seq_len
+
+    masked_correct = (predicted_ids == target_ids) & inv_mask
+    return torch.sum(masked_correct) / torch.sum(inv_mask)
+
   def training_step(self, batch, batch_idx):
     _, collated_smiles = batch
 
@@ -456,13 +479,15 @@ class Moonshot(HsqcRankedTransformer):
     with torch.no_grad():
       perplexity = self._calc_perplexity(collated_smiles, out)
       my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
+      accuracy = self._predicted_accuracy(collated_smiles, out)
 
     self.log("tr/loss", loss)
     metrics = {
         "loss": loss.detach().item(),
         "perplexity": perplexity.detach().item(),
         "my_perplexity": my_perplexity.detach().item(),
-        "my_nnll": my_nnll.detach().item()
+        "my_nnll": my_nnll.detach().item(),
+        "accuracy": accuracy.detach().item()
     }
     self.training_step_outputs.append(metrics)
     return loss
@@ -474,11 +499,13 @@ class Moonshot(HsqcRankedTransformer):
     loss = self._calc_loss(collated_smiles, out)
     perplexity = self._calc_perplexity(collated_smiles, out)
     my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
+    accuracy = self._predicted_accuracy(collated_smiles, out)
     metrics = {
         "loss": loss.detach().item(),
         "perplexity": perplexity.detach().item(),
         "my_perplexity": my_perplexity.detach().item(),
-        "my_nnll": my_nnll.detach().item()
+        "my_nnll": my_nnll.detach().item(),
+        "accuracy": accuracy.detach().item()
     }
     self.validation_step_outputs.append(metrics)
     return metrics

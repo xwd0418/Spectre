@@ -1,2 +1,2 @@
 mkdir -p tempdata/chemformer
-cp /data/data/chemformer/* tempdata/chemformer
+rsync /data/data/chemformer/* tempdata/chemformer

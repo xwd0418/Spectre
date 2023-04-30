@@ -5,6 +5,18 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "with_config",
+      "type": "python",
+      "request": "launch",
+      "program": "train_concise.py",
+      "args": [
+        "--config",
+        "configs/template/ignore_basic_moonshot.yml",
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
       "name": "Debug train_concise",
       "type": "python",
       "request": "launch",
