@@ -1,6 +1,8 @@
 import logging
 import pytorch_lightning as pl
 from argparse import ArgumentParser
+from models.chemformer.tokeniser import MolEncTokeniser
+from models.chemformer.utils import REGEX
 
 from models.ranked_transformer import HsqcRankedTransformer, Moonshot
 from models.ranked_double_transformer import DoubleTransformer
@@ -13,7 +15,6 @@ def model_mux(args, model_type):
 
   kwargs = {k: args[k] for k in args if k not in EXCLUDE_FROM_MODEL_ARGS}
   load_override = {} if "load_override" not in args else args["load_override"]
-
   model_class: pl.LightningModule = None
   if model_type == "hsqc_transformer" or model_type == "ms_transformer":
     model_class = HsqcRankedTransformer
@@ -21,6 +22,9 @@ def model_mux(args, model_type):
     model_class = DoubleTransformer
   elif model_type == "moonshot":
     model_class = Moonshot
+    load_override["tokeniser"] = MolEncTokeniser.from_vocab_file(
+        args["token_file"], REGEX, 272
+    )
   else:
     raise (f"No model for model type {model_type}.")
 
