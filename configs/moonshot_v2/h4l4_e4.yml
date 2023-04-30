@@ -2,7 +2,7 @@
 manifest:
   type: single
 args:
-  foldername: moonshot_v1
+  foldername: moonshot_v2
   expname: h4l4_e-4
   load_path: tempdata/chemformer/model.ckpt
   modelname: moonshot
@@ -38,4 +38,4 @@ args:
   feats_handlers: [pad, tokenise]
   token_file: tempdata/chemformer/bart_vocab.txt
   ds_path: tempdata/SMILES_dataset
-  num_workers: 8
+  num_workers: 12

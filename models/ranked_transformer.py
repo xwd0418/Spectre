@@ -269,6 +269,7 @@ class Moonshot(HsqcRankedTransformer):
                max_seq_len,
                # schedule,
                # warm_up_steps,
+               tokeniser,
                dropout=0.1,
                *args,
                **kwargs):
@@ -284,6 +285,7 @@ class Moonshot(HsqcRankedTransformer):
     self.activation = activation
     self.dropout = nn.Dropout(dropout)
     self.max_seq_len = max_seq_len
+    self.tokeniser = tokeniser
 
     # BART stuff
     self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
@@ -335,13 +337,52 @@ class Moonshot(HsqcRankedTransformer):
     encs = torch.stack(encs)
     return encs
 
+  def sample(self, hsqc):
+    """
+      hsqc: (bs, seq_len)
+    """
+    bs, _, _ = hsqc.size()
+    pad_token_idx = 0
+    begin_token_idx = 2
+    end_token_idx = 3
+    with torch.no_grad():
+      # (bs, seq_len)
+      tokens = torch.ones((bs, self.max_seq_len), dtype=torch.int64).to(
+          self.device) * pad_token_idx
+      tokens[:, 0] = begin_token_idx
+      # (bs, seq_len)
+      pad_mask = torch.zeros((bs, self.max_seq_len),
+                             dtype=torch.bool).to(self.device)
+
+      memory, encoder_mask = self.encode(hsqc)
+
+      for i in range(1, self.max_seq_len):
+        decoder_inputs = tokens[:, :i]
+        decoder_mask = pad_mask[:, :i]
+        # (seq_len, bs, vocab_size) for token_output
+        model_output = self.decode(
+            memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
+        best_ids = torch.argmax(
+            model_output[[-1], :, :], dim=2).squeeze(0).long()  # (bs)
+        tokens[:, i] = best_ids
+        pad_mask[:, i] = (best_ids == end_token_idx) | (
+            best_ids == pad_token_idx)
+
+        if torch.all(pad_mask):
+          break
+      # (bs, seq_len)
+      my_tokens = tokens.transpose(0, 1).tolist()
+      str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
+      mol_strs = self.tokeniser.detokenise(str_tokens)
+    pass
+
   def decode(self, memory, encoder_mask, decoder_inputs, decoder_mask):
     """
 
     Args:
         memory: (b_s, seq_len, dim_model)
         encoder_padding_mask : (b_s, seq_len)
-        decoder_inputs: (seq_len, b_s)
+        decoder_inputs: (b_s, seq_len)
         decoder_mask: (b_s, seq_len)
 
     Returns:
@@ -471,8 +512,22 @@ class Moonshot(HsqcRankedTransformer):
     masked_correct = (predicted_ids == target_ids) & inv_mask
     return torch.sum(masked_correct) / torch.sum(inv_mask)
 
+  def _full_accuracy(self, batch_input, model_output):
+    target_ids = batch_input["target"]  # bs, seq_len
+    target_mask = batch_input["target_mask"]  # bs, seq_len
+    inv_mask = ~target_mask
+    predicted_logits = model_output["token_output"]  # seq_len, bs, vocab_size
+
+    predicted_ids = torch.argmax(
+        predicted_logits, dim=2).transpose(0, 1)  # bs, seq_len
+
+    masked_correct = (predicted_ids == target_ids) & inv_mask
+    seq_sum_eq_mask_sum = torch.sum(
+        masked_correct, dim=1) == torch.sum(inv_mask, dim=1)
+    return seq_sum_eq_mask_sum.float().mean()
+
   def training_step(self, batch, batch_idx):
-    _, collated_smiles = batch
+    hsqc, collated_smiles = batch
 
     out = self.forward(batch)
     loss = self._calc_loss(collated_smiles, out)
@@ -480,14 +535,15 @@ class Moonshot(HsqcRankedTransformer):
       perplexity = self._calc_perplexity(collated_smiles, out)
       my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
       accuracy = self._predicted_accuracy(collated_smiles, out)
-
+      full_accuracy = self._full_accuracy(collated_smiles, out)
     self.log("tr/loss", loss)
     metrics = {
         "loss": loss.detach().item(),
         "perplexity": perplexity.detach().item(),
         "my_perplexity": my_perplexity.detach().item(),
         "my_nnll": my_nnll.detach().item(),
-        "accuracy": accuracy.detach().item()
+        "accuracy": accuracy.detach().item(),
+        "full_accuracy": full_accuracy.detach().item()
     }
     self.training_step_outputs.append(metrics)
     return loss
@@ -500,12 +556,14 @@ class Moonshot(HsqcRankedTransformer):
     perplexity = self._calc_perplexity(collated_smiles, out)
     my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
     accuracy = self._predicted_accuracy(collated_smiles, out)
+    full_accuracy = self._full_accuracy(collated_smiles, out)
     metrics = {
         "loss": loss.detach().item(),
         "perplexity": perplexity.detach().item(),
         "my_perplexity": my_perplexity.detach().item(),
         "my_nnll": my_nnll.detach().item(),
-        "accuracy": accuracy.detach().item()
+        "accuracy": accuracy.detach().item(),
+        "full_accuracy": full_accuracy.detach().item()
     }
     self.validation_step_outputs.append(metrics)
     return metrics
