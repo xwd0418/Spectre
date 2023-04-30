@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 from datasets.generic_index_dataset import GenericIndexedModule
 from datasets.dataset_utils import pad, tokenise_and_mask
 
+from pysmilesutils.augment import SMILESAugmenter
 from models.chemformer.utils import REGEX
 from models.chemformer.tokeniser import MolEncTokeniser
 
@@ -26,9 +27,10 @@ def map_to_handler(k, token_file):
     tokeniser = MolEncTokeniser.from_vocab_file(
         token_file, REGEX, 272
     )
+    aug = SMILESAugmenter()  # random enumeration
 
     def tokenise_fn(smiles):
-      return tokenise_and_mask(smiles, tokeniser)
+      return tokenise_and_mask(aug(smiles), tokeniser)
     return tokenise_fn
 
 def data_mux(features, feature_handlers, ds_path,

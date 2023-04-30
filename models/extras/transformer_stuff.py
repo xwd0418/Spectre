@@ -20,3 +20,17 @@ def generate_square_subsequent_mask(sz, device="cpu"):
   mask = mask.float().masked_fill(mask == 0, float('-inf')
                                   ).masked_fill(mask == 1, float(0.0))
   return mask
+
+def build_padding_mask(inp):
+  """
+  Builds padding mask from input. Assumes (b_s, seq_len, embedding_dim)
+
+  """
+  # sum along data dimension,
+  zeros = ~inp.sum(dim=2).bool()  # (b_s, seq_len)
+  mask = [
+      torch.tensor([[False]] * inp.shape[0]).type_as(zeros),
+      zeros,
+  ]
+  mask = torch.cat(mask, dim=1)
+  return mask

@@ -220,6 +220,19 @@ class MolEncTokeniser:
     return len(self.vocab)
 
   def tokenise(self, sents1, sents2=None, mask=False, pad=False):
+    """
+      Tokenizes a list of SMILES strings. Just call with pad=True.
+
+    Returns:
+        type: dict
+        If we have n=num_SMILES, seq = maximum sequence length
+        {
+          original_tokens: (n)list of (seq+2)token lists. Contains
+            ^ start token, & end token, and <PAD> tokens,
+          original_pad_masks/masked_pad_masks: pretty much the same, and both
+            are (n)list of (seq+2)int list. 0 = no pad, 1 = pad
+        }
+    """
     if sents2 is not None and len(sents1) != len(sents2):
       raise ValueError(
           "Sentence 1 batch and sentence 2 batch must have the same number of elements")
