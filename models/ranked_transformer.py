@@ -378,7 +378,7 @@ class Moonshot(HsqcRankedTransformer):
       mol_strs = self.tokeniser.detokenise(str_tokens)
       return mol_strs
   
-  def sample_rdm(self, hsqc):
+  def sample_rdm(self, hsqc, temperature = 1.0, gen_len = None):
     """
       hsqc: (bs, seq_len)
     """
@@ -386,25 +386,30 @@ class Moonshot(HsqcRankedTransformer):
     pad_token_idx = 0
     begin_token_idx = 2
     end_token_idx = 3
+    
+    max_len = self.max_seq_len
+    if gen_len:
+      max_len = gen_len
+    
     with torch.no_grad():
       # (bs, seq_len)
-      tokens = torch.ones((bs, self.max_seq_len), dtype=torch.int64).to(
+      tokens = torch.ones((bs, gen_len), dtype=torch.int64).to(
           self.device) * pad_token_idx
       tokens[:, 0] = begin_token_idx
       # (bs, seq_len)
-      pad_mask = torch.zeros((bs, self.max_seq_len),
+      pad_mask = torch.zeros((bs, gen_len),
                              dtype=torch.bool).to(self.device)
-      print(f"Max seq len: {self.max_seq_len}")
+      print(f"Max seq len: {gen_len}")
       memory, encoder_mask = self.encode(hsqc)
 
-      for i in tqdm.tqdm(range(1, self.max_seq_len)):
+      for i in tqdm.tqdm(range(1, gen_len)):
         decoder_inputs = tokens[:, :i]
         decoder_mask = pad_mask[:, :i]
         # (seq_len, bs, vocab_size) for token_output
         model_output = self.decode(
             memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
         # (seq_len, bs, vocab_size)
-        probability_output = F.softmax(model_output, dim=2)
+        probability_output = F.softmax(model_output / temperature, dim=2)
         sampled_ids = torch.multinomial(probability_output[-1, :, :], num_samples=1).flatten()
         tokens[:, i] = sampled_ids
         pad_mask[:, i] = (sampled_ids == end_token_idx) | (sampled_ids == pad_token_idx)
@@ -413,10 +418,14 @@ class Moonshot(HsqcRankedTransformer):
           break
 
       # (bs, seq_len)
-      my_tokens = tokens.transpose(0, 1).tolist()
+      my_tokens = tokens.tolist()
       str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
       mol_strs = self.tokeniser.detokenise(str_tokens)
-      return mol_strs
+      return {
+        "mol_strs": mol_strs,
+        "token_ids": my_tokens,
+        "tokens": str_tokens,
+      }
 
   def decode(self, memory, encoder_mask, decoder_inputs, decoder_mask):
     """

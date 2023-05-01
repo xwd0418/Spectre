@@ -3,5 +3,9 @@
         "/workspace/smart4.5"
     ],
     "notebook.output.textLineLimit": 30,
-    "notebook.output.scrolling": true
+    "notebook.output.scrolling": true,
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.autopep8"
+    },
+    "python.formatting.provider": "none"
 }
