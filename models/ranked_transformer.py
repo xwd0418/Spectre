@@ -4,6 +4,7 @@ import torch
 import math
 import torch.nn as nn
 import torch.nn.functional as F
+import tqdm
 
 from utils import ranker, constants
 from models import compute_metrics
@@ -336,7 +337,7 @@ class Moonshot(HsqcRankedTransformer):
     encs = [torch.stack(enc, dim=1).flatten()[:self.d_model] for enc in encs]
     encs = torch.stack(encs)
     return encs
-
+  
   def sample(self, hsqc):
     """
       hsqc: (bs, seq_len)
@@ -364,6 +365,7 @@ class Moonshot(HsqcRankedTransformer):
             memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
         best_ids = torch.argmax(
             model_output[[-1], :, :], dim=2).squeeze(0).long()  # (bs)
+        
         tokens[:, i] = best_ids
         pad_mask[:, i] = (best_ids == end_token_idx) | (
             best_ids == pad_token_idx)
@@ -374,7 +376,47 @@ class Moonshot(HsqcRankedTransformer):
       my_tokens = tokens.transpose(0, 1).tolist()
       str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
       mol_strs = self.tokeniser.detokenise(str_tokens)
-    pass
+      return mol_strs
+  
+  def sample_rdm(self, hsqc):
+    """
+      hsqc: (bs, seq_len)
+    """
+    bs, _, _ = hsqc.size()
+    pad_token_idx = 0
+    begin_token_idx = 2
+    end_token_idx = 3
+    with torch.no_grad():
+      # (bs, seq_len)
+      tokens = torch.ones((bs, self.max_seq_len), dtype=torch.int64).to(
+          self.device) * pad_token_idx
+      tokens[:, 0] = begin_token_idx
+      # (bs, seq_len)
+      pad_mask = torch.zeros((bs, self.max_seq_len),
+                             dtype=torch.bool).to(self.device)
+      print(f"Max seq len: {self.max_seq_len}")
+      memory, encoder_mask = self.encode(hsqc)
+
+      for i in tqdm.tqdm(range(1, self.max_seq_len)):
+        decoder_inputs = tokens[:, :i]
+        decoder_mask = pad_mask[:, :i]
+        # (seq_len, bs, vocab_size) for token_output
+        model_output = self.decode(
+            memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
+        # (seq_len, bs, vocab_size)
+        probability_output = F.softmax(model_output, dim=2)
+        sampled_ids = torch.multinomial(probability_output[-1, :, :], num_samples=1).flatten()
+        tokens[:, i] = sampled_ids
+        pad_mask[:, i] = (sampled_ids == end_token_idx) | (sampled_ids == pad_token_idx)
+        
+        if torch.all(pad_mask):
+          break
+
+      # (bs, seq_len)
+      my_tokens = tokens.transpose(0, 1).tolist()
+      str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
+      mol_strs = self.tokeniser.detokenise(str_tokens)
+      return mol_strs
 
   def decode(self, memory, encoder_mask, decoder_inputs, decoder_mask):
     """
