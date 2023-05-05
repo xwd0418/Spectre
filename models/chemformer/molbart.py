@@ -1,4 +1,4 @@
-#
+
 # This code is pulled straight from the Chemformer repo
 #
 import math
@@ -141,9 +141,9 @@ class _AbsTransformerModel(pl.LightningModule):
     model_output = self.forward(batch)
     target_smiles = batch["target_smiles"]
 
-    print("Test Step")
-    print("Target Smiles: ")
-    print(target_smiles)
+    # print("Test Step")
+    # print("Target Smiles: ")
+    # print(target_smiles)
 
     loss = self._calc_loss(batch, model_output)
     token_acc = self._calc_token_acc(batch, model_output)
@@ -152,8 +152,8 @@ class _AbsTransformerModel(pl.LightningModule):
         batch, sampling_alg=self.test_sampling_alg)
     metrics = self.sampler.calc_sampling_metrics(mol_strs, target_smiles)
 
-    print("Mol_strs: ")
-    print(mol_strs)
+    # print("Mol_strs: ")
+    # print(mol_strs)
 
     test_outputs = {
         "test_loss": loss.item(),
@@ -335,7 +335,6 @@ class BARTModel(_AbsTransformerModel):
       activation,
       num_steps,
       max_seq_len,
-      my_tokeniser,
       schedule="cycle",
       warm_up_steps=None,
       dropout=0.1,
@@ -359,7 +358,6 @@ class BARTModel(_AbsTransformerModel):
         **kwargs
     )
 
-    self.my_tokeniser = my_tokeniser
     self.sampler = decode_sampler
     self.val_sampling_alg = "greedy"
     self.test_sampling_alg = "beam"
@@ -382,10 +380,6 @@ class BARTModel(_AbsTransformerModel):
 
     self._init_params()
 
-  def decode_tokens(self, v):
-    tokens = self.my_tokeniser.convert_ids_to_tokens(v)
-    return self.my_tokeniser.detokenise(tokens)
-
   def forward(self, x):
     """ Apply SMILES strings to model
 
@@ -405,17 +399,17 @@ class BARTModel(_AbsTransformerModel):
         Output from model (dict containing key "token_output" and "model_output")
     """
 
-    print("\n=== Describing forward input ===")
-    for k, v in x.items():
-      print(f"==> Key: {k}")
-      print(
-          f"==> Value: {type(v)}")
-      if type(v) is torch.Tensor:
-        print(f"==> Size: {v.size()} {v.type()} {v.dtype}")
-        if v.dtype == torch.int64:
-          print("==> Decoded: ", self.decode_tokens(v.T))
-        print("==> value")
-        print(indent(str(v[:5][:5]), prefix="\t"))
+    # print("\n=== Describing forward input ===")
+    # for k, v in x.items():
+    # print(f"==> Key: {k}")
+    # print(
+    # f"==> Value: {type(v)}")
+    # if type(v) is torch.Tensor:
+    # print(f"==> Size: {v.size()} {v.type()} {v.dtype}")
+    # if v.dtype == torch.int64:
+    # print("==> Decoded: ", self.decode_tokens(v.T))
+    # print("==> value")
+    # print(indent(str(v[:5][:5]), prefix="\t"))
 
     encoder_input = x["encoder_input"]
     decoder_input = x["decoder_input"]
@@ -431,13 +425,13 @@ class BARTModel(_AbsTransformerModel):
 
     memory = self.encoder(encoder_embs, src_key_padding_mask=encoder_pad_mask)
 
-    print("=== Memory ===")
-    print(memory.size())
-    print("=== Decoder Embs ===")
-    print(decoder_embs.size())
-    print("=== tgt_mask ===")
-    print(tgt_mask.size())
-    print(indent(str(tgt_mask[:5][:5]), prefix="\t"))
+    # print("=== Memory ===")
+    # print(memory.size())
+    # print("=== Decoder Embs ===")
+    # print(decoder_embs.size())
+    # print("=== tgt_mask ===")
+    # print(tgt_mask.size())
+    # print(indent(str(tgt_mask[:5][:5]), prefix="\t"))
 
     model_output = self.decoder(
         decoder_embs,
