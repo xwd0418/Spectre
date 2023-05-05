@@ -162,3 +162,95 @@ class Uspto50(ReactionDataset):
       prod_str = f"{str(type_token)}{prod_str}" if self.type_token else prod_str
 
     return react_str, prod_str
+
+class MoleculeDataset(_AbsDataset):
+  def __init__(
+      self,
+      molecules,
+      seq_lengths=None,
+      transform=None,
+      train_idxs=None,
+      val_idxs=None,
+      test_idxs=None
+  ):
+    super(MoleculeDataset, self).__init__()
+
+    self.molecules = molecules
+    self.seq_lengths = seq_lengths
+    self.transform = transform
+    self.train_idxs = train_idxs
+    self.val_idxs = val_idxs
+    self.test_idxs = test_idxs
+
+  def __len__(self):
+    return len(self.molecules)
+
+  def __getitem__(self, item):
+    molecule = self.molecules[item]
+    if self.transform is not None:
+      molecule = self.transform(molecule)
+
+    return molecule
+
+  def split_idxs(self, val_idxs, test_idxs):
+    val_mols = [self.molecules[idx] for idx in val_idxs]
+    val_lengths = [self.seq_lengths[idx]
+                   for idx in val_idxs] if self.seq_lengths is not None else None
+    val_dataset = MoleculeDataset(val_mols, val_lengths, self.transform)
+
+    test_mols = [self.molecules[idx] for idx in test_idxs]
+    test_lengths = [self.seq_lengths[idx]
+                    for idx in test_idxs] if self.seq_lengths is not None else None
+    test_dataset = MoleculeDataset(test_mols, test_lengths, self.transform)
+
+    train_idxs = set(range(len(self))) - set(val_idxs).union(set(test_idxs))
+    train_mols = [self.molecules[idx] for idx in sorted(train_idxs)]
+    train_lengths = [self.seq_lengths[idx]
+                     for idx in train_idxs] if self.seq_lengths is not None else None
+    train_dataset = MoleculeDataset(train_mols, train_lengths, self.transform)
+
+    return train_dataset, val_dataset, test_dataset
+
+class ZincSlice(MoleculeDataset):
+  def __init__(self, df):
+    smiles = df["smiles"].tolist()
+    train_idxs, val_idxs, test_idxs = self._save_idxs(df)
+
+    super().__init__(
+        smiles,
+        train_idxs=train_idxs,
+        val_idxs=val_idxs,
+        test_idxs=test_idxs,
+        transform=lambda smi: Chem.MolFromSmiles(smi)
+    )
+
+  def _save_idxs(self, df):
+    val_idxs = df.index[df["set"] == "val"].tolist()
+    test_idxs = df.index[df["set"] == "test"].tolist()
+
+    idxs_intersect = set(val_idxs).intersection(set(test_idxs))
+    if len(idxs_intersect) > 0:
+      raise ValueError(f"Val idxs and test idxs overlap")
+
+    idxs = set(range(len(df.index)))
+    train_idxs = idxs - set(val_idxs).union(set(test_idxs))
+
+    return train_idxs, val_idxs, test_idxs
+
+
+class Zinc(ZincSlice):
+  def __init__(self, data_path):
+    path = Path(data_path)
+
+    # If path is a directory then read every subfile
+    if path.is_dir():
+      df = self._read_dir_df(path)
+    else:
+      df = pd.read_csv(path)
+
+    super().__init__(df)
+
+  def _read_dir_df(self, path):
+    dfs = [pd.read_csv(f) for f in path.iterdir()]
+    zinc_df = pd.concat(dfs, ignore_index=True, copy=False)
+    return zinc_df
