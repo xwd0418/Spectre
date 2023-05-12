@@ -29,6 +29,9 @@ class SMART_CLIP(pl.LightningModule):
     self.lr = lr
     self.loss_fn = nn.CrossEntropyLoss(reduction="none")
 
+    self.ce1 = nn.CrossEntropyLoss()
+    self.ce2 = nn.CrossEntropyLoss()
+
   def encode(self, hsqc_vals, hsqc_mask, smiles_vals, smiles_mask):
     hsqc_out = self.smart(hsqc_vals, hsqc_mask)
     hsqc_proj = self.smart_lin(hsqc_out)
@@ -53,6 +56,55 @@ class SMART_CLIP(pl.LightningModule):
   def forward(self, batch):
     hsqc, hsqc_p, smiles, smiles_p = batch
     return self.encode(hsqc, hsqc_p, smiles, smiles_p)
+
+  def training_step(self, batch, batch_idx):
+    logits_hsqc, logits_smiles = self.forward(batch)
+    loss = self._compute_loss(logits_hsqc, logits_smiles)
+    self.log("tr/loss", loss)
+    self.log("tr/logit_scale", self.logit_scale[0].item())
+    metrics = {
+        "loss": loss.item(),
+        "logit_scale": self.logit_scale[0].item()
+    }
+    self.training_step_outputs.append(metrics)
+    return loss
+
+  def validation_step(self, batch):
+    logits_hsqc, logits_smiles = self.forward(batch)
+    loss = self._compute_loss(logits_hsqc, logits_smiles)
+    metrics = {
+        "loss": loss
+    }
+    self.validation_step_outputs.append(metrics)
+
+  def on_train_epoch_end(self):
+    if self.training_step_outputs:
+      feats = self.training_step_outputs[0].keys()
+      di = {}
+      for feat in feats:
+        di[f"tr/mean_{feat}"] = np.mean([v[feat]
+                                        for v in self.training_step_outputs])
+      for k, v in di.items():
+        self.log(k, v, on_epoch=True)
+      self.training_step_outputs.clear()
+
+  def on_validation_epoch_end(self):
+    if self.validation_step_outputs:
+      feats = self.validation_step_outputs[0].keys()
+      di = {}
+      for feat in feats:
+        di[f"val/mean_{feat}"] = np.mean([v[feat]
+                                          for v in self.validation_step_outputs])
+      for k, v in di.items():
+        self.log(k, v, on_epoch=True)
+      self.validation_step_outputs.clear()
+
+  def _compute_loss(self, logits_hsqc, logits_smiles):
+    ground_truth = torch.arange(
+        len(logits_hsqc), dtype=torch.long, device=self.device)
+    loss = (self.ce1(logits_hsqc, ground_truth) +
+            self.ce2(logits_smiles, ground_truth)) / 2
+    return loss
 
   def configure_optimizers(self):
     if not self.scheduler:
