@@ -1,13 +1,10 @@
 from argparse import ArgumentParser
 
 from models.ranked_transformer import HsqcRankedTransformer
-from models.ranked_double_transformer import DoubleTransformer
 
 def apply_args(parser, model_type):
   if model_type == "hsqc_transformer" or model_type == "ms_transformer":
     HsqcRankedTransformer.add_model_specific_args(parser)
-  elif model_type == "double_transformer":
-    DoubleTransformer.add_model_specific_args(parser)
   else:
     raise (f"No model for model type {model_type}.")
 

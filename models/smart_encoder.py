@@ -6,6 +6,17 @@ from models.encoders.encoder_factory import build_encoder, build_encoder_from_ar
 
 from models.ranked_transformer import RANKED_TNSFMER_ARGS
 
+SMART_ENCODER_ARGS = [
+  "dim_model",
+  "dim_coords",
+  "heads",
+  "layers",
+  "ff_dim",
+  "coord_enc",
+  "enc_args",
+  "r_dropout"
+]
+
 class SMART_Encoder(pl.LightningModule):
   """A Transformer encoder for input HSQC.
   Parameters
@@ -32,10 +43,10 @@ class SMART_Encoder(pl.LightningModule):
     self.out_logger.info("Started Initializing")
 
     for k, v in params.items():
-      if k in RANKED_TNSFMER_ARGS:
+      if k in SMART_ENCODER_ARGS:
         self.out_logger.info(f"\tHyperparameter: {k}={v}")
 
-    self.save_hyperparameters(*RANKED_TNSFMER_ARGS)
+    self.save_hyperparameters(*SMART_ENCODER_ARGS)
 
     # ranked encoder
     self.enc = build_encoder_from_args(
@@ -66,8 +77,10 @@ class SMART_Encoder(pl.LightningModule):
     # (b_s, seq_len, model_dim)
     points = self.enc(hsqc)
     # Add the spectrum representation to each input:
-    latent = self.latent.expand(points.shape[0], -1, -1)
-    points = torch.cat([latent, points], dim=1).to(self.device)
+    latent = self.latent.expand(points.shape[0], -1, -1).to(self.device)
+    points = torch.cat([latent, points], dim=1)
+    # (b_s, seq_len + 1)
+    mask = torch.cat([torch.ones(len(mask), 1).to(self.device), mask], dim=1)
     out = self.transformer_encoder(points, src_key_padding_mask=mask)
     return out
 

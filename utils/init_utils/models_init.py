@@ -5,7 +5,7 @@ from models.chemformer.tokeniser import MolEncTokeniser
 from models.chemformer.utils import REGEX
 
 from models.ranked_transformer import HsqcRankedTransformer, Moonshot
-from models.ranked_double_transformer import DoubleTransformer
+from models.smart_clip import SMART_CLIP
 
 
 from utils.constants import EXCLUDE_FROM_MODEL_ARGS
@@ -18,8 +18,8 @@ def model_mux(args, model_type):
   model_class: pl.LightningModule = None
   if model_type == "hsqc_transformer" or model_type == "ms_transformer":
     model_class = HsqcRankedTransformer
-  elif model_type == "double_transformer":
-    model_class = DoubleTransformer
+  elif model_type == "smart_clip":
+    model_class = SMART_CLIP
   elif model_type == "moonshot":
     model_class = Moonshot
     load_override["tokeniser"] = MolEncTokeniser.from_vocab_file(
