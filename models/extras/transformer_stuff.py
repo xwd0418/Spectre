@@ -34,3 +34,19 @@ def build_padding_mask(inp):
   ]
   mask = torch.cat(mask, dim=1)
   return mask
+
+def positional_embs(d_model, max_seq_len):
+    """ Produces a tensor of positional embeddings for the model
+
+    Returns a tensor of shape (self.max_seq_len, self.d_model) filled with positional embeddings,
+    which are created from sine and cosine waves of varying wavelength
+    """
+
+    encs = torch.tensor(
+        [dim / d_model for dim in range(0, d_model, 2)])
+    encs = 10000 ** encs
+    encs = [(torch.sin(pos / encs), torch.cos(pos / encs))
+            for pos in range(max_seq_len)]
+    encs = [torch.stack(enc, dim=1).flatten()[:d_model] for enc in encs]
+    encs = torch.stack(encs)
+    return encs

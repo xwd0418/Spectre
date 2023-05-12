@@ -14,7 +14,7 @@ def init_logger(out_path, path1, path2):
     pass
 
   formatter = logging.Formatter(
-      '%(asctime)s-%(name)s-%(levelname)s-%(message)s')
+      '%(asctime)s-%(name)s-[%(filename)s:%(lineno)s]-%(message)s')
   fh = logging.FileHandler(logfile_path)
   fh.setFormatter(formatter)
   logger.addHandler(fh)
