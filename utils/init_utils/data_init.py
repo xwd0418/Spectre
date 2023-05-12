@@ -3,7 +3,7 @@ import os
 from argparse import ArgumentParser
 
 from datasets.generic_index_dataset import GenericIndexedModule
-from datasets.dataset_utils import pad, tokenise_and_mask
+from datasets.dataset_utils import pad, pad_and_mask, tokenise_and_mask, tokenise_and_mask_encoder
 
 from pysmilesutils.augment import SMILESAugmenter
 from models.chemformer.utils import REGEX
@@ -21,6 +21,8 @@ def apply_args(parser: ArgumentParser):
 def map_to_handler(k, token_file):
   if k == "pad":
     return pad
+  if k == "pad_and_mask":
+    return pad_and_mask
   if k == "None":
     return None
   if k == "tokenise":
@@ -32,6 +34,15 @@ def map_to_handler(k, token_file):
     def tokenise_fn(smiles):
       return tokenise_and_mask(aug(smiles), tokeniser)
     return tokenise_fn
+  if k == "tokenise_and_mask_encoder":
+    tokeniser = MolEncTokeniser.from_vocab_file(
+        token_file, REGEX, 272
+    )
+    aug = SMILESAugmenter()  # random enumeration
+
+    def tokenise_fn2(smiles):
+      return tokenise_and_mask_encoder(aug(smiles), tokeniser)
+    return tokenise_fn2
 
 def data_mux(features, feature_handlers, ds_path,
              token_file=None, batch_size=32, len_override=None,
@@ -44,7 +55,7 @@ def data_mux(features, feature_handlers, ds_path,
   """
   logger = logging.getLogger('lightning')
 
-  if "tokenise" in feature_handlers:
+  if "tokenise" in feature_handlers or "tokenise_and_mask_encoder" in feature_handlers:
     assert (token_file)
 
   feature_handlers = [map_to_handler(f, token_file) for f in feature_handlers]

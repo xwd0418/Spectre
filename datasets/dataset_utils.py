@@ -33,7 +33,7 @@ def pad_and_mask(sequence):
       else v.type(torch.float32)
       for v in sequence
   ], batch_first=True)
-  padding_mask = ~(sequence > 0)
+  padding_mask = ~torch.any((sequence > 0), dim=2)
   return {
       "sequence": sequence,
       "padding_mask": padding_mask

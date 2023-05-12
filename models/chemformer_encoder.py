@@ -27,7 +27,6 @@ class _Yoinked_Encoder(pl.LightningModule):
       num_layers,
       num_heads,
       d_feedforward,
-      weight_decay,
       activation,
       max_seq_len,
       dropout=0.1,
@@ -41,7 +40,6 @@ class _Yoinked_Encoder(pl.LightningModule):
     self.num_layers = num_layers
     self.num_heads = num_heads
     self.d_feedforward = d_feedforward
-    self.weight_decay = weight_decay
     self.activation = activation
     self.max_seq_len = max_seq_len
     self.dropout = dropout
@@ -51,7 +49,7 @@ class _Yoinked_Encoder(pl.LightningModule):
 
     self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
     self.dropout = nn.Dropout(dropout)
-    self.register_buffer("pos_emb", positional_embs())
+    self.register_buffer("pos_emb", positional_embs(d_model, max_seq_len))
 
   def forward(self, x):
     raise NotImplementedError()
@@ -126,7 +124,6 @@ class BART_Encoder(_Yoinked_Encoder):
         num_heads,
         d_feedforward,
         activation,
-        num_steps,
         max_seq_len,
         dropout,
         **kwargs
@@ -141,5 +138,5 @@ class BART_Encoder(_Yoinked_Encoder):
   def forward(self, batch) -> torch.Tensor:
     smiles_token_ids, smiles_pad_mask = batch
     encoder_embs = self._construct_input(smiles_token_ids)
-    memory = self.encoder(encoder_embs, src_key_padding_mask=smiles_pad_mask)
-    return memory[:, 0, :]
+    memory = self.encoder(encoder_embs.permute((1, 0, 2)), src_key_padding_mask=smiles_pad_mask)
+    return memory[0, :, :]
