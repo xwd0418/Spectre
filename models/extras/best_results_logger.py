@@ -3,13 +3,21 @@ from pytorch_lightning.utilities import rank_zero_only
 from collections import defaultdict
 from pathlib import Path
 import numpy as np
-import yaml
+import yaml, os, pickle
 
 class BestResultLogger(Logger):
   def __init__(self, save_dir, name, version):
     super().__init__()
     self.data = defaultdict(list)
     self.out_path = Path(save_dir) / name / version / "results.yml"
+    self.save_path = Path(save_dir) / name / version / "save.pickle"
+    
+    if os.path.exists(self.save_path):
+      with open(self.save_path, "rb") as f:
+        self.data = pickle.load(f)
+        if self.data:
+          print(f"Loaded {len(list(self.data.values())[0])} data samples from pickle")
+  
 
   @property
   def name(self):
@@ -33,10 +41,12 @@ class BestResultLogger(Logger):
     for k, v in metrics.items():
       self.data[k].append((v, step))
 
+
   @rank_zero_only
   def save(self):
     # Optional. Any code necessary to save logger data goes here
-    pass
+    with open(self.save_path, "wb") as f:
+      pickle.dump(self.data, f)
 
   @rank_zero_only
   def finalize(self, status):

@@ -4,6 +4,7 @@ import sys
 import torch
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
+from utils.callbacks.marker_callback import DoneMarkerCallback
 from utils.init_utils import (
     args_init, data_init, loggers_init, models_init
 )
@@ -30,6 +31,7 @@ def main():
   path1 = args["foldername"]  # lightning_logs
   path2 = args["expname"]
   marker_path = Path(out_path) / path1 / path2 / "marker"
+  done_path = Path(out_path) / path1 / path2 / "done"
 
   # Logger setup
   my_logger = loggers_init.init_logger(out_path, path1, path2)
@@ -41,7 +43,8 @@ def main():
     my_logger.info(f"[Main] Using seed {args.get('seed')}")
 
   # marking experiment as done
-  if not args["force_start"] and marker.has_marker(marker_path):
+  if not args["force_start"] and marker.has_marker(marker_path) \
+    and marker.has_marker(done_path):
     print("Experiment in progress / done")
     exit(123)
   os.makedirs(Path(out_path) / path1 / path2, exist_ok=True)
@@ -74,16 +77,18 @@ def main():
   early_stopping = EarlyStopping(
       monitor=metric, mode=metricmode, patience=patience)
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
+  done_callback = DoneMarkerCallback(done_path)
 
   if args.get("actually_run", True):
     # Create trainer instance
-    trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", devices=1, logger=[tbl, brl], callbacks=[
-        checkpoint_callback, early_stopping, lr_monitor])
+    trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", 
+                         devices=1, logger=[tbl, brl], callbacks=[
+                           checkpoint_callback, early_stopping, lr_monitor, done_callback
+                           ])
 
     my_logger.info("[Main] Begin Training!")
-    trainer.fit(model, data_module)
-    my_logger.info("[Main] Done Training!")
-
+    trainer.fit(model, datamodule = data_module, ckpt_path="last")
+    my_logger.info("[Main] Done Training!")  
 
 if __name__ == '__main__':
   main()

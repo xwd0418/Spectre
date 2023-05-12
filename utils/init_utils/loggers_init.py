@@ -13,10 +13,14 @@ def init_logger(out_path, path1, path2):
   with open(logfile_path, 'w') as fp:  # touch
     pass
 
-  formatter = logging.Formatter(
+  formatter_fh = logging.Formatter(
       '%(asctime)s-%(name)s-[%(filename)s:%(lineno)s]-%(message)s')
   fh = logging.FileHandler(logfile_path)
-  fh.setFormatter(formatter)
+  fh.setFormatter(formatter_fh)
   logger.addHandler(fh)
-  logger.addHandler(logging.StreamHandler(sys.stdout))
+  formatter_sh = logging.Formatter(
+      '%(asctime)s-[%(filename)s:%(lineno)s]-%(message)s')
+  sh = logging.StreamHandler(sys.stdout)
+  sh.setFormatter(formatter_sh)
+  logger.addHandler(sh)
   return logger
