@@ -15,7 +15,7 @@ do
   echo "Pulling $trimmed..."
   
   start=`date +%s`
-  cp "/data/data/$FILE" $tempdata
+  rsync --progress "/data/data/$FILE" $tempdata
   unzip -q "$tempdata/$FILE" -d $tempdata
   rm "$tempdata/$FILE"
   end=`date +%s`

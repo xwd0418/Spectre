@@ -1,7 +1,7 @@
-apt-get install unzip
+apt-get update
+apt-get install unzip libxrender1 rsync
 pip install ray[tune]
 pip install rdkit
-apt-get install libxrender1
 pip install --upgrade torchmetrics
 pip install --upgrade pytorch-lightning
 pip install autopep8
