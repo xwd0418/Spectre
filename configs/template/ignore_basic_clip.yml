@@ -13,8 +13,8 @@ args:
   data_len: 300
 
   # trainer args
-  epochs: 10
-  batch_size: 32
+  epochs: 4
+  batch_size: 64
 
   # tb_args
   metric: val/mean_loss
@@ -31,6 +31,7 @@ args:
   dim_model: 128
 
   # data_args
+  module_type: gim
   feats: [HSQC, SMILES]
   feats_handlers: [pad_and_mask, tokenise_and_mask_encoder]
   token_file: tempdata/chemformer/bart_vocab.txt

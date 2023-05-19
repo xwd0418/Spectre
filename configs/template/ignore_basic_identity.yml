@@ -1,0 +1,28 @@
+--- 
+manifest:
+  type: single
+args:
+  foldername: debug
+  expname: debug
+  modelname: identity
+
+  # control args
+  actually_run: True
+  force_start: True
+
+  # trainer args
+  epochs: 25
+  batch_size: 32
+
+  # model args
+  lr: 1.0e-4
+
+  # tb_args
+  metric: val/mean_loss
+  metricmode: min
+  patience: 30
+
+  # data_args
+  module_type: identity
+  num_workers: 4
+

@@ -9,9 +9,9 @@ from utils.init_utils import (
     args_init, data_init, loggers_init, models_init
 )
 from utils import marker, config
-from models.extras.best_results_logger import BestResultLogger
 
 from pytorch_lightning.loggers import TensorBoardLogger
+from utils.loggers.betterTBL import BetterTBL
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from pathlib import Path
@@ -44,7 +44,7 @@ def main():
 
   # marking experiment as done
   if not args["force_start"] and marker.has_marker(marker_path) \
-    and marker.has_marker(done_path):
+          and marker.has_marker(done_path):
     print("Experiment in progress / done")
     exit(123)
   os.makedirs(Path(out_path) / path1 / path2, exist_ok=True)
@@ -60,18 +60,18 @@ def main():
   # Model and Data setup
   batch_size = args["batch_size"]
   model = models_init.model_mux(args, args["modelname"])
+  data_module_type = args["module_type"]
   data_module = data_init.data_mux(
-      args["feats"], args["feats_handlers"], args["ds_path"],
-      token_file=args.get("token_file"),
-      len_override=args.get("data_len"), batch_size=batch_size,
-      num_workers=args["num_workers"])
+      data_module_type,
+      features=args.get("feats"), feature_handlers=args.get("feats_handlers"), ds_path=args.get("ds_path"),
+      token_file=args.get("token_file"), len_override=args.get("data_len"), batch_size=batch_size, num_workers=args["num_workers"])
   my_logger.info(f"[Main - Data] Initialized.")
 
   # All callbacks
   metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
 
-  brl = BestResultLogger(save_dir=out_path, name=path1, version=path2)
-  tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
+  tbl = BetterTBL(best_metric=metric, save_dir=out_path,
+                  name=path1, version=path2)
   checkpoint_callback = cb.ModelCheckpoint(
       monitor=metric, mode=metricmode, save_last=True, save_top_k=3)
   early_stopping = EarlyStopping(
@@ -81,14 +81,15 @@ def main():
 
   if args.get("actually_run", True):
     # Create trainer instance
-    trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", 
-                         devices=1, logger=[tbl, brl], callbacks=[
-                           checkpoint_callback, early_stopping, lr_monitor, done_callback
-                           ])
+    trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu",
+                         devices=1, logger=[tbl], callbacks=[
+        checkpoint_callback, early_stopping, lr_monitor, done_callback
+    ])
 
     my_logger.info("[Main] Begin Training!")
-    trainer.fit(model, datamodule = data_module, ckpt_path="last")
-    my_logger.info("[Main] Done Training!")  
+    trainer.fit(model, datamodule=data_module, ckpt_path="last")
+    my_logger.info("[Main] Done Training!")
+
 
 if __name__ == '__main__':
   main()

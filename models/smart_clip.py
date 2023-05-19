@@ -4,8 +4,9 @@ import torch.nn as nn
 import numpy as np
 
 from models.chemformer_encoder import BART_Encoder
-from models.smart_encoder import SMART_Encoder
+from models.smart_encoder import SMART_Encoder, SMART_ENCODER_ARGS
 
+SMART_CLIP_ARGS = ["projection_dim", "lr"]
 class SMART_CLIP(pl.LightningModule):
   def __init__(self,
                chemformer_path,
@@ -14,7 +15,13 @@ class SMART_CLIP(pl.LightningModule):
                lr=1e-3,
                **kwargs):
     super().__init__()
+    clip_args = {
+        "projection_dim": projection_dim,
+        "lr": lr
+    }
+    smart_args = {k: kwargs[k] for k in SMART_ENCODER_ARGS if k in kwargs}
     # === Parameters ===
+    self.save_hyperparameters({**clip_args, **smart_args})
     self.bart = BART_Encoder.load_from_checkpoint(chemformer_path, strict=False)
     self.smart = SMART_Encoder(**kwargs)
 
@@ -22,7 +29,8 @@ class SMART_CLIP(pl.LightningModule):
     self.bart_lin = nn.Linear(512, projection_dim)
     self.smart_lin = nn.Linear(kwargs["dim_model"], projection_dim)
 
-    self.logit_scale = nn.Parameter(torch.tensor([np.log(1 / 0.07)], dtype=torch.float32))
+    self.logit_scale = nn.Parameter(torch.tensor(
+        [np.log(1 / 0.07)], dtype=torch.float32))
 
     # === Optimizer ===
     self.validation_step_outputs = []
@@ -42,7 +50,6 @@ class SMART_CLIP(pl.LightningModule):
     chemformer_proj = self.bart_lin(chemformer_out)
     chemformer_proj = chemformer_proj / \
         chemformer_proj.norm(dim=1, keepdim=True)
-
 
     logit_scale = self.logit_scale.exp()
     logits_per_hsqc = logit_scale * hsqc_proj @ chemformer_proj.t()
@@ -67,8 +74,7 @@ class SMART_CLIP(pl.LightningModule):
     self.log("tr/loss", loss)
     self.log("tr/logit_scale", self.logit_scale[0].item())
     metrics = {
-        "loss": loss.item(),
-        "logit_scale": self.logit_scale[0].item()
+        "loss": loss.item()
     }
     self.training_step_outputs.append(metrics)
     return loss
@@ -76,8 +82,13 @@ class SMART_CLIP(pl.LightningModule):
   def validation_step(self, batch, batch_idx):
     logits_hsqc, logits_smiles = self.forward(batch)
     loss = self._compute_loss(logits_hsqc, logits_smiles)
+    hsqc_rankn = self._mean_rank_n(logits_hsqc)
+    smiles_rankn = self._mean_rank_n(logits_smiles)
     metrics = {
-        "loss": loss.item()
+        "loss": loss.item(),
+        "logit_scale": self.logit_scale[0].item(),
+        "hsqc_rankn": hsqc_rankn.item(),
+        "smiles_rankn": smiles_rankn.item()
     }
     self.validation_step_outputs.append(metrics)
 
@@ -109,6 +120,10 @@ class SMART_CLIP(pl.LightningModule):
     loss = (self.ce1(logits_hsqc, ground_truth) +
             self.ce2(logits_smiles, ground_truth)) / 2
     return loss
+
+  def _mean_rank_n(self, logits_matrix):
+    diag = logits_matrix.diag().view((-1, 1))
+    return (logits_matrix > diag).sum(dim=1).float().mean()
 
   def configure_optimizers(self):
     return torch.optim.Adam(self.parameters(), lr=self.lr)

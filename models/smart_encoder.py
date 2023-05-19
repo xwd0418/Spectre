@@ -7,14 +7,14 @@ from models.encoders.encoder_factory import build_encoder, build_encoder_from_ar
 from models.ranked_transformer import RANKED_TNSFMER_ARGS
 
 SMART_ENCODER_ARGS = [
-  "dim_model",
-  "dim_coords",
-  "heads",
-  "layers",
-  "ff_dim",
-  "coord_enc",
-  "enc_args",
-  "r_dropout"
+    "dim_model",
+    "dim_coords",
+    "heads",
+    "layers",
+    "ff_dim",
+    "coord_enc",
+    "enc_args",
+    "r_dropout"
 ]
 
 class SMART_Encoder(pl.LightningModule):
@@ -45,8 +45,6 @@ class SMART_Encoder(pl.LightningModule):
     for k, v in params.items():
       if k in SMART_ENCODER_ARGS:
         self.out_logger.info(f"\tHyperparameter: {k}={v}")
-
-    self.save_hyperparameters(*SMART_ENCODER_ARGS)
 
     # ranked encoder
     self.enc = build_encoder_from_args(
