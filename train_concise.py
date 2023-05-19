@@ -71,7 +71,7 @@ def main():
   metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
 
   tbl = BetterTBL(best_metric=metric, save_dir=out_path,
-                  name=path1, version=path2)
+                  name=path1, version=path2, default_hp_metric=False)
   checkpoint_callback = cb.ModelCheckpoint(
       monitor=metric, mode=metricmode, save_last=True, save_top_k=3)
   early_stopping = EarlyStopping(
