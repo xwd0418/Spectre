@@ -13,7 +13,7 @@ args:
 
   # trainer args
   epochs: 150
-  batch_size: 48
+  batch_size: 32
 
   # tb_args
   metric: val/mean_loss
