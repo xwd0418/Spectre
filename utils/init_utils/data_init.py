@@ -3,6 +3,7 @@ import os
 from argparse import ArgumentParser
 
 from datasets.generic_index_dataset import GenericIndexedModule
+from datasets.identity_dataset import IdentityModule
 from datasets.dataset_utils import pad, pad_and_mask, tokenise_and_mask, tokenise_and_mask_encoder
 
 from pysmilesutils.augment import SMILESAugmenter
@@ -44,7 +45,8 @@ def map_to_handler(k, token_file):
       return tokenise_and_mask_encoder(aug(smiles), tokeniser)
     return tokenise_fn2
 
-def data_mux(features, feature_handlers, ds_path,
+def data_mux(module_type,
+             features=None, feature_handlers=None, ds_path=None,
              token_file=None, batch_size=32, len_override=None,
              num_workers=4):
   """
@@ -55,12 +57,15 @@ def data_mux(features, feature_handlers, ds_path,
   """
   logger = logging.getLogger('lightning')
 
-  if "tokenise" in feature_handlers or "tokenise_and_mask_encoder" in feature_handlers:
-    assert (token_file)
+  if module_type == "gim":
+    if "tokenise" in feature_handlers or "tokenise_and_mask_encoder" in feature_handlers:
+      assert (token_file)
 
-  feature_handlers = [map_to_handler(f, token_file) for f in feature_handlers]
-  gim = GenericIndexedModule(ds_path, features, feature_handlers,
-                             batch_size=batch_size, len_override=len_override,
-                             num_workers=num_workers)
-  logger.info(f"[data_init] Attempting to use {num_workers} cpus")
-  return gim
+    feature_handlers = [map_to_handler(f, token_file) for f in feature_handlers]
+    gim = GenericIndexedModule(ds_path, features, feature_handlers,
+                               batch_size=batch_size, len_override=len_override,
+                               num_workers=num_workers)
+    logger.info(f"[data_init] Attempting to use {num_workers} cpus")
+    return gim
+  elif module_type == "identity":
+    return IdentityModule()

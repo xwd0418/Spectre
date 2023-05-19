@@ -17,7 +17,8 @@ from models.chemformer.molbart_utils import (
 
 from models.extras.transformer_stuff import positional_embs
 
-
+YOINKED_ARGS = ["pad_token_idx", "vocab_size", "d_model", "num_layers",
+                "num_heads", "d_feedforward", "activation", "max_seq_len", "dropout"]
 class _Yoinked_Encoder(pl.LightningModule):
   def __init__(
       self,
@@ -45,7 +46,7 @@ class _Yoinked_Encoder(pl.LightningModule):
     self.dropout = dropout
 
     # Additional args passed in to **kwargs in init will also be saved
-    self.save_hyperparameters()
+    self.save_hyperparameters(*YOINKED_ARGS)
 
     self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
     self.dropout = nn.Dropout(dropout)
@@ -111,7 +112,6 @@ class BART_Encoder(_Yoinked_Encoder):
       num_heads,
       d_feedforward,
       activation,
-      num_steps,
       max_seq_len,
       dropout=0.1,
       **kwargs
@@ -138,5 +138,6 @@ class BART_Encoder(_Yoinked_Encoder):
   def forward(self, batch) -> torch.Tensor:
     smiles_token_ids, smiles_pad_mask = batch
     encoder_embs = self._construct_input(smiles_token_ids)
-    memory = self.encoder(encoder_embs.permute((1, 0, 2)), src_key_padding_mask=smiles_pad_mask)
+    memory = self.encoder(encoder_embs.permute((1, 0, 2)),
+                          src_key_padding_mask=smiles_pad_mask)
     return memory[0, :, :]

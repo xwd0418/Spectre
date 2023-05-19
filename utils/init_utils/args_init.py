@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 
 from models.ranked_transformer import HsqcRankedTransformer
+from models.identity_module import IdentityModule
 
 def apply_args(parser, model_type):
   if model_type == "hsqc_transformer" or model_type == "ms_transformer":
@@ -31,5 +32,6 @@ def training_args(parser):
   parser.add_argument("--patience", type=int, default=30)
 
   # data args
+  parser.add_argument("--module_type", type=str, default="gim")
   parser.add_argument("--data_len", type=int, default=None)
   parser.add_argument("--batch_size", type=int, default=32)
