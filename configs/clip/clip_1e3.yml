@@ -27,7 +27,8 @@ args:
   coord_enc: sce
   enc_args:
     wavelength_bounds: [[0.01, 150], [0.01, 150]]
-  dim_model: 256
+  dim_coords: [60, 60, 8]
+  dim_model: 128
 
   # data_args
   module_type: gim
