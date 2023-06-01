@@ -12,7 +12,7 @@ class BetterTBL(TensorBoardLogger):
 
   @rank_zero_only
   def log_metrics(self, metrics, step):
-    super().log_metrics(metrics, step)
+    # super().log_metrics(metrics, step)
     for k, v in metrics.items():
       if self.best_metric in k:
         super().log_metrics({"hp_metric": v}, step)

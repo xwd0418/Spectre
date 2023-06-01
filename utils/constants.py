@@ -1,6 +1,9 @@
 from datetime import datetime
 from pytz import timezone
 
+LIGHTNING_LOGGER = "pytorch_lightning"
+
+
 # when logging hparam locals, ignore these keys
 MODEL_LOGGING_IGNORE = ["kwargs", "__class__", "self"]
 
