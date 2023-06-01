@@ -6,7 +6,7 @@ import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 from utils.callbacks.marker_callback import DoneMarkerCallback
 from utils.init_utils import (
-    args_init, data_init, loggers_init, models_init
+    args_init, data_init, loggers_init, models_init, warnings_init
 )
 from utils import marker, config
 
@@ -34,6 +34,7 @@ def main():
   done_path = Path(out_path) / path1 / path2 / "done"
 
   # Logger setup
+  warnings_init.clear_warnings()
   my_logger = loggers_init.init_logger(out_path, path1, path2)
   my_logger.info(f'[Main - Logger] Output Path: {out_path}/{path1}/{path2}')
 
@@ -70,8 +71,8 @@ def main():
   # All callbacks
   metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
 
-  tbl = BetterTBL(best_metric=metric, save_dir=out_path,
-                  name=path1, version=path2, default_hp_metric=False)
+  tbl = TensorBoardLogger(save_dir=out_path,
+                          name=path1, version=path2, default_hp_metric=False)
   checkpoint_callback = cb.ModelCheckpoint(
       monitor=metric, mode=metricmode, save_last=True, save_top_k=3)
   early_stopping = EarlyStopping(

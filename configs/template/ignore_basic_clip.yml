@@ -13,7 +13,7 @@ args:
   data_len: 300
 
   # trainer args
-  epochs: 4
+  epochs: 25
   batch_size: 64
 
   # tb_args

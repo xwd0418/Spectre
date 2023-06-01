@@ -112,6 +112,7 @@ class SMART_CLIP(pl.LightningModule):
                                           for v in self.validation_step_outputs])
       for k, v in di.items():
         self.log(k, v, on_epoch=True)
+      self.log("hp/mean_")
       self.validation_step_outputs.clear()
 
   def _compute_loss(self, logits_hsqc, logits_smiles):

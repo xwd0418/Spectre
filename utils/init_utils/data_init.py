@@ -9,6 +9,7 @@ from datasets.dataset_utils import pad, pad_and_mask, tokenise_and_mask, tokenis
 from pysmilesutils.augment import SMILESAugmenter
 from models.chemformer.utils import REGEX
 from models.chemformer.tokeniser import MolEncTokeniser
+from utils.constants import LIGHTNING_LOGGER
 
 def apply_args(parser: ArgumentParser):
   parser.add_argument("--feats", action="store",
@@ -55,7 +56,7 @@ def data_mux(module_type,
       parser: the argument parser
       len_override: to set a custom size of the dataset
   """
-  logger = logging.getLogger('lightning')
+  logger = logging.getLogger(LIGHTNING_LOGGER)
 
   if module_type == "gim":
     if "tokenise" in feature_handlers or "tokenise_and_mask_encoder" in feature_handlers:
