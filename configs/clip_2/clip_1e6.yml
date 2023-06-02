@@ -4,7 +4,7 @@ manifest:
 args:
   foldername: smart_clip_2
   expname: clip_1e_6
-  modelname: smart_clip_2
+  modelname: smart_clip
   seed: 1337
 
   # control args
