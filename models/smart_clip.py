@@ -23,9 +23,7 @@ class SMART_CLIP(pl.LightningModule):
     smart_args = {k: kwargs[k] for k in SMART_ENCODER_ARGS if k in kwargs}
     self.my_logger = get_logger()
     # === Parameters ===
-    self.hparams = {**clip_args, **smart_args}
-
-    self.save_hyperparameters(self.hparams, logger=False)
+    self.save_hyperparameters({**clip_args, **smart_args}, logger=False)
 
     self.bart = BART_Encoder.load_from_checkpoint(chemformer_path, strict=False)
     self.smart = SMART_Encoder(**kwargs)
@@ -98,7 +96,6 @@ class SMART_CLIP(pl.LightningModule):
     self.validation_step_outputs.append(metrics)
 
   def on_train_start(self) -> None:
-    self.my_logger.info(self.trainer.global_step)
     if self.trainer.global_step == 0:
       self.my_logger.info("Global step = 0, initializing hp_metric")
       self.logger.log_hyperparams(self.hparams, {"hp_metric": -1})
