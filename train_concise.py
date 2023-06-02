@@ -1,21 +1,19 @@
-import logging
-import os
-import sys
-import torch
+from argparse import ArgumentParser
+from pathlib import Path
+
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
-from utils.callbacks.marker_callback import DoneMarkerCallback
-from utils.init_utils import (
-    args_init, data_init, loggers_init, models_init, warnings_init
-)
-from utils import marker, config
-
-from pytorch_lightning.loggers import TensorBoardLogger
-from utils.loggers.betterTBL import BetterTBL
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.tuner import Tuner
 
-from pathlib import Path
-from argparse import ArgumentParser
+from utils import config
+from utils.callbacks.best_metric_callback import BestMetricCallback
+from utils.callbacks.marker_callback import DoneMarkerCallback
+from utils.init_utils import (args_init, data_init, loggers_init, models_init,
+                              warnings_init)
+from utils.loggers.betterTBL import BetterTBL
+
 
 def main():
   parser = ArgumentParser(add_help=True)
@@ -42,14 +40,6 @@ def main():
   if args.get("seed"):
     pl.utilities.seed.isolate_rng(args.get("seed"))
     my_logger.info(f"[Main] Using seed {args.get('seed')}")
-
-  # marking experiment as done
-  if not args["force_start"] and marker.has_marker(marker_path) \
-          and marker.has_marker(done_path):
-    print("Experiment in progress / done")
-    exit(123)
-  os.makedirs(Path(out_path) / path1 / path2, exist_ok=True)
-  marker.place_marker(marker_path)
 
   if not is_config:
     # general args
@@ -78,13 +68,13 @@ def main():
   early_stopping = EarlyStopping(
       monitor=metric, mode=metricmode, patience=patience)
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
-  done_callback = DoneMarkerCallback(done_path)
+  best_metric_callback = BestMetricCallback("asdf", "asdf")
 
   if args.get("actually_run", True):
     # Create trainer instance
     trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu",
                          devices=1, logger=[tbl], callbacks=[
-        checkpoint_callback, early_stopping, lr_monitor, done_callback
+        checkpoint_callback, early_stopping, lr_monitor, best_metric_callback
     ])
 
     my_logger.info("[Main] Begin Training!")
