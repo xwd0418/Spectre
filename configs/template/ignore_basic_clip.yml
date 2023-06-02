@@ -19,6 +19,8 @@ args:
   # tb_args
   metric: val/mean_loss
   metricmode: min
+  best_metrics: ["val/mean_loss"]
+  best_metric_modes: ["min"]
   patience: 30
   
   # model args

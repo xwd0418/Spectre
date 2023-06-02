@@ -12,22 +12,18 @@ class BestMetricCallback(Callback):
     self.metric_modes = metric_modes
     assert (type(metrics) == list)
     assert (type(metric_modes) == list)
-    assert (len(metrics) == len(metric_modes))
+    assert (len(metrics) == len(metric_modes) == 1)
     self.state = {}
     for k in metrics:
       self.state[k] = None
     self.logger = get_logger()
 
   def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
-    self.logger.info("load_state_dict")
+    self.logger.info(f"load_state_dict: {state_dict}")
     self.state = state_dict
 
   def state_dict(self) -> Dict[str, Any]:
-    self.logger.info("state_dict")
     return self.state
-
-  def on_train_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
-    self.logger.info("train end")
 
   def on_validation_epoch_end(self, trainer: pl.Trainer, pl_module: pl.LightningModule) -> None:
     callbacks = deepcopy(trainer.callback_metrics)
@@ -38,7 +34,7 @@ class BestMetricCallback(Callback):
         raise Exception(f"Unknown metric mode {metric}")
       val = callbacks[metric]
       op = torch.gt if mode == "max" else torch.lt
-      if op(val, self.state[metric]):
+      if self.state[metric] is None or op(val, self.state[metric]):
         self.state[metric] = val
         trainer.logger.log_metrics(
-            val, "hp/" + metric, step=trainer.global_step)
+            {"hp_metric": val}, step=trainer.global_step)

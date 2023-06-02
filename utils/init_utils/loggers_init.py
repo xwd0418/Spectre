@@ -7,6 +7,10 @@ from utils.constants import LIGHTNING_LOGGER
 
 def init_logger(out_path, path1, path2):
   logger = logging.getLogger(LIGHTNING_LOGGER)
+  # print(f"Handlers: {logger.handlers}")
+  for handler in logger.handlers:
+    logger.removeHandler(handler)
+    # print("Removed handler")
   logger.setLevel(logging.INFO)
 
   logfile_dir = Path(out_path) / path1 / path2
