@@ -25,11 +25,9 @@ def main():
     is_config = True
 
   # Tensorboard setup
-  out_path = "/data/smart4.5"
+  out_path = args.get("out_path", "/data/smart4.5")
   path1 = args["foldername"]  # lightning_logs
   path2 = args["expname"]
-  marker_path = Path(out_path) / path1 / path2 / "marker"
-  done_path = Path(out_path) / path1 / path2 / "done"
 
   # Logger setup
   warnings_init.clear_warnings()
@@ -68,7 +66,10 @@ def main():
   early_stopping = EarlyStopping(
       monitor=metric, mode=metricmode, patience=patience)
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
-  best_metric_callback = BestMetricCallback(["val/mean_hsqc_rankn"], ["min"])
+  best_metrics, best_metric_modes = args.get(
+      "best_metrics", []), args.get("best_metric_modes", [])
+  best_metric_callback = BestMetricCallback(
+      best_metrics, best_metric_modes)
 
   if args.get("actually_run", True):
     # Create trainer instance
