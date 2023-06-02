@@ -68,7 +68,7 @@ def main():
   early_stopping = EarlyStopping(
       monitor=metric, mode=metricmode, patience=patience)
   lr_monitor = cb.LearningRateMonitor(logging_interval="step")
-  best_metric_callback = BestMetricCallback("asdf", "asdf")
+  best_metric_callback = BestMetricCallback(["val/mean_hsqc_rankn"], ["min"])
 
   if args.get("actually_run", True):
     # Create trainer instance
