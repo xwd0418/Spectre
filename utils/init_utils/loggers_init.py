@@ -27,3 +27,6 @@ def init_logger(out_path, path1, path2):
   sh.setFormatter(formatter_sh)
   logger.addHandler(sh)
   return logger
+
+def get_logger():
+  return logging.getLogger(LIGHTNING_LOGGER)

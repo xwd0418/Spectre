@@ -5,6 +5,7 @@ import torch.nn as nn
 from models.encoders.encoder_factory import build_encoder, build_encoder_from_args
 
 from models.ranked_transformer import RANKED_TNSFMER_ARGS
+from utils.init_utils.loggers_init import get_logger
 
 SMART_ENCODER_ARGS = [
     "dim_model",
@@ -39,7 +40,7 @@ class SMART_Encoder(pl.LightningModule):
   ):
     super().__init__()
     params = locals().copy()
-    self.out_logger = logging.getLogger("lightning")
+    self.out_logger = get_logger()
     self.out_logger.info("Started Initializing")
 
     for k, v in params.items():

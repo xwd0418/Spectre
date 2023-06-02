@@ -5,6 +5,7 @@ import numpy as np
 
 from models.chemformer_encoder import BART_Encoder
 from models.smart_encoder import SMART_Encoder, SMART_ENCODER_ARGS
+from utils.init_utils.loggers_init import get_logger
 
 SMART_CLIP_ARGS = ["projection_dim", "lr"]
 class SMART_CLIP(pl.LightningModule):
@@ -20,6 +21,7 @@ class SMART_CLIP(pl.LightningModule):
         "lr": lr
     }
     smart_args = {k: kwargs[k] for k in SMART_ENCODER_ARGS if k in kwargs}
+    self.my_logger = get_logger()
     # === Parameters ===
     self.save_hyperparameters({**clip_args, **smart_args})
     self.bart = BART_Encoder.load_from_checkpoint(chemformer_path, strict=False)
@@ -108,11 +110,11 @@ class SMART_CLIP(pl.LightningModule):
       feats = self.validation_step_outputs[0].keys()
       di = {}
       for feat in feats:
-        di[f"val/mean_{feat}"] = np.mean([v[feat]
-                                          for v in self.validation_step_outputs])
+        a = np.mean([v[feat] for v in self.validation_step_outputs])
+        di[f"val/mean_{feat}"] = a
+
       for k, v in di.items():
         self.log(k, v, on_epoch=True)
-      self.log("hp/mean_")
       self.validation_step_outputs.clear()
 
   def _compute_loss(self, logits_hsqc, logits_smiles):
