@@ -550,3 +550,5 @@ core.*
 path1/
 lightning_logs/
 tb_logs/
+
+ignore/
