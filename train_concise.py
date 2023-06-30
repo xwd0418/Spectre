@@ -51,9 +51,9 @@ def main():
   model = models_init.model_mux(args, args["modelname"])
   data_module_type = args["module_type"]
   data_module = data_init.data_mux(
-      data_module_type,
+      args, data_module_type,
       features=args.get("feats"), feature_handlers=args.get("feats_handlers"), ds_path=args.get("ds_path"),
-      token_file=args.get("token_file"), len_override=args.get("data_len"), batch_size=batch_size, num_workers=args["num_workers"])
+      len_override=args.get("data_len"), batch_size=batch_size, num_workers=args["num_workers"])
   my_logger.info(f"[Main - Data] Initialized.")
 
   # All callbacks

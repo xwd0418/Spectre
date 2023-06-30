@@ -2,8 +2,8 @@
 manifest:
   type: single
 args:
-  foldername: debug
-  expname: moonshot_debug
+  foldername: moonshot_debug
+  expname: overfit_no_aug
   load_path: tempdata/chemformer/model.ckpt
   modelname: moonshot
   seed: 1337
@@ -26,13 +26,13 @@ args:
   data_len: 300
 
   # trainer args
-  epochs: 10
+  epochs: 1000
   batch_size: 32
 
   # tb_args
   metric: val/mean_loss
   metricmode: min
-  patience: 30
+  patience: 200
   best_metrics: ["val/mean_loss"]
   best_metric_modes: ["min"]
 
@@ -43,3 +43,4 @@ args:
   token_file: tempdata/chemformer/bart_vocab.txt
   ds_path: tempdata/SMILES_dataset
   num_workers: 4
+  smiles_augment: False
