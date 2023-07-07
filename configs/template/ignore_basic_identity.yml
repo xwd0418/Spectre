@@ -11,7 +11,7 @@ args:
   force_start: True
 
   # trainer args
-  epochs: 25
+  epochs: 5
   batch_size: 32
 
   # model args

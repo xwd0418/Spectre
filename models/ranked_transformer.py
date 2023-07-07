@@ -58,7 +58,6 @@ class HsqcRankedTransformer(pl.LightningModule):
       *args,
       **kwargs,
   ):
-    print("\n\n\nRanked Transformer callin super")
     super().__init__()
     params = locals().copy()
     self.out_logger = logging.getLogger("lightning")
@@ -75,6 +74,7 @@ class HsqcRankedTransformer(pl.LightningModule):
       self.ranker = ranker.RankingSet(file_path=ranking_set_path)
 
     if save_params:
+      print("HsqcRankedTransformer saving args")
       self.save_hyperparameters(*RANKED_TNSFMER_ARGS)
 
     # ranked encoder
@@ -274,8 +274,14 @@ class Moonshot(HsqcRankedTransformer):
                dropout=0.1,
                *args,
                **kwargs):
-    super().__init__(*args, **kwargs)
-
+    super().__init__(save_params=False, *args, **kwargs)
+    moonshot_params = locals()
+    moonshot_args = {k: moonshot_params[k] for k in MOONSHOT_ARGS}
+    ranked_tnsfm_args = {k: kwargs[k] for k in RANKED_TNSFMER_ARGS if k in kwargs}
+    to_save = {**ranked_tnsfm_args, **moonshot_args}
+    print(to_save)
+    self.save_hyperparameters(to_save, logger=True)
+    
     # _AbsTransformerModel
     self.pad_token_idx = pad_token_idx
     self.vocab_size = vocab_size
@@ -299,8 +305,6 @@ class Moonshot(HsqcRankedTransformer):
         reduction="none", ignore_index=pad_token_idx)
     self.log_softmax = nn.LogSoftmax(dim=2)
     self.register_buffer("pos_emb", self._positional_embs())
-
-    self.save_hyperparameters(*MOONSHOT_ARGS)
 
   # Ripped from chemformer
   def _construct_input(self, token_ids):

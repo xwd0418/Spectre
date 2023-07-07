@@ -9,7 +9,7 @@ from utils.init_utils.loggers_init import get_logger
 class IdentityModule(pl.LightningModule):
   def __init__(self, lr, **kwargs):
     super().__init__()
-    self.save_hyperparameters(*["lr"], logger=False)
+    self.save_hyperparameters(*["lr"], logger=True)
     self.lr = lr
     self.v = nn.Linear(5, 1)
     self.loss = torch.nn.MSELoss()
