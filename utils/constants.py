@@ -18,6 +18,15 @@ EXCLUDE_FROM_MODEL_ARGS = ["modelname", "load_override", "expname",
                            "ds", "freeze", "load_all_weights",
                            "metric", "metricmode", "patience"]
 
+
+
+# GUESS
+GROUPS = [
+    {"lr", "momentum"},  # Learning rate related parameters
+    {"batch_size", "epochs"},  # Training size and duration parameters
+    # ... other groups
+]
+
 def get_curr_time():
   pst = timezone("PST8PDT")
   california_time = datetime.now(pst)
