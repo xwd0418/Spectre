@@ -42,9 +42,7 @@ class PositionalEncoder(torch.nn.Module):
     self.sin_terms = sin_term
     self.cos_terms = cos_term
 
-    if torch.cuda.is_available():
-      sin_term = sin_term.to('cuda')
-      cos_term = cos_term.to('cuda')
+    
 
     self.register_buffer("sin_term", sin_term)
     self.register_buffer("cos_term", cos_term)
@@ -60,6 +58,10 @@ class PositionalEncoder(torch.nn.Module):
     torch.Tensor of shape (n_positions, dim_model)
         The encoded positions
     """
+    if torch.cuda.is_available():
+      self.sin_term = self.sin_term.to(X)
+      self.cos_term = self.cos_term.to(X)
+      
     sin_mz = torch.sin(X / self.sin_term)
     cos_mz = torch.cos(X / self.cos_term)
     return torch.cat([sin_mz, cos_mz], axis=-1)
