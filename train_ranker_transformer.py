@@ -42,17 +42,20 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
         (for graph visualization)
     """
     choice = data_src
+    kwargs = vars(parser.parse_args())
 
     if model_type == "double_transformer":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
+    elif model_type == "transformer_2d1d":
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
     raise(f"No datamodule for model type {model_type}.")
 
 def apply_args(parser, model_type):
-    if model_type == "hsqc_transformer" or model_type == "ms_transformer":
+    if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         HsqcRankedTransformer.add_model_specific_args(parser)
     # elif model_type == "double_transformer":
     #     DoubleTransformer.add_model_specific_args(parser)
@@ -63,14 +66,14 @@ def model_mux(parser, model_type, weights_path, freeze):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
     ranking_set_type = "HYUN_FP" if kwargs["do_hyun_FP"] else "R2_6144FP"
-    kwargs["ranking_set_path"] = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/ranking_sets/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
+    kwargs["ranking_set_path"] = f"/workspace/ranking_sets/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
         
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
 
     model_class = None
-    if model_type == "hsqc_transformer" or model_type == "ms_transformer":
+    if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         model_class = HsqcRankedTransformer
     # elif model_type == "double_transformer":
     #     model_class = DoubleTransformer
@@ -111,15 +114,15 @@ def main():
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
     parser.add_argument("modelname", type=str)
-    parser.add_argument("--name_type", type=int, default=0)
+    parser.add_argument("--name_type", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=500)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
-    parser.add_argument("--datasrc", type=str, default=f"/root/MorganFP_prediction/James_dataset_zips/SMILES_dataset")
-    parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
+    parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
     parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--patience", type=int, default=30)
+    parser.add_argument("--patience", type=int, default=50)
     parser.add_argument("--ds", type=str, default="")
+    parser.add_argument("--num_workers", type=int, default=12)
     # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_ce_loss")
     parser.add_argument("--metricmode", type=str, default="min")
@@ -127,6 +130,13 @@ def main():
     parser.add_argument("--load_all_weights", type=str, default="")
     parser.add_argument("--freeze", type=bool, default=False)
     parser.add_argument("--validate", type=bool, default=False)
+    parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
+
+    # different versions of input/output
+    parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
+    parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
+    
+    
     args = vars(parser.parse_known_args()[0])
 
     # general args
@@ -160,24 +170,29 @@ def main():
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
-    checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 3)
+    checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
     early_stopping = EarlyStopping(monitor=metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
-    trainer = pl.Trainer(max_epochs=args["epochs"], accelerator="gpu", logger=tbl, callbacks=[checkpoint_callback, early_stopping, lr_monitor])
+    trainer = pl.Trainer(
+                         max_epochs=args["epochs"],
+                         accelerator="gpu",
+                         logger=tbl, 
+                         callbacks=[checkpoint_callback, early_stopping, lr_monitor],
+                        )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module)
     else:
         my_logger.info("[Main] Begin Training!")
-        trainer.fit(model, data_module)
-        my_logger.info("[Main] Final Validation Step:")
+        trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
+        my_logger.info("[Main] Begin Testing:")
         if dist.is_initialized():
             rank = dist.get_rank()
-            if rank == 0:
-                validation_trainer = pl.Trainer(accelerator="gpu", devices=1)
-                validation_trainer.validate(model, data_module)
-        # validation_trainer.test(model, datamodule=??)
-    my_logger.info("[Main] Done Training!")
+            if rank == 0: # To only run the test once
+                test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
+                test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
+        # trainer.test(model, data_module,ckpt_path="best")
+    my_logger.info("[Main] Done!")
 
 if __name__ == '__main__':
     torch.set_float32_matmul_precision('medium')

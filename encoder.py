@@ -91,7 +91,9 @@ class CoordinateEncoder(torch.nn.Module):
     super().__init__()
     assert (sum(dim_coords) == dim_model)
     if wavelength_bounds:
-      assert (len(wavelength_bounds) == len(dim_coords))
+        print(wavelength_bounds)
+        print(dim_coords)
+        assert (len(wavelength_bounds) == len(dim_coords))
 
     self.positional_encoders = []
     self.dim_coords = dim_coords
