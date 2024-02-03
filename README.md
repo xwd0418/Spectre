@@ -65,3 +65,6 @@ reconcile diverging workflows between colin and james.
 Basic testing command
 
 - `python train_ranker_transformer.py hsqc_transformer --name_type 2 --foldername debug --expname debug --epochs 2 --ranking_set_path /root/tessellation_project/ranker_set.pt`
+
+Successfully trained a model predicting r2-fingerpring from HSQC, by running
+- ` python train_ranker_transformer.py hsqc_transformer --name_type 2 --foldername model_dim_384_minimize --expname r2_FP --dim_model 384 --dim_coords  180 180 24 --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0 --coord_enc sce` 

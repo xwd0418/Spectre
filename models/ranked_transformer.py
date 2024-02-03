@@ -27,7 +27,7 @@ RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
     # exclude save_params
     "gce_resolution", "r_dropout", "weight_decay", "out_dim", "pos_weight", "ranking_set_path",
-    "lr", "scheduler", "freeze_weights"
+    "lr", "scheduler", "freeze_weights", "bs"
 ]
 
 
@@ -45,7 +45,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         heads=8,
         layers=8,
         ff_dim=1024,
-        coord_enc="ce",
+        coord_enc="sce",
         wavelength_bounds=None,
         gce_resolution=1,
         r_dropout=0,
@@ -55,6 +55,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         ranking_set_path="",
         # training args
         lr=1e-3,
+        pos_weight = None,
+        weight_decay = 0.0,
         scheduler=None,  # None, "attention"
         freeze_weights=False,
         *args,
@@ -90,14 +92,30 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.out_logger.info(
             f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
-        self.loss = nn.BCEWithLogitsLoss()
+        if pos_weight==None:
+            bce_pos_weight = None
+            self.out_logger.info("[RankedTransformer] bce_pos_weight = None")
+        else:
+            try:
+                pos_weight_value = float(pos_weight)
+                bce_pos_weight= torch.full((6144,), pos_weight_value)
+                self.out_logger.info(f"[RankedTransformer] bce_pos_weight is {pos_weight_value}")
+        
+            except ValueError:
+                if pos_weight == "ratio":
+                    bce_pos_weight = torch.load('/root/MorganFP_prediction/reproduce_previous_works/smart4.5/pos_weight_array_based_on_ratio.pt')
+                    self.out_logger.info("[RankedTransformer] bce_pos_weight is loaded ")
+        
+        self.loss = nn.BCEWithLogitsLoss(pos_weight=bce_pos_weight)
         self.lr = lr
+        self.weight_decay = weight_decay
 
         self.scheduler = scheduler
         self.dim_model = dim_model
 
         self.validation_step_outputs = []
         self.training_step_outputs = []
+        self.test_step_outputs = []
 
         # === All Parameters ===
         self.fc = nn.Linear(dim_model, out_dim)
@@ -129,9 +147,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         model_name = model_name if len(model_name) == 0 else f"{model_name}_"
         parser = parent_parser.add_argument_group(model_name)
         parser.add_argument(f"--{model_name}lr", type=float, default=1e-5)
-        parser.add_argument(f"--{model_name}dim_model", type=int, default=128)
+        parser.add_argument(f"--{model_name}dim_model", type=int, default=384)
         parser.add_argument(f"--{model_name}dim_coords",
-                            type=int, default=[43, 43, 42],
+                            type=int, default=[180,180,24],
                             nargs="*", action="store")
         parser.add_argument(f"--{model_name}heads", type=int, default=8)
         parser.add_argument(f"--{model_name}layers", type=int, default=8)
@@ -140,12 +158,14 @@ class HsqcRankedTransformer(pl.LightningModule):
                             type=float, default=None, nargs='+', action='append')
         parser.add_argument(f"--{model_name}dropout", type=float, default=0.0)
         parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
-        parser.add_argument(f"--{model_name}pos_weight",
-                            type=float, default=1.0)
+        parser.add_argument(f"--{model_name}pos_weight", type=str, default=None, 
+                            help = "if none, then not to be used; if ratio,\
+                                then used the save tensor which is the ratio of num_0/num_1, \
+                                if float num ,then use this as the ratio")
         parser.add_argument(
             f"--{model_name}weight_decay", type=float, default=0.0)
         parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
-        parser.add_argument(f"--{model_name}coord_enc", type=str, default="ce")
+        parser.add_argument(f"--{model_name}coord_enc", type=str, default="sce")
         parser.add_argument(
             f"--{model_name}gce_resolution", type=float, default=1)
         parser.add_argument(f"--{model_name}freeze_weights",
@@ -179,7 +199,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             mask = torch.cat(mask, dim=1)
             mask = mask.to(self.device)
 
-        points = self.enc(hsqc)
+        points = self.enc(hsqc) # something like positional encoding 
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1)
         points = torch.cat([latent, points], dim=1).to(self.device)
@@ -207,7 +227,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         loss = self.loss(out, labels)
 
-        self.log("tr/loss", loss)
+        self.log("tr/loss", loss, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -218,6 +238,16 @@ class HsqcRankedTransformer(pl.LightningModule):
         metrics = compute_metrics.cm(
             out, labels, self.ranker, loss, self.loss, thresh=0.0)
         self.validation_step_outputs.append(metrics)
+        return metrics
+    
+    def test_step(self, batch, batch_idx):
+        x, labels = batch
+        labels = labels.type(torch.float32)
+        out = self.forward(x)
+        loss = self.loss(out, labels)
+        metrics = compute_metrics.cm(
+            out, labels, self.ranker, loss, self.loss, thresh=0.0)
+        self.test_step_outputs.append(metrics)
         return metrics
 
     # def on_train_start(self, trainer, pl_module):
@@ -247,10 +277,20 @@ class HsqcRankedTransformer(pl.LightningModule):
         for k, v in di.items():
             self.log(k, v, on_epoch=True)
         self.validation_step_outputs.clear()
+        
+    def on_test_epoch_end(self):
+        feats = self.test_step_outputs[0].keys()
+        di = {}
+        for feat in feats:
+            di[f"test/mean_{feat}"] = np.mean([v[feat]
+                                             for v in self.test_step_outputs])
+        for k, v in di.items():
+            self.log(k, v, on_epoch=True)
+        self.test_step_outputs.clear()
 
     def configure_optimizers(self):
         if not self.scheduler:
-            return torch.optim.Adam(self.parameters(), lr=self.lr)
+            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
         elif self.scheduler == "attention":
             optim = torch.optim.Adam(self.parameters(), lr=0, betas=(
                 0.9, 0.98), eps=1e-9)

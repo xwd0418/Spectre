@@ -554,3 +554,8 @@ lightning_logs/
 tb_logs/
 
 ignore/
+
+*.pt
+*.zip
+dataloader_inspect.ipynb
+find_pos_weight_vector.ipynb
