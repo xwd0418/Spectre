@@ -292,8 +292,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         if not self.scheduler:
             return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
         elif self.scheduler == "attention":
-            optim = torch.optim.Adam(self.parameters(), lr=0, betas=(
-                0.9, 0.98), eps=1e-9)
+            optim = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
+                                     betas=(0.9, 0.98), eps=1e-9)
             scheduler = NoamOpt(self.dim_model, 4000, optim)
             return {
                 "optimizer": optim,
