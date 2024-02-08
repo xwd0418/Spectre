@@ -65,8 +65,8 @@ def apply_args(parser, model_type):
 def model_mux(parser, model_type, weights_path, freeze):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
-    ranking_set_type = "HYUN_FP" if kwargs["do_hyun_FP"] else "R2_6144FP"
-    kwargs["ranking_set_path"] = f"/workspace/ranking_sets/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
+    ranking_set_type = "HYUN_FP" if kwargs["do_hyun_FP"] else "R2-6144FP"
+    kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
         
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
@@ -115,7 +115,7 @@ def main():
     parser = ArgumentParser(add_help=True)
     parser.add_argument("modelname", type=str)
     parser.add_argument("--name_type", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=500)
+    parser.add_argument("--epochs", type=int, default=1000)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
@@ -147,7 +147,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/reproduce_results_transformer"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/reproduce_w_cleaned_dataset_n_testing_ranker"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -171,13 +171,16 @@ def main():
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
+    print(checkpoint_callback.best_model_path )
+    print(checkpoint_callback.last_model_path )
+    exit()
     early_stopping = EarlyStopping(monitor=metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
                          accelerator="gpu",
                          logger=tbl, 
-                         callbacks=[checkpoint_callback, early_stopping, lr_monitor],
+                        #  callbacks=[checkpoint_callback, early_stopping, lr_monitor],
                         )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
@@ -189,8 +192,10 @@ def main():
         if dist.is_initialized():
             rank = dist.get_rank()
             if rank == 0: # To only run the test once
+                model.change_ranker_for_testing()
                 test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
                 test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
+                test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
         # trainer.test(model, data_module,ckpt_path="best")
     my_logger.info("[Main] Done!")
 

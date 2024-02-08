@@ -56,8 +56,9 @@ class FolderDataset(Dataset):
             hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
             if self.parser_args['normalize_hsqc']:
                 hsqc = normalize_columns(hsqc)
-            inputs = torch.vstack([get_delimeter("HSQC_start"),hsqc,get_delimeter("HSQC_end")])
+            inputs = hsqc
         if "oneD_NMR" in self.input_src:
+            inputs = torch.vstack([get_delimeter("HSQC_start"),hsqc,get_delimeter("HSQC_end")])
             c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}") if file_exist("oneD_NMR", self.files[i]) else (torch.tensor([]) , torch.tensor([])) 
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
@@ -131,10 +132,13 @@ class FolderDataModule(pl.LightningDataModule):
             raise NotImplementedError("Predict setup not implemented")
 
     def train_dataloader(self):
-        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=self.parser_args['num_workers'])
+        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn, 
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=self.parser_args['num_workers'])
+        return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, 
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.batch_size, collate_fn=self.collate_fn, num_workers=self.parser_args['num_workers'])
+        return DataLoader(self.test, batch_size=self.batch_size, collate_fn=self.collate_fn, 
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)

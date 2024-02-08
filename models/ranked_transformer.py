@@ -79,6 +79,8 @@ class HsqcRankedTransformer(pl.LightningModule):
 
         # don't set ranking set if you just want to treat it as a module
         if ranking_set_path:
+            self.ranking_set_path = ranking_set_path
+            # print(ranking_set_path)
             assert (os.path.exists(ranking_set_path))
             self.ranker = ranker.RankingSet(file_path=ranking_set_path, device=self.device)
 
@@ -258,6 +260,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     #             self.out_logger.setLevel(logging.WARNING)
         
     def on_train_epoch_end(self):
+        return
         if self.training_step_outputs:
             feats = self.training_step_outputs[0].keys()
             di = {}
@@ -269,6 +272,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.training_step_outputs.clear()
 
     def on_validation_epoch_end(self):
+        return
         feats = self.validation_step_outputs[0].keys()
         di = {}
         for feat in feats:
@@ -285,14 +289,14 @@ class HsqcRankedTransformer(pl.LightningModule):
             di[f"test/mean_{feat}"] = np.mean([v[feat]
                                              for v in self.test_step_outputs])
         for k, v in di.items():
-            self.log(k, v, on_epoch=True)
+            self.log(k, v, on_epoch=True, sync_dist=False)
         self.test_step_outputs.clear()
 
     def configure_optimizers(self):
         if not self.scheduler:
-            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
+            return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
         elif self.scheduler == "attention":
-            optim = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
+            optim = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
                                      betas=(0.9, 0.98), eps=1e-9)
             scheduler = NoamOpt(self.dim_model, 4000, optim)
             return {
@@ -306,9 +310,14 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     def log(self, name, value, *args, **kwargs):
         # Set 'sync_dist' to True by default
-        kwargs['sync_dist'] = kwargs.get(
-            'sync_dist', self.logger_should_sync_dist)
+        if kwargs.get('sync_dist') is None:
+            kwargs['sync_dist'] = kwargs.get(
+                'sync_dist', self.logger_should_sync_dist)
         super().log(name, value, *args, **kwargs)
+        
+    def change_ranker_for_testing(self):
+        test_ranking_set_path = self.ranking_set_path.replace("val", "test")
+        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, device=self.device)
 
 
 MOONSHOT_ARGS = [
