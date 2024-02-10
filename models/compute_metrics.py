@@ -11,6 +11,9 @@ do_accuracy = BinaryAccuracy()
 
 
 def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, device="cuda"):
+    # return {
+    #     "ce_loss": loss.item(),
+    # }
     global do_f1, do_recall, do_precision, do_accuracy
     do_f1 = do_f1.to(model_output)
     do_recall = do_recall.to(model_output)
@@ -43,6 +46,7 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, devic
     else:
         raise (f"Weird Threshold {thresh}")
 
+    # print( pos_contr.device, fp_label.device)
     pos_loss = loss_fn(pos_contr, fp_label)
     neg_loss = loss_fn(neg_contr, fp_label)
 

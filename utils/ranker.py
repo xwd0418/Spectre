@@ -5,7 +5,7 @@ from sklearn.preprocessing import normalize
 
 import logging
 
-class RankingSet():
+class RankingSet(torch.nn.Module):
   def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, device="cuda"):
     '''
       Creates a ranking set. Assumes the file specified at file_path is a pickle file of 
@@ -20,30 +20,31 @@ class RankingSet():
 
       debug: enable/disable verbosity for debug statements
     '''
+    
+    super().__init__()
     self.logger = logging.getLogger("lightning")
 
     self.debug = debug
-    self.device = device
     self.idf = None
 
     self.logger.debug("[Ranker] Initializing Ranker")
 
     with torch.no_grad():
       if store is not None:
-        self.data = F.normalize(store, dim=1, p=2.0).to(device)
+        self.register_buffer("data", F.normalize(store, dim=1, p=2.0))
       else:
         with open(file_path, "rb") as f:
-          self.data = F.normalize(torch.load(f).type(
-              torch.FloatTensor), dim=1, p=2.0).to(device)
+          self.register_buffer("data", F.normalize(torch.load(f).type(
+              torch.FloatTensor), dim=1, p=2.0))
 
       if retrieve_path:
         with open(retrieve_path, "rb") as f:
           self.lookup = pickle.load(f)
 
       if idf_weights is not None:
-        self.idf = idf_weights.to(device)
-        self.idf_data = F.normalize(
-            self.data * self.idf, dim=1, p=2.0).to(device)
+        self.register_buffer("idf", idf_weights)
+        self.register_buffer("idf_data", F.normalize(
+            self.data * self.idf, dim=1, p=2.0))
 
     self.logger.info(
         f"[Ranking Set] Initialized with {len(self.data)} sample(s)"
@@ -119,8 +120,9 @@ class RankingSet():
       # only compare for entries where the label does not match the ranked sample
       # if a label q' matches a ranked sample n', then truth_products[n',q'] = 1.0f
       match_mask = ~torch.isclose(
-          truth_products, torch.ones(n, q).to(self.device)
+          truth_products, torch.ones(n, q).to(truth_products)
       )
+      
 
       # places where the query doesn't match the threshold exactly
       # broadcast (n, q), (1, q)
@@ -154,12 +156,14 @@ class RankingSet():
         returns: size (q) tensor of how many things in the ranking set had a higher cosine similarity 
           cos(prediction, sample) than a threshold cos(prediction, label)
     '''
+    
     with torch.no_grad():
       q = queries.size()[0]
-      queries = F.normalize(queries, dim=1, p=2.0).to(self.device)  # (q, 6144)
-      truths = F.normalize(truths, dim=1, p=2.0).to(self.device)  # (q, 6144)
+    #   change here!!!!!!
+      queries = F.normalize(queries, dim=1, p=2.0)  # (q, 6144)
+      truths = F.normalize(truths, dim=1, p=2.0)  # (q, 6144)
 
-      # transpose and element-wise dot ->(6144, q)
+o      # transpose and element-wise dot ->(6144, q)
       # sum dim 0, keepdims -> (1, q)
       thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
 

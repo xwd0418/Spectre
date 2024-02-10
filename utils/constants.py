@@ -13,7 +13,7 @@ ALWAYS_EXCLUDE = ["modelname", "debug", "expname", "foldername", "datasrc", "pat
 
 
 # things to exclude when passing var args to model
-EXCLUDE_FROM_MODEL_ARGS = ["modelname", "load_override", "expname",
+EXCLUDE_FROM_MODEL_ARGS = [ "load_override", "expname",
                            "foldername", "datasrc",
                            "ds", "freeze", "load_all_weights",
                            "metric", "metricmode", "patience"]

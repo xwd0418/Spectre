@@ -51,7 +51,7 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
     elif model_type == "ms_transformer":
         return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "transformer_2d1d":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "detailed_oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
     raise(f"No datamodule for model type {model_type}.")
 
 def apply_args(parser, model_type):
@@ -67,7 +67,7 @@ def model_mux(parser, model_type, weights_path, freeze):
     kwargs = vars(parser.parse_args())
     ranking_set_type = "HYUN_FP" if kwargs["do_hyun_FP"] else "R2-6144FP"
     kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
-        
+   
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
@@ -84,6 +84,7 @@ def model_mux(parser, model_type, weights_path, freeze):
         model = model_class.load_from_checkpoint(weights_path, strict=False)
         logger.info("[Main] Loading model from Weights")
     else: # or from scratch
+        print(kwargs['modelname'])
         model = model_class(**kwargs)
         logger.info("[Main] Freshly initializing model")
 
@@ -124,7 +125,7 @@ def main():
     parser.add_argument("--ds", type=str, default="")
     parser.add_argument("--num_workers", type=int, default=12)
     # for early stopping/model saving
-    parser.add_argument("--metric", type=str, default="val/mean_ce_loss")
+    parser.add_argument("--metric", type=str, default="val/mean_rank_1")
     parser.add_argument("--metricmode", type=str, default="min")
 
     parser.add_argument("--load_all_weights", type=str, default="")
@@ -171,16 +172,14 @@ def main():
 
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
-    print(checkpoint_callback.best_model_path )
-    print(checkpoint_callback.last_model_path )
-    exit()
+  
     early_stopping = EarlyStopping(monitor=metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
                          accelerator="gpu",
                          logger=tbl, 
-                        #  callbacks=[checkpoint_callback, early_stopping, lr_monitor],
+                         callbacks=[checkpoint_callback, early_stopping, lr_monitor],
                         )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")

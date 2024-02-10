@@ -53,6 +53,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         # other business logic stuff
         save_params=True,
         ranking_set_path="",
+        modelname='',
         # training args
         lr=1e-3,
         pos_weight = None,
@@ -62,6 +63,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         *args,
         **kwargs,
     ):
+        print("model name is ", modelname)
         super().__init__()
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
@@ -82,6 +84,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
             assert (os.path.exists(ranking_set_path))
+            
             self.ranker = ranker.RankingSet(file_path=ranking_set_path, device=self.device)
 
         if save_params:
@@ -122,7 +125,16 @@ class HsqcRankedTransformer(pl.LightningModule):
         # === All Parameters ===
         self.fc = nn.Linear(dim_model, out_dim)
         # (1, 1, dim_model)
-        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model))
+        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
+        self.modelname = modelname
+        # print(self.modelname)
+        if self.modelname == "hsqc_transformer":
+            self.embedding_num = 2 # hsqc start, hsqc end
+        elif self.modelname == "transformer_2d1d":
+            self.embedding_num = 8+3 # (hsqc, h, c, solvent) start, (hsqc, h, c, solvent) end, so it is 8, and plus {h2o, d2o, unkown, }
+        else:
+            raise Exception("modelname not found")
+        self.delimiter_n_token_embedding = torch.nn.Embedding(self.embedding_num,3) # 3 is form "there are 3 column in hsqc tensor"
 
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
@@ -224,7 +236,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         return out
 
     def training_step(self, batch, batch_idx):
-        x, labels = batch
+        x, labels = self.get_input_output(batch)
         labels = labels.type(torch.float32)
         out = self.forward(x)
         loss = self.loss(out, labels)
@@ -233,7 +245,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        x, labels = batch
+        x, labels = self.get_input_output(batch)
         labels = labels.type(torch.float32)
         out = self.forward(x)
         loss = self.loss(out, labels)
@@ -243,7 +255,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         return metrics
     
     def test_step(self, batch, batch_idx):
-        x, labels = batch
+        x, labels = self.get_input_output(batch)
         labels = labels.type(torch.float32)
         out = self.forward(x)
         loss = self.loss(out, labels)
@@ -252,6 +264,35 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.test_step_outputs.append(metrics)
         return metrics
 
+    def get_input_output(self, batch):
+        # len(batch[0]) is batch_size, cuz here batch = (hsqc, label)
+        hsqc_start_token = self.delimiter_n_token_embedding(torch.tensor([0]*len(batch[0])).to(self.device)).unsqueeze(1)
+        hsqc_end_token   = self.delimiter_n_token_embedding(torch.tensor([1]*len(batch[0])).to(self.device)).unsqueeze(1)
+        
+        if len (batch) == 2: # only hsqc
+            hsqc, labels = batch
+            x = torch.cat([hsqc_start_token, hsqc, hsqc_end_token], dim=1)
+        else:
+            hsqc, c_tensor, h_tensor, solvent_indices, labels = batch
+            c_start_token = self.delimiter_n_token_embedding(torch.tensor([2]*len(batch[0])).to(self.device)).unsqueeze(1)
+            c_end_token   = self.delimiter_n_token_embedding(torch.tensor([3]*len(batch[0])).to(self.device)).unsqueeze(1)
+            h_start_token = self.delimiter_n_token_embedding(torch.tensor([4]*len(batch[0])).to(self.device)).unsqueeze(1)
+            h_end_token   = self.delimiter_n_token_embedding(torch.tensor([5]*len(batch[0])).to(self.device)).unsqueeze(1)
+            solvent_start_token = self.delimiter_n_token_embedding(torch.tensor([6]*len(batch[0])).to(self.device)).unsqueeze(1)
+            solvent_end_token   = self.delimiter_n_token_embedding(torch.tensor([7]*len(batch[0])).to(self.device)).unsqueeze(1)
+            
+            solvent_embedding = torch.vstack([ torch.tensor([0,0,0]).to(self.device) if idx == -1 else self.delimiter_n_token_embedding(torch.tensor(idx).to(self.device)+8) 
+                                              for idx in solvent_indices]).unsqueeze(1)
+            
+            # self.delimiter_n_token_embedding(torch.tensor(solvent_indices).to(self.device)+8).unsqueeze(1)
+             
+            x = torch.cat([hsqc_start_token, hsqc, hsqc_end_token,
+                           c_start_token,c_tensor,c_end_token,
+                           h_start_token, h_tensor, h_end_token,
+                           solvent_start_token,solvent_embedding,solvent_end_token], dim=1)
+             
+        return x, labels
+            
     # def on_train_start(self, trainer, pl_module):
     #     if dist.is_initialized():
     #         rank = dist.get_rank()
@@ -260,7 +301,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     #             self.out_logger.setLevel(logging.WARNING)
         
     def on_train_epoch_end(self):
-        return
+        # return
         if self.training_step_outputs:
             feats = self.training_step_outputs[0].keys()
             di = {}
@@ -272,7 +313,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.training_step_outputs.clear()
 
     def on_validation_epoch_end(self):
-        return
+        # return
         feats = self.validation_step_outputs[0].keys()
         di = {}
         for feat in feats:
