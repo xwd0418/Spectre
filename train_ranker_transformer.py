@@ -136,6 +136,8 @@ def main():
     # different versions of input/output
     parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
+    parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
+    parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
     
     
     args = vars(parser.parse_known_args()[0])

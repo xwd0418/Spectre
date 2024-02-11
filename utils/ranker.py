@@ -31,20 +31,20 @@ class RankingSet(torch.nn.Module):
 
     with torch.no_grad():
       if store is not None:
-        self.register_buffer("data", F.normalize(store, dim=1, p=2.0))
+        self.register_buffer("data", F.normalize(store, dim=1, p=2.0), persistent=False)
       else:
         with open(file_path, "rb") as f:
           self.register_buffer("data", F.normalize(torch.load(f).type(
-              torch.FloatTensor), dim=1, p=2.0))
+              torch.FloatTensor), dim=1, p=2.0), persistent=False)
 
       if retrieve_path:
         with open(retrieve_path, "rb") as f:
           self.lookup = pickle.load(f)
 
       if idf_weights is not None:
-        self.register_buffer("idf", idf_weights)
+        self.register_buffer("idf", idf_weights, persistent=False)
         self.register_buffer("idf_data", F.normalize(
-            self.data * self.idf, dim=1, p=2.0))
+            self.data * self.idf, dim=1, p=2.0), persistent=False)
 
     self.logger.info(
         f"[Ranking Set] Initialized with {len(self.data)} sample(s)"
@@ -158,16 +158,15 @@ class RankingSet(torch.nn.Module):
     '''
     
     with torch.no_grad():
-      q = queries.size()[0]
-    #   change here!!!!!!
-      queries = F.normalize(queries, dim=1, p=2.0)  # (q, 6144)
-      truths = F.normalize(truths, dim=1, p=2.0)  # (q, 6144)
+        #   q = queries.size()[0]
+        queries = F.normalize(queries, dim=1, p=2.0)  # (q, 6144)
+        truths = F.normalize(truths, dim=1, p=2.0)  # (q, 6144)
 
-o      # transpose and element-wise dot ->(6144, q)
-      # sum dim 0, keepdims -> (1, q)
-      thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
+        # transpose and element-wise dot ->(6144, q)
+        # sum dim 0, keepdims -> (1, q)
+        thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
 
-      return self.dot_prod_rank(self.data, queries, truths, thresh)
+        return self.dot_prod_rank(self.data, queries, truths, thresh)
 
   def batched_rank_tfidf(self, queries, truths):
     '''
