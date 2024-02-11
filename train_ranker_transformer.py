@@ -126,7 +126,7 @@ def main():
     parser.add_argument("--num_workers", type=int, default=12)
     # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_rank_1")
-    parser.add_argument("--metricmode", type=str, default="min")
+    parser.add_argument("--metricmode", type=str, default="max")
 
     parser.add_argument("--load_all_weights", type=str, default="")
     parser.add_argument("--freeze", type=bool, default=False)
@@ -196,7 +196,7 @@ def main():
                 model.change_ranker_for_testing()
                 test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
                 test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
-                test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
+                # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
         # trainer.test(model, data_module,ckpt_path="best")
     my_logger.info("[Main] Done!")
 
