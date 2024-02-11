@@ -138,7 +138,8 @@ def main():
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
     parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
-    
+    parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
+                        help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
     
     args = vars(parser.parse_known_args()[0])
 
