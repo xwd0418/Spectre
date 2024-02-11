@@ -51,38 +51,71 @@ class FolderDataset(Dataset):
         def file_exist(src, filename):
             return os.path.exists(os.path.join(self.dir, src, filename))
         
+        # Load HSQC
         hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
         if self.parser_args['disable_hsqc_peaks']:
             hsqc[:,2]=0
-            
-        inputs = [hsqc]
+        if self.parser_args['normalize_hsqc']:
+            hsqc = normalize_columns(hsqc)
+        if self.parser_args['enable_hsqc_delimeter_only_2d']:
+            assert (self.input_src == ["HSQC"])
+            hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
+        inputs = hsqc
+        
         if "detailed_oneD_NMR" in self.input_src:
-            c_tensor, h_tensor, solvent = torch.load(f"{self.dir}/detailed_oneD_NMR/{self.files[i]}") if file_exist("detailed_oneD_NMR", self.files[i]) else (torch.tensor([]) , torch.tensor([]), "No_1D_NMR")  # C, H, solvent
-            if self.parser_args['disable_solvent']:
-                solvent = "No_1D_NMR" # if solvent is disabled, it will be zero-padded
+            c_tensor, h_tensor, solvent = torch.load(f"{self.dir}/detailed_oneD_NMR/{self.files[i]}") if file_exist("detailed_oneD_NMR", self.files[i]) \
+                else (torch.tensor([]) , torch.tensor([]), "No_1D_NMR") # empty tensor, will be skipped duing v-stack
+    
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (1, 1), "constant", 0)
-            inputs+=[c_tensor, h_tensor, solvent]
+            inputs = torch.vstack([
+                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
+                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
+                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
+                ])    
+            if not self.parser_args['disable_solvent']: # add solvent info
+                inputs = torch.vstack([inputs, get_delimeter("solvent_start"), get_solvent(solvent), get_delimeter("solvent_end")])
         mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
-        combined = (*inputs, mfp.type(torch.FloatTensor))
+        combined = (inputs, mfp.type(torch.FloatTensor))
         return combined
    
-solvent_index_lookup = {
-                'D2O': 0, 'H2O': 1, 'unknown': 2, "No_1D_NMR":-1
-            }            
+
+
+def get_delimeter(delimeter_name):
+    match delimeter_name:
+        case "HSQC_start":
+            return torch.tensor([-1,-1,-1]).float()
+        case "HSQC_end":
+            return torch.tensor([-2,-2,-2]).float()
+        case "C_NMR_start":
+            return torch.tensor([-3,-3,-3]).float()
+        case "C_NMR_end":
+            return torch.tensor([-4,-4,-4]).float()
+        case "H_NMR_start":
+            return torch.tensor([-5,-5,-5]).float()
+        case "H_NMR_end":
+            return torch.tensor([-6,-6,-6]).float()
+        case "solvent_start":
+            return torch.tensor([-7,-7,-7]).float()
+        case "solvent_end":
+            return torch.tensor([-8,-8,-8]).float()
+        case _:
+            raise Exception(f"unknown {delimeter_name}")
+                    
+def get_solvent(solvent_name):
+    match solvent_name:
+        case "H2O": return torch.tensor([-9,-9,-9]).float()
+        case "D2O": return torch.tensor([-10,-10,-10]).float()
+        case "unknown": return torch.tensor([-11,-11,-11]).float()
+        case "No_1D_NMR": return torch.tensor([]).float().view(-1,3) # empty tensor, will be skipped duing v-stack
+        case _: raise Exception(f"unknown {solvent_name}")
 
 def pad(batch):
     items = tuple(zip(*batch))
     fp = items[-1]
-    if len(items)==2: # only HSQC
-        inputs = items[:-1]
-        inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
-        combined = (*inputs_2, torch.stack(fp))
-    else: # hsqc+H+C+solvent
-        inputs = items[:-2]
-        solvent_indices = [solvent_index_lookup[solvent] for solvent in items[-2]]
-        inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
-        combined = (*inputs_2, solvent_indices, torch.stack(fp))
+    inputs = items[:-1]
+    inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
+    combined = (*inputs_2, torch.stack(fp))
     return combined
 
 def normalize_columns(hsqc):
