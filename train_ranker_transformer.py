@@ -36,7 +36,7 @@ def exp_string(expname, args):
     # limited hyperparameter experiment name, all hyperparameter string, expname + time
     return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited), f"{expname}_[{get_curr_time()}]"
 
-def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
+def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds):
     """
         constructs data module based on model_type, and also outputs dimensions of dummy data
         (for graph visualization)
@@ -45,13 +45,13 @@ def data_mux(parser, model_type, data_src, do_hyun_fp, batch_size, ds):
     kwargs = vars(parser.parse_args())
 
     if model_type == "double_transformer":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "transformer_2d1d":
-        return FolderDataModule(dir=choice, do_hyun_fp=do_hyun_fp, input_src=["HSQC", "detailed_oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "detailed_oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
     raise(f"No datamodule for model type {model_type}.")
 
 def apply_args(parser, model_type):
@@ -65,7 +65,7 @@ def apply_args(parser, model_type):
 def model_mux(parser, model_type, weights_path, freeze):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
-    ranking_set_type = "HYUN_FP" if kwargs["do_hyun_FP"] else "R2-6144FP"
+    ranking_set_type = kwargs["FP_choice"] 
     kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
    
     for v in EXCLUDE_FROM_MODEL_ARGS:
@@ -121,7 +121,7 @@ def main():
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
     parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--patience", type=int, default=50)
+    parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--ds", type=str, default="")
     parser.add_argument("--num_workers", type=int, default=12)
     # for early stopping/model saving
@@ -134,7 +134,8 @@ def main():
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
     # different versions of input/output
-    parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
+    # parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
+    parser.add_argument("--FP_choice", type=str, default="R2-6144FP", help="use which fingerprint as ground truth, default: r2-6144fp") 
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
     parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
@@ -168,7 +169,15 @@ def main():
 
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"])
-    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["do_hyun_FP"], args["bs"], args["ds"])
+    # # try:
+    # import torch._dynamo
+    # torch._dynamo.reset()
+    # compiled_model = torch.compile(model, mode="reduce-overhead")
+    # model = compiled_model
+    # my_logger.info("[Main] Compiled Model")
+    # # except:
+    #     # my_logger.info("[Main] Compile failed, continuing without compilation")
+    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"])
 
     # Trainer, callbacks
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
