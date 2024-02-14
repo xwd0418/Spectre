@@ -53,6 +53,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         # other business logic stuff
         save_params=True,
         ranking_set_path="",
+        FP_choice="R2-6144FP",
         # training args
         lr=1e-3,
         pos_weight = None,
@@ -87,7 +88,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
         if save_params:
             print("HsqcRankedTransformer saving args")
-            self.save_hyperparameters(*RANKED_TNSFMER_ARGS)
+            self.save_hyperparameters(*RANKED_TNSFMER_ARGS, *kwargs.keys())
 
         # ranked encoder
         self.enc = build_encoder(
@@ -121,6 +122,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.test_step_outputs = []
 
         # === All Parameters ===
+        if FP_choice == "R0_to_R4_30720_FP":
+            out_dim = 6144*5
         self.fc = nn.Linear(dim_model, out_dim)
         # (1, 1, dim_model)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
@@ -160,7 +163,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}wavelength_bounds",
                             type=float, default=None, nargs='+', action='append')
         parser.add_argument(f"--{model_name}dropout", type=float, default=0.0)
-        parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
+        # parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
         parser.add_argument(f"--{model_name}pos_weight", type=str, default=None, 
                             help = "if none, then not to be used; if ratio,\
                                 then used the save tensor which is the ratio of num_0/num_1, \
@@ -206,7 +209,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
-        points = torch.cat([latent, points], dim=1).to(self.device)
+        points = torch.cat([latent, points], dim=1)
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out, mask
 

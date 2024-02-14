@@ -21,10 +21,10 @@ class FolderDataset(Dataset):
         - ...
         
     '''
-    def __init__(self, dir, split="train", input_src=["HSQC"], do_hyun_fp=True, parser_args=None):
+    def __init__(self, dir, split="train", input_src=["HSQC"], FP_choice="", parser_args=None):
         self.dir = os.path.join(dir, split)
         self.split = split
-        self.fp_suffix = "HYUN_FP" if do_hyun_fp else "R2-6144FP"
+        self.fp_suffix = FP_choice
         self.input_src = input_src
         self.parser_args = parser_args
 
@@ -32,7 +32,7 @@ class FolderDataset(Dataset):
         assert(os.path.exists(self.dir))
         assert(split in ["train", "val", "test"])
         for src in input_src:
-            assert(os.path.exists(os.path.join(self.dir, src)))
+            assert(os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src)))
 
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
         logger = logging.getLogger("lightning")
@@ -41,7 +41,7 @@ class FolderDataset(Dataset):
             if rank != 0:
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
-        logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},hyunfp={do_hyun_fp},normalize_hsqc={parser_args['normalize_hsqc']}")
+        logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
         
     def __len__(self):
         # return 10000
@@ -75,7 +75,7 @@ class FolderDataset(Dataset):
                 ])    
             if not self.parser_args['disable_solvent']: # add solvent info
                 inputs = torch.vstack([inputs, get_delimeter("solvent_start"), get_solvent(solvent), get_delimeter("solvent_end")])
-        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
+        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")  
         combined = (inputs, mfp.type(torch.FloatTensor))
         return combined
    
@@ -138,21 +138,21 @@ def normalize_columns(hsqc):
     return normalized_hsqc
 
 class FolderDataModule(pl.LightningDataModule):
-    def __init__(self, dir, do_hyun_fp, input_src, batch_size: int = 32, parser_args=None):
+    def __init__(self, dir, FP_choice, input_src, batch_size: int = 32, parser_args=None):
         super().__init__()
         self.batch_size = batch_size
         self.dir = dir
-        self.do_hyun_fp = do_hyun_fp
+        self.FP_choice = FP_choice
         self.input_src = input_src
         self.collate_fn = pad
         self.parser_args = parser_args
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
-            self.train = FolderDataset(dir=self.dir, do_hyun_fp=self.do_hyun_fp, input_src = self.input_src, split="train", parser_args=self.parser_args)
-            self.val = FolderDataset(dir=self.dir, do_hyun_fp=self.do_hyun_fp, input_src = self.input_src,split="val", parser_args=self.parser_args)
+            self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="train", parser_args=self.parser_args)
+            self.val = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src,split="val", parser_args=self.parser_args)
         if stage == "test":
-            self.test = FolderDataset(dir=self.dir, do_hyun_fp=self.do_hyun_fp, input_src = self.input_src, split="test", parser_args=self.parser_args)
+            self.test = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="test", parser_args=self.parser_args)
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
 
