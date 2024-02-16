@@ -10,7 +10,7 @@ do_precision = BinaryPrecision()
 do_accuracy = BinaryAccuracy()
 
 
-def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, device="cuda"):
+def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False):
     # return {
     #     "ce_loss": loss.item(),
     # }
@@ -51,7 +51,10 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, devic
     neg_loss = loss_fn(neg_contr, fp_label)
 
     # === Do Ranking ===
-    rank_res = ranker.batched_rank(fp_pred, fp_label)
+    if rank_by_soft_output:
+        rank_res = ranker.batched_rank(torch.sigmoid(model_output), fp_label)
+    else:
+        rank_res = ranker.batched_rank(fp_pred, fp_label)
     cts = [1, 5, 10]
     # strictly less as batched_rank returns number of items STRICTLY greater
     ranks = {

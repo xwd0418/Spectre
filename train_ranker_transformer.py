@@ -1,4 +1,6 @@
 import logging, os, sys, torch
+import random
+import numpy as np
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 
@@ -51,7 +53,11 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds):
     elif model_type == "ms_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "transformer_2d1d":
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "detailed_oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+        if kwargs['use_oneD_NMR_no_solvent']:
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+        else:
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "detailed_oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+    
     raise(f"No datamodule for model type {model_type}.")
 
 def apply_args(parser, model_type):
@@ -111,7 +117,20 @@ def init_logger(out_path, path1, path2):
             
     return logger
 
+def seed_everything(seed):
+    """
+    Set the random seed for reproducibility.
+    """
+    pl.seed_everything(seed,  workers=True)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed) 
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.use_deterministic_algorithms(True)
+    
 def main():
+    # seed_everything(seed=2024)
+    
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
     parser.add_argument("modelname", type=str)
@@ -141,6 +160,9 @@ def main():
     parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
+    parser.add_argument("--use_oneD_NMR_no_solvent", action='store_true', help="use detailed 1D NMR data")
+    parser.add_argument("--rank_by_soft_output", action='store_true', help="rank by soft output instead of binary output")
+    parser.add_argument("--use_MS", action='store_true', help="using mass spectra")
     
     args = vars(parser.parse_known_args()[0])
 
@@ -152,7 +174,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/reproduce_w_cleaned_dataset_n_testing_ranker"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/reproduce_0.8_rank1"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
