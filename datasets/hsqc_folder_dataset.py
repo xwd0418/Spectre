@@ -1,4 +1,5 @@
 import logging
+import pickle
 import torch, os, pytorch_lightning as pl, glob
 import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
@@ -32,7 +33,9 @@ class FolderDataset(Dataset):
         assert(os.path.exists(self.dir))
         assert(split in ["train", "val", "test"])
         for src in input_src:
-            assert(os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src)))
+            assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
+        if parser_args['use_MS']:
+            self.mass_spec = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
 
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
         logger = logging.getLogger("lightning")
@@ -75,6 +78,20 @@ class FolderDataset(Dataset):
                 ])    
             if not self.parser_args['disable_solvent']: # add solvent info
                 inputs = torch.vstack([inputs, get_delimeter("solvent_start"), get_solvent(solvent), get_delimeter("solvent_end")])
+        elif "oneD_NMR" in self.input_src:
+            c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}") if file_exist("oneD_NMR", self.files[i]) else (torch.tensor([]) , torch.tensor([])) 
+            c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
+            c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
+            inputs = torch.vstack([
+                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
+                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
+                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
+                ])    
+        if self.parser_args['use_MS']:
+            mass_spec = self.mass_spec[int(self.files[i].split(".")[0])]
+            mass_spec = torch.tensor([mass_spec,0,0]).float()
+            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mass_spec, get_delimeter("ms_end")])
+               
         mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")  
         combined = (inputs, mfp.type(torch.FloatTensor))
         return combined
@@ -99,6 +116,10 @@ def get_delimeter(delimeter_name):
             return torch.tensor([-7,-7,-7]).float()
         case "solvent_end":
             return torch.tensor([-8,-8,-8]).float()
+        case "ms_start":
+            return torch.tensor([-12,-12,-12]).float()
+        case "ms_end":
+            return torch.tensor([-13,-13,-13]).float()
         case _:
             raise Exception(f"unknown {delimeter_name}")
                     

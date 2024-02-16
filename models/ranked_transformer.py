@@ -83,7 +83,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
             assert (os.path.exists(ranking_set_path))
-            
+            self.rank_by_soft_output = kwargs['rank_by_soft_output']
             self.ranker = ranker.RankingSet(file_path=ranking_set_path, device=self.device)
 
         if save_params:
@@ -243,7 +243,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         loss = self.loss(out, labels)
         metrics = compute_metrics.cm(
-            out, labels, self.ranker, loss, self.loss, thresh=0.0)
+            out, labels, self.ranker, loss, self.loss, thresh=0.0, rank_by_soft_output=self.rank_by_soft_output)
         self.validation_step_outputs.append(metrics)
         return metrics
     
@@ -253,7 +253,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         loss = self.loss(out, labels)
         metrics = compute_metrics.cm(
-            out, labels, self.ranker, loss, self.loss, thresh=0.0)
+            out, labels, self.ranker, loss, self.loss, thresh=0.0,rank_by_soft_output=self.rank_by_soft_output)
         self.test_step_outputs.append(metrics)
         return metrics
 
@@ -297,13 +297,14 @@ class HsqcRankedTransformer(pl.LightningModule):
                                              for v in self.test_step_outputs])
         for k, v in di.items():
             self.log(k, v, on_epoch=True, sync_dist=False)
+            # self.log(k, v, on_epoch=True)
         self.test_step_outputs.clear()
 
     def configure_optimizers(self):
         if not self.scheduler:
-            return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
+            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
         elif self.scheduler == "attention":
-            optim = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
+            optim = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
                                      betas=(0.9, 0.98), eps=1e-9)
             scheduler = NoamOpt(self.dim_model, 4000, optim)
             return {
