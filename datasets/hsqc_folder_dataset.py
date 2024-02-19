@@ -34,7 +34,7 @@ class FolderDataset(Dataset):
         assert(split in ["train", "val", "test"])
         for src in input_src:
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
-        if parser_args['use_MS']:
+        if parser_args['use_MW']:
             self.mass_spec = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
 
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
@@ -58,6 +58,8 @@ class FolderDataset(Dataset):
         hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
         if self.parser_args['disable_hsqc_peaks']:
             hsqc[:,2]=0
+        if self.parser_args['disable_hsqc_intensity']:
+            hsqc[:,2]=torch.sign(hsqc[:,2])
         if self.parser_args['normalize_hsqc']:
             hsqc = normalize_columns(hsqc)
         if self.parser_args['enable_hsqc_delimeter_only_2d']:
@@ -87,7 +89,7 @@ class FolderDataset(Dataset):
                 get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
                 get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
                 ])    
-        if self.parser_args['use_MS']:
+        if self.parser_args['use_MW']:
             mass_spec = self.mass_spec[int(self.files[i].split(".")[0])]
             mass_spec = torch.tensor([mass_spec,0,0]).float()
             inputs = torch.vstack([inputs, get_delimeter("ms_start"), mass_spec, get_delimeter("ms_end")])

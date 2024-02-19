@@ -158,11 +158,12 @@ def main():
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
     parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
+    parser.add_argument("--disable_hsqc_intensity", action='store_true', help="hsqc peaks tensor will be +/-1")    
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
     parser.add_argument("--use_oneD_NMR_no_solvent", action='store_true', help="use detailed 1D NMR data")
     parser.add_argument("--rank_by_soft_output", action='store_true', help="rank by soft output instead of binary output")
-    parser.add_argument("--use_MS", action='store_true', help="using mass spectra")
+    parser.add_argument("--use_MW", action='store_true', help="using mass spectra")
     
     args = vars(parser.parse_known_args()[0])
 
