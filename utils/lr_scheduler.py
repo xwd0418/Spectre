@@ -1,10 +1,11 @@
 from torch.optim.lr_scheduler import _LRScheduler
 class NoamOpt(_LRScheduler):
     "Optim wrapper that implements rate."
-    def __init__(self, model_size, warmup, optimizer):
+    def __init__(self, model_size, warmup, optimizer, noam_factor):
         self.optimizer = optimizer
         self._step = 0
         self.warmup = warmup
+        self.noam_factor = noam_factor
         self.model_size = model_size
         self._rate = 0
     
@@ -35,5 +36,5 @@ class NoamOpt(_LRScheduler):
         "Implement `lrate` above"
         if step is None:
             step = self._step
-        return (self.model_size ** (-0.5) *
+        return self.noam_factor * (self.model_size ** (-0.5) *
             min(step ** (-0.5), step * self.warmup ** (-1.5))) 

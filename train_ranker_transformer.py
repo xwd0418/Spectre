@@ -5,6 +5,8 @@ import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 
 from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import CSVLogger
+
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch.distributed as dist
 
@@ -126,23 +128,23 @@ def seed_everything(seed):
     torch.cuda.manual_seed_all(seed) 
     np.random.seed(seed)
     random.seed(seed)
-    torch.use_deterministic_algorithms(True)
+    # torch.use_deterministic_algorithms(True)
     
 def main():
-    # seed_everything(seed=2024)
+    seed_everything(seed=2024)
     
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
     parser.add_argument("modelname", type=str)
     parser.add_argument("--name_type", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=1000)
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--ds", type=str, default="")
-    parser.add_argument("--num_workers", type=int, default=12)
+    parser.add_argument("--num_workers", type=int, default=24)
     # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_rank_1")
     parser.add_argument("--metricmode", type=str, default="max")
@@ -175,7 +177,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/reproduce_0.8_rank1"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/tuning"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -222,15 +224,18 @@ def main():
     else:
         my_logger.info("[Main] Begin Training!")
         trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
-        my_logger.info("[Main] Begin Testing:")
         if dist.is_initialized():
+            my_logger.info("[Main] Begin Testing:")
             rank = dist.get_rank()
             if rank == 0: # To only run the test once
                 model.change_ranker_for_testing()
+                # testlogger = CSVLogger(save_dir=out_path, name=path1, version=path2)
+
                 test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
                 test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
                 # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
-        # trainer.test(model, data_module,ckpt_path="best")
+        
+        # trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
     my_logger.info("[Main] Done!")
 
 if __name__ == '__main__':

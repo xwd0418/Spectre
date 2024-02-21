@@ -47,7 +47,7 @@ class FolderDataset(Dataset):
         logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
         
     def __len__(self):
-        # return 10000
+        # return 1000
         return len(self.files)
 
     def __getitem__(self, i):
