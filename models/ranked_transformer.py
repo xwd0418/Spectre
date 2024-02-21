@@ -26,8 +26,8 @@ from utils.lr_scheduler import NoamOpt
 RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
     # exclude save_params
-    "gce_resolution", "r_dropout", "weight_decay", "out_dim", "pos_weight", "ranking_set_path",
-    "lr", "scheduler", "freeze_weights", "bs"
+    "gce_resolution", "r_dropout", "weight_decay", "out_dim", "pos_weight", "ranking_set_path", "FP_choice",
+    "lr", "noam_factor", "scheduler", "freeze_weights", "bs", "warm_up_steps"
 ]
 
 
@@ -55,10 +55,12 @@ class HsqcRankedTransformer(pl.LightningModule):
         ranking_set_path="",
         FP_choice="R2-6144FP",
         # training args
-        lr=1e-3,
+        lr=1e-5,
+        noam_factor = 1,
         pos_weight = None,
         weight_decay = 0.0,
         scheduler=None,  # None, "attention"
+        warm_up_steps=0,
         freeze_weights=False,
         *args,
         **kwargs,
@@ -97,24 +99,28 @@ class HsqcRankedTransformer(pl.LightningModule):
             f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
         if pos_weight==None:
-            bce_pos_weight = None
+            self.bce_pos_weight = None
             self.out_logger.info("[RankedTransformer] bce_pos_weight = None")
         else:
             try:
                 pos_weight_value = float(pos_weight)
-                bce_pos_weight= torch.full((6144,), pos_weight_value)
+                self.bce_pos_weight= torch.full((6144,), pos_weight_value)
                 self.out_logger.info(f"[RankedTransformer] bce_pos_weight is {pos_weight_value}")
         
             except ValueError:
                 if pos_weight == "ratio":
-                    bce_pos_weight = torch.load('/root/MorganFP_prediction/reproduce_previous_works/smart4.5/pos_weight_array_based_on_ratio.pt')
+                    self.bce_pos_weight = torch.load('/root/MorganFP_prediction/reproduce_previous_works/smart4.5/pos_weight_array_based_on_ratio.pt')
                     self.out_logger.info("[RankedTransformer] bce_pos_weight is loaded ")
+                else:
+                    raise ValueError(f"pos_weight {pos_weight} is not valid")
         
-        self.loss = nn.BCEWithLogitsLoss(pos_weight=bce_pos_weight)
+        self.loss = nn.BCEWithLogitsLoss(pos_weight=self.bce_pos_weight)
         self.lr = lr
+        self.noam_factor = noam_factor
         self.weight_decay = weight_decay
 
         self.scheduler = scheduler
+        self.warm_up_steps = warm_up_steps
         self.dim_model = dim_model
 
         self.validation_step_outputs = []
@@ -153,6 +159,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         model_name = model_name if len(model_name) == 0 else f"{model_name}_"
         parser = parent_parser.add_argument_group(model_name)
         parser.add_argument(f"--{model_name}lr", type=float, default=1e-5)
+        parser.add_argument(f"--{model_name}noam_factor", type=float, default=1.0)
         parser.add_argument(f"--{model_name}dim_model", type=int, default=384)
         parser.add_argument(f"--{model_name}dim_coords",
                             type=int, default=[180,180,24],
@@ -170,6 +177,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                                 if float num ,then use this as the ratio")
         parser.add_argument(
             f"--{model_name}weight_decay", type=float, default=0.0)
+        parser.add_argument(f"--{model_name}warm_up_steps", type=int, default=4000)
         parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
         parser.add_argument(f"--{model_name}coord_enc", type=str, default="sce")
         parser.add_argument(
@@ -286,7 +294,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             di[f"val/mean_{feat}"] = np.mean([v[feat]
                                              for v in self.validation_step_outputs])
         for k, v in di.items():
-            self.log(k, v, on_epoch=True)
+            self.log(k, v, on_epoch=True, prog_bar=k=="val/mean_rank_1")
         self.validation_step_outputs.clear()
         
     def on_test_epoch_end(self):
@@ -306,7 +314,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         elif self.scheduler == "attention":
             optim = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
                                      betas=(0.9, 0.98), eps=1e-9)
-            scheduler = NoamOpt(self.dim_model, 4000, optim)
+            
+            scheduler = NoamOpt(self.dim_model, self.warm_up_steps, optim, self.noam_factor)
+            
             return {
                 "optimizer": optim,
                 "lr_scheduler": {
@@ -321,11 +331,31 @@ class HsqcRankedTransformer(pl.LightningModule):
         if kwargs.get('sync_dist') is None:
             kwargs['sync_dist'] = kwargs.get(
                 'sync_dist', self.logger_should_sync_dist)
+        if name == "test/mean_rank_1":
+            print(kwargs,"\n\n")
         super().log(name, value, *args, **kwargs)
         
     def change_ranker_for_testing(self):
         test_ranking_set_path = self.ranking_set_path.replace("val", "test")
         self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, device=self.device)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 MOONSHOT_ARGS = [
