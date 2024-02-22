@@ -144,7 +144,7 @@ def main():
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--patience", type=int, default=10)
     parser.add_argument("--ds", type=str, default="")
-    parser.add_argument("--num_workers", type=int, default=24)
+    parser.add_argument("--num_workers", type=int, default=16)
     # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_rank_1")
     parser.add_argument("--metricmode", type=str, default="max")
@@ -177,7 +177,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/tuning"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/single_gpu"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -224,18 +224,18 @@ def main():
     else:
         my_logger.info("[Main] Begin Training!")
         trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
-        if dist.is_initialized():
-            my_logger.info("[Main] Begin Testing:")
-            rank = dist.get_rank()
-            if rank == 0: # To only run the test once
-                model.change_ranker_for_testing()
-                # testlogger = CSVLogger(save_dir=out_path, name=path1, version=path2)
+        # if dist.is_initialized():
+        #     my_logger.info("[Main] Begin Testing:")
+        #     rank = dist.get_rank()
+        #     if rank == 0: # To only run the test once
+        #         model.change_ranker_for_testing()
+        #         # testlogger = CSVLogger(save_dir=out_path, name=path1, version=path2)
 
-                test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
-                test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
-                # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
-        
-        # trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
+        #         test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
+        #         test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
+        #         # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
+        model.change_ranker_for_testing()
+        trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
     my_logger.info("[Main] Done!")
 
 if __name__ == '__main__':

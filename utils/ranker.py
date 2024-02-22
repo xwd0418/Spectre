@@ -23,6 +23,7 @@ class RankingSet(torch.nn.Module):
     
     super().__init__()
     self.logger = logging.getLogger("lightning")
+    self.logger.setLevel(logging.DEBUG)
 
     self.debug = debug
     self.idf = None
@@ -114,35 +115,34 @@ class RankingSet(torch.nn.Module):
 
       # For all of these tensors, A_ij is the cosine similarity of sample n to query q
       query_products = data @ queries.T  # (n, q)
-      # For all of these tensors, A_ij is the cosine similarity of sample n to query q's label
-      truth_products = data @ truths.T  # (n, q)
-
-      # only compare for entries where the label does not match the ranked sample
-      # if a label q' matches a ranked sample n', then truth_products[n',q'] = 1.0f
-      match_mask = ~torch.isclose(
-          truth_products, torch.ones(n, q).to(truth_products)
-      )
       
-
-      # places where the query doesn't match the threshold exactly
-      # broadcast (n, q), (1, q)
-      equality_mask = ~torch.isclose(
-          query_products, thresh
-      )
 
       # ((n, q) > (1, q)) -> (n, q) -> (1, q)
       ct_greater = torch.sum(
-          (query_products > thresh) & match_mask & equality_mask, dim=0, keepdim=True, dtype=torch.int
+          (query_products >= thresh), dim=0, keepdim=True, dtype=torch.int
       )
-
+      ct_greater -= 1  # subtract the ground_truth from the ranking set  
       if self.debug:
-        self.logger.info("thresh: ")
-        self.logger.info(thresh)
-        self.logger.info("ct_greater: ")
-        self.logger.info(ct_greater)
-        self.logger.info(torch.nonzero(query_products > thresh))
-        self.logger.info(query_products[:5, :5])
-
+        
+        # self.logger.info("thresh: ")
+        # self.logger.info(thresh)
+        # self.logger.info("ct_greater: ")
+        # self.logger.info(ct_greater)
+        # self.logger.info(torch.nonzero(query_products > thresh))
+        # self.logger.info(query_products[:5, :5])
+        
+        print("thresh: ")
+        print(thresh)
+        print("ct_greater: ")
+        print(ct_greater)
+        print('data[0]:\n', torch.nonzero(data[0]))
+        # print("mask shape: ",equality_mask[:,0].shape)
+        # print("mask shape: ",match_mask[:,0].shape)
+        print("match_mask_correct: \n",torch.nonzero(match_mask_correct==False))
+        print("match_mask_correct are the same?:\n ",torch.equal(match_mask_correct,match_mask_correct_2))
+        # print("where is larger?:\n",torch.nonzero(query_products > thresh))
+        # print(query_products[:5, :5])
+        print()
       return ct_greater
 
   def batched_rank(self, queries, truths):
