@@ -246,6 +246,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        
         x, labels = batch
         labels = labels.type(torch.float32)
         out = self.forward(x)
