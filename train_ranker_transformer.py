@@ -163,9 +163,10 @@ def main():
     parser.add_argument("--disable_hsqc_intensity", action='store_true', help="hsqc peaks tensor will be +/-1")    
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
-    parser.add_argument("--use_oneD_NMR_no_solvent", action='store_true', help="use detailed 1D NMR data")
-    parser.add_argument("--rank_by_soft_output", action='store_true', help="rank by soft output instead of binary output")
-    parser.add_argument("--use_MW", action='store_true', help="using mass spectra")
+    
+    parser.add_argument("--use_oneD_NMR_no_solvent",  type=bool, default=True, help="use detailed 1D NMR data")
+    parser.add_argument("--rank_by_soft_output",  type=bool, default=True, help="rank by soft output instead of binary output")
+    parser.add_argument("--use_MW",  type=bool, default=True, help="using mass spectra")
     
     args = vars(parser.parse_known_args()[0])
 
@@ -177,7 +178,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/single_gpu"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/high_precision"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -189,6 +190,7 @@ def main():
 
     # Logger setup
     my_logger = init_logger(out_path, path1, path2)
+    
     my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
     my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
 
@@ -237,7 +239,11 @@ def main():
         model.change_ranker_for_testing()
         trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
     my_logger.info("[Main] Done!")
+    try:
+        my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    except:
+        my_logger.info(f'[Main] could not find GPU name')
 
 if __name__ == '__main__':
-    torch.set_float32_matmul_precision('medium')
+    torch.set_float32_matmul_precision('high')
     main()

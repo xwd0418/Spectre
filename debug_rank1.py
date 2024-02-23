@@ -6,7 +6,7 @@ from datasets.hsqc_folder_dataset import FolderDataModule
 import yaml
 from pytorch_lightning.loggers import TensorBoardLogger
 
-torch.set_float32_matmul_precision('medium')
+torch.set_float32_matmul_precision('high')
 
 # Load the checkpoint from the path
 checkpoint_path = \
