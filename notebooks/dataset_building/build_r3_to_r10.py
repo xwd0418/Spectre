@@ -16,7 +16,7 @@ def generate_FP(smile_str, radius):
     mol_H = Chem.AddHs(mol) # add implicit Hs to the molecule
     plain_fp = AllChem.GetMorganFingerprintAsBitVect(mol_H,radius=radius,nBits=6144)
    
-    return plain_fp
+    return torch.tensor(plain_fp)
 
 for radius in range(3, 11):
     for split in ["test", "train", "val"]:

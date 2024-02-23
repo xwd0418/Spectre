@@ -10,7 +10,7 @@ do_precision = BinaryPrecision()
 do_accuracy = BinaryAccuracy()
 
 
-def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False):
+def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
     # return {
     #     "ce_loss": loss.item(),
     # }
@@ -52,17 +52,16 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
 
     # === Do Ranking ===
     if rank_by_soft_output:
-        rank_res = ranker.batched_rank(torch.sigmoid(model_output), fp_label)
+        rank_res = ranker.batched_rank(torch.sigmoid(model_output), fp_label, query_idx_in_rankingset)
     else:
-        rank_res = ranker.batched_rank(fp_pred, fp_label)
+        rank_res = ranker.batched_rank(fp_pred, fp_label, query_idx_in_rankingset)
     cts = [1, 5, 10]
     # strictly less as batched_rank returns number of items STRICTLY greater
     ranks = {
         f"rank_{allow}": torch.sum(rank_res < allow).item() / torch.numel(rank_res)
         for allow in cts
     }
-    print("ranks", ranks)
-    exit(0)
+    # print("ranks", ranks)
     mean_rank = torch.mean(rank_res.float()).item()
     return {
         "ce_loss": loss.item(),

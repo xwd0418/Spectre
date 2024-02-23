@@ -6,7 +6,7 @@ from sklearn.preprocessing import normalize
 import logging
 
 class RankingSet(torch.nn.Module):
-  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, device="cuda"):
+  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0):
     '''
       Creates a ranking set. Assumes the file specified at file_path is a pickle file of 
       a numpy array of fingerprints. Fingerprints should be (n, 6144) dimension, and on load,
@@ -27,7 +27,7 @@ class RankingSet(torch.nn.Module):
 
     self.debug = debug
     self.idf = None
-
+    self.batch_size = batch_size
     self.logger.debug("[Ranker] Initializing Ranker")
 
     with torch.no_grad():
@@ -93,7 +93,7 @@ class RankingSet(torch.nn.Module):
       out.append(self.lookup.get(nonzero, None))
     return out
 
-  def dot_prod_rank(self, data, queries, truths, thresh):
+  def dot_prod_rank(self, data, queries, truths, thresh, query_idx_in_rankingset):
     '''
       Perform a dot-product ranking. Assumes that data, queries, and truths are already
       normalized. 
@@ -103,6 +103,8 @@ class RankingSet(torch.nn.Module):
       truths: (q, 6144) of true fingerprints (assumed normalized)
 
       thresh: (1, q) what is the cutoff for things that ranked higher
+      
+      query_idx_in_rankingset: the first index of the same sample in the data tensors
 
       returns: size (q) tensor of how many were higher, minus how many labels were in the 
         ranking set 
@@ -116,12 +118,15 @@ class RankingSet(torch.nn.Module):
       # For all of these tensors, A_ij is the cosine similarity of sample n to query q
       query_products = data @ queries.T  # (n, q)
       
-
+      rows_range = torch.arange(query_products.size(0)).unsqueeze(1)
+      # False if the index in self.data and batch_index represent the same sample
+      query_indices_in_rankingset = torch.arange(query_idx_in_rankingset*self.batch_size, query_idx_in_rankingset*self.batch_size + q)
+      idx_mask = (query_indices_in_rankingset != rows_range)  
+      
       # ((n, q) > (1, q)) -> (n, q) -> (1, q)
       ct_greater = torch.sum(
-          (query_products >= thresh), dim=0, keepdim=True, dtype=torch.int
+          (query_products >= thresh) & idx_mask.to(query_products).bool(), dim=0, keepdim=True, dtype=torch.int
       )
-      ct_greater -= 1  # subtract the ground_truth from the ranking set  
       if self.debug:
         
         # self.logger.info("thresh: ")
@@ -136,16 +141,17 @@ class RankingSet(torch.nn.Module):
         print("ct_greater: ")
         print(ct_greater)
         print('data[0]:\n', torch.nonzero(data[0]))
+        print("idx mask :\n ",torch.nonzero(idx_mask==False))
+        # print("masked query products: ",query_products[])s
         # print("mask shape: ",equality_mask[:,0].shape)
         # print("mask shape: ",match_mask[:,0].shape)
-        print("match_mask_correct: \n",torch.nonzero(match_mask_correct==False))
-        print("match_mask_correct are the same?:\n ",torch.equal(match_mask_correct,match_mask_correct_2))
+
         # print("where is larger?:\n",torch.nonzero(query_products > thresh))
         # print(query_products[:5, :5])
         print()
       return ct_greater
 
-  def batched_rank(self, queries, truths):
+  def batched_rank(self, queries, truths, query_idx_in_rankingset):
     '''
         Perform a batched ranking
 
@@ -166,7 +172,7 @@ class RankingSet(torch.nn.Module):
         # sum dim 0, keepdims -> (1, q)
         thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
 
-        return self.dot_prod_rank(self.data, queries, truths, thresh)
+        return self.dot_prod_rank(self.data, queries, truths, thresh, query_idx_in_rankingset)
 
   def batched_rank_tfidf(self, queries, truths):
     '''

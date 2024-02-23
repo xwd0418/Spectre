@@ -80,13 +80,14 @@ class HsqcRankedTransformer(pl.LightningModule):
             if k in RANKED_TNSFMER_ARGS:
                 self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
 
+        self.bs = kwargs['bs']
         # don't set ranking set if you just want to treat it as a module
         if ranking_set_path:
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
             assert (os.path.exists(ranking_set_path))
             self.rank_by_soft_output = kwargs['rank_by_soft_output']
-            self.ranker = ranker.RankingSet(file_path=ranking_set_path, device=self.device)
+            self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs)
 
         if save_params:
             print("HsqcRankedTransformer saving args")
@@ -252,7 +253,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         loss = self.loss(out, labels)
         metrics = compute_metrics.cm(
-            out, labels, self.ranker, loss, self.loss, thresh=0.0, rank_by_soft_output=self.rank_by_soft_output)
+            out, labels, self.ranker, loss, self.loss, thresh=0.0, 
+            rank_by_soft_output=self.rank_by_soft_output,
+            query_idx_in_rankingset=batch_idx
+            )
         self.validation_step_outputs.append(metrics)
         return metrics
     
@@ -262,7 +266,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         loss = self.loss(out, labels)
         metrics = compute_metrics.cm(
-            out, labels, self.ranker, loss, self.loss, thresh=0.0,rank_by_soft_output=self.rank_by_soft_output)
+            out, labels, self.ranker, loss, self.loss, thresh=0.0,
+            rank_by_soft_output=self.rank_by_soft_output,
+            query_idx_in_rankingset=batch_idx
+            )
         self.test_step_outputs.append(metrics)
         return metrics
 
@@ -338,7 +345,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         
     def change_ranker_for_testing(self):
         test_ranking_set_path = self.ranking_set_path.replace("val", "test")
-        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, device=self.device)
+        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs)
 
 
 
