@@ -2,9 +2,12 @@ import torch
 import torch.nn.functional as F
 import pickle
 from sklearn.preprocessing import normalize
+from utils.matmul_precision_wrapper import set_float32_highest_precision
 
 import logging
 
+
+@set_float32_highest_precision
 class RankingSet(torch.nn.Module):
   def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0):
     '''
@@ -127,7 +130,7 @@ class RankingSet(torch.nn.Module):
       ct_greater = torch.sum(
           (query_products >= thresh) & idx_mask.to(query_products).bool(), dim=0, keepdim=True, dtype=torch.int
       )
-      if self.debug:
+      if True:
         
         # self.logger.info("thresh: ")
         # self.logger.info(thresh)
@@ -135,13 +138,15 @@ class RankingSet(torch.nn.Module):
         # self.logger.info(ct_greater)
         # self.logger.info(torch.nonzero(query_products > thresh))
         # self.logger.info(query_products[:5, :5])
-        
+        truth_products = data @ truths.T  # (n, q)
         print("thresh: ")
         print(thresh)
         print("ct_greater: ")
         print(ct_greater)
         print('data[0]:\n', torch.nonzero(data[0]))
-        print("idx mask :\n ",torch.nonzero(idx_mask==False))
+        # print("idx mask :\n ",torch.nonzero(idx_mask==False))
+        rows, cols = zip(*torch.nonzero(idx_mask==False))
+        print("supposed to be all ones: ", truth_products[rows,cols])
         # print("masked query products: ",query_products[])s
         # print("mask shape: ",equality_mask[:,0].shape)
         # print("mask shape: ",match_mask[:,0].shape)
