@@ -6,11 +6,12 @@ from datasets.hsqc_folder_dataset import FolderDataModule
 import yaml
 from pytorch_lightning.loggers import TensorBoardLogger
 
-torch.set_float32_matmul_precision('high')
+torch.set_float32_matmul_precision('medium')
+
 
 # Load the checkpoint from the path
 checkpoint_path = \
-"/root/MorganFP_prediction/reproduce_previous_works/single_gpu/input_output_versions_soft_old_1d/use_mass_spec/checkpoints/epoch=24-step=42850.ckpt"
+"/root/MorganFP_prediction/reproduce_previous_works/reproduce_w_cleaned_dataset_n_testing_ranker/new_vs_old_datasets/old_ranking_path_1/checkpoints/epoch=29-step=12870.ckpt"
 # "/root/MorganFP_prediction/reproduce_previous_works/single_gpu/debug_rank1/no_hsqc_peak_val/checkpoints/epoch=3-step=6856.ckpt"
 
 hyperpaerameters_path = checkpoint_path.split("checkpoints")[0] + "hparams.yaml"

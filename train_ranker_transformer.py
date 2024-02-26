@@ -178,7 +178,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/high_precision"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/highest_precision"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -245,5 +245,5 @@ def main():
         my_logger.info(f'[Main] could not find GPU name')
 
 if __name__ == '__main__':
-    torch.set_float32_matmul_precision('high')
+    torch.set_float32_matmul_precision('medium')
     main()
