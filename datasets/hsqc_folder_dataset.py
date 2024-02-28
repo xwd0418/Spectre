@@ -184,9 +184,11 @@ class FolderDataModule(pl.LightningDataModule):
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def val_dataloader(self):
+        # 13738
         return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, 
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def test_dataloader(self):
+        # 13630
         return DataLoader(self.test, batch_size=self.batch_size, collate_fn=self.collate_fn, 
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)

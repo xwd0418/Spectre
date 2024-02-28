@@ -121,16 +121,14 @@ class RankingSet(torch.nn.Module):
       # For all of these tensors, A_ij is the cosine similarity of sample n to query q
       query_products = data @ queries.T  # (n, q)
       
-      rows_range = torch.arange(query_products.size(0)).unsqueeze(1)
-      # False if the index in self.data and batch_index represent the same sample
-      query_indices_in_rankingset = torch.arange(query_idx_in_rankingset*self.batch_size, query_idx_in_rankingset*self.batch_size + q)
-      idx_mask = (query_indices_in_rankingset != rows_range)  
       
       # ((n, q) > (1, q)) -> (n, q) -> (1, q)
       ct_greater = torch.sum(
-          (query_products >= thresh) & idx_mask.to(query_products).bool(), dim=0, keepdim=True, dtype=torch.int
+          (query_products >= thresh) | torch.isclose(query_products, thresh) , dim=0, keepdim=True, dtype=torch.int
       )
-      if True:
+      ct_greater -= 1 # subtract the label(the sample itself) from the ranking set
+      
+      if self.debug:
         
         # self.logger.info("thresh: ")
         # self.logger.info(thresh)
@@ -138,22 +136,40 @@ class RankingSet(torch.nn.Module):
         # self.logger.info(ct_greater)
         # self.logger.info(torch.nonzero(query_products > thresh))
         # self.logger.info(query_products[:5, :5])
-        truth_products = data @ truths.T  # (n, q)
-        print("thresh: ")
-        print(thresh)
-        print("ct_greater: ")
-        print(ct_greater)
-        print('data[0]:\n', torch.nonzero(data[0]))
+        
+        # truth_products = data @ truths.T  # (n, q)
+        
+        # inspect candidates larger than threshold
+        print("thresh: \n", thresh)
+        # print("query_products: \n", query_products)
+        for i in range(q):
+            print('biggest of current column: ', torch.topk(query_products[:,i], k=3).values)
+        print("ct_greater: \n", ct_greater)
+        
+        
+        
+        # print('data[0]:\n', torch.nonzero(data[0]))
         # print("idx mask :\n ",torch.nonzero(idx_mask==False))
-        rows, cols = zip(*torch.nonzero(idx_mask==False))
-        print("supposed to be all ones: ", truth_products[rows,cols])
+        # rows, cols = zip(*torch.nonzero(idx_mask==False))
+        # print("supposed to be all ones: ", truth_products[rows,cols])
         # print("masked query products: ",query_products[])s
         # print("mask shape: ",equality_mask[:,0].shape)
         # print("mask shape: ",match_mask[:,0].shape)
 
         # print("where is larger?:\n",torch.nonzero(query_products > thresh))
         # print(query_products[:5, :5])
-        print()
+        # print()
+        
+        
+        # # check if same products are all from same FPs
+        # same_product = torch.isclose(query_products, thresh) # shape of (n, q)
+        # idx_rankingset, idx_batch = same_product.nonzero()[:,0], same_product.nonzero()[:,1]
+
+        # if not (self.data[idx_rankingset] == truths[idx_batch]).all():
+        #     print( "indices of same_product that product is same but FPs are not the same" , ((self.data[idx_rankingset] == truths[idx_batch]).all(dim=1) == False).nonzero())
+        #     print("not all same products are from same FPs")
+
+        
       return ct_greater
 
   def batched_rank(self, queries, truths, query_idx_in_rankingset):
