@@ -178,7 +178,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/highest_precision"
+    out_path = "/root/MorganFP_prediction/reproduce_previous_works/compute_ranking_lower_bound"
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -237,6 +237,7 @@ def main():
         #         test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
         #         # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
         model.change_ranker_for_testing()
+        my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
         trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
     my_logger.info("[Main] Done!")
     try:

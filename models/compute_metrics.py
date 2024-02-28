@@ -61,6 +61,7 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
         f"rank_{allow}": torch.sum(rank_res < allow).item() / torch.numel(rank_res)
         for allow in cts
     }
+    # print(f"rank_1: {ranks['rank_1']}")
     # print("ranks", ranks)
     mean_rank = torch.mean(rank_res.float()).item()
     return {
