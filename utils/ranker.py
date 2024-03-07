@@ -9,7 +9,7 @@ import logging
 
 @set_float32_highest_precision
 class RankingSet(torch.nn.Module):
-  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0):
+  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0, CE_num_class = None):
     '''
       Creates a ranking set. Assumes the file specified at file_path is a pickle file of 
       a numpy array of fingerprints. Fingerprints should be (n, 6144) dimension, and on load,
@@ -38,8 +38,10 @@ class RankingSet(torch.nn.Module):
         self.register_buffer("data", F.normalize(store, dim=1, p=2.0), persistent=False)
       else:
         with open(file_path, "rb") as f:
-          self.register_buffer("data", F.normalize(torch.load(f).type(
-              torch.FloatTensor), dim=1, p=2.0), persistent=False)
+            rankingset_data = torch.load(f).type(torch.FloatTensor)
+            if CE_num_class is not None:
+                rankingset_data =  torch.where(rankingset_data >= CE_num_class, CE_num_class-1, rankingset_data).float()
+            self.register_buffer("data", F.normalize(rankingset_data, dim=1, p=2.0), persistent=False)
 
       if retrieve_path:
         with open(retrieve_path, "rb") as f:
@@ -142,8 +144,8 @@ class RankingSet(torch.nn.Module):
         # inspect candidates larger than threshold
         print("thresh: \n", thresh)
         # print("query_products: \n", query_products)
-        for i in range(q):
-            print('biggest of current column: ', torch.topk(query_products[:,i], k=3).values)
+        # for i in range(q):
+        #     print('biggest of current column: ', torch.topk(query_products[:,i], k=3).values)
         print("ct_greater: \n", ct_greater)
         
         
@@ -158,7 +160,7 @@ class RankingSet(torch.nn.Module):
 
         # print("where is larger?:\n",torch.nonzero(query_products > thresh))
         # print(query_products[:5, :5])
-        # print()
+        print()
         
         
         # # check if same products are all from same FPs

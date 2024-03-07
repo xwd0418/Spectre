@@ -1,5 +1,5 @@
 import logging
-import pickle
+import pickle, random
 import torch, os, pytorch_lightning as pl, glob
 import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
@@ -80,8 +80,33 @@ class FolderDataset(Dataset):
                 ])    
             if not self.parser_args['disable_solvent']: # add solvent info
                 inputs = torch.vstack([inputs, get_delimeter("solvent_start"), get_solvent(solvent), get_delimeter("solvent_end")])
+        
         elif "oneD_NMR" in self.input_src:
-            c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}") if file_exist("oneD_NMR", self.files[i]) else (torch.tensor([]) , torch.tensor([])) 
+            if file_exist("oneD_NMR", self.files[i]):
+                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
+                # randomly drop 1D and 2D NMRs if needed
+                if self.parser_args['optional_inputs']:
+                    # drop 2D:
+                    if random.random() <= self.parser_args['drop_2d_rate'] and (len(c_tensor)>0 or len(h_tensor)>0):
+                        hsqc =  torch.empty(0,3)
+                        if len(c_tensor)>0 and len(h_tensor)>0:
+                            # it is fine to drop one of the oneD NMRs
+                            if random.random() <= self.parser_args['drop_1d_rate']:
+                                if random.random()<0.5:
+                                    c_tensor = torch.tensor([])
+                                else:
+                                    h_tensor = torch.tensor([])
+                    else:
+                        if random.random() <= self.parser_args['drop_1d_rate']:
+                            c_tensor = torch.tensor([])
+                        if random.random() <= self.parser_args['drop_1d_rate']:
+                            h_tensor = torch.tensor([])
+                    assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
+                        
+            else:
+                c_tensor, h_tensor = (torch.tensor([]) , torch.tensor([])) 
+                # then we should not drop 2D info anyawy
+                
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
             inputs = torch.vstack([
@@ -89,13 +114,17 @@ class FolderDataset(Dataset):
                 get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
                 get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
                 ])    
+            
         if self.parser_args['use_MW']:
             mass_spec = self.mass_spec[int(self.files[i].split(".")[0])]
             mass_spec = torch.tensor([mass_spec,0,0]).float()
             inputs = torch.vstack([inputs, get_delimeter("ms_start"), mass_spec, get_delimeter("ms_end")])
                
-        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")  
-        combined = (inputs, mfp.type(torch.FloatTensor))
+        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}").float()  
+        if self.parser_args['loss_func'] == "CE":
+            num_class = self.parser_args['num_class']
+            mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
+        combined = (inputs, mfp)
         return combined
    
 
@@ -133,6 +162,7 @@ def get_solvent(solvent_name):
         case "No_1D_NMR": return torch.tensor([]).float().view(-1,3) # empty tensor, will be skipped duing v-stack
         case _: raise Exception(f"unknown {solvent_name}")
 
+# used as collate_fn in the dataloader
 def pad(batch):
     items = tuple(zip(*batch))
     fp = items[-1]
@@ -151,14 +181,43 @@ def normalize_columns(hsqc):
     """    
     
     assert(len(hsqc.shape)==2 and hsqc.shape[1]==3)
+    '''cananical approach to normalize each field'''
     # Calculate the mean and standard deviation for each column
-    mean = hsqc.mean(dim=0, keepdim=True)
-    std = hsqc.std(dim=0, keepdim=True, unbiased=False)
+    # mean = hsqc.mean(dim=0, keepdim=True)
+    # std = hsqc.std(dim=0, keepdim=True, unbiased=False)
+    # std = torch.where(std == 0, torch.tensor(1e-7), std)
     
-    # Normalize each column
-    normalized_hsqc = (hsqc - mean) / std
+    # # Normalize each column
+    # normalized_hsqc = (hsqc - mean) / std
     
-    return normalized_hsqc
+    # return normalized_hsqc
+    
+    
+    '''normalize only peak intensities, and separate positive and negative peaks'''
+    selected_values = hsqc[hsqc[:,2] > 0, 2]
+    if len(selected_values) > 1:
+        mean_pos = hsqc[hsqc[:,2]>0,2].mean()
+        std_pos = hsqc[hsqc[:,2]>0,2].std()
+        std_pos = torch.where(std_pos == 0, torch.tensor(1e-7), std_pos)
+        normalized_pos = (hsqc[hsqc[:,2]>0,2] - mean_pos) / std_pos
+        normalized_pos = torch.where(normalized_pos<0, torch.tensor(1e-7), normalized_pos)
+        hsqc[hsqc[:,2]>0,2] = normalized_pos
+    elif len(selected_values) == 1:
+        hsqc[hsqc[:,2]>0,2] = 1
+    
+    selected_values = hsqc[hsqc[:,2] < 0, 2]
+    if len(selected_values) > 1:
+        mean_neg = hsqc[hsqc[:,2]<0,2].mean()
+        std_neg = hsqc[hsqc[:,2]<0,2].std()
+        std_neg = torch.where(std_neg == 0, torch.tensor(1e-7), std_neg)
+        normalized_neg = (hsqc[hsqc[:,2]<0,2] - mean_neg) / std_neg
+        normalized_neg = torch.where(normalized_neg>0, torch.tensor(-1e-7), normalized_neg)
+        hsqc[hsqc[:,2]<0,2] = normalized_neg
+    elif len(selected_values) == 1:
+        hsqc[hsqc[:,2]<0,2] = -1
+        
+    return hsqc
+    
 
 class FolderDataModule(pl.LightningDataModule):
     def __init__(self, dir, FP_choice, input_src, batch_size: int = 32, parser_args=None):
