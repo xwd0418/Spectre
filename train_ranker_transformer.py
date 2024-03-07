@@ -87,12 +87,13 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     model_class = None
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         model_class = HsqcRankedTransformer
+    else:
+        raise(f"No model for model type {model_type}.")
+    
     if args['optional_inputs']:
         model_class = OptionalInputRankedTransformer
     # elif model_type == "double_transformer":
     #     model_class = DoubleTransformer
-    else:
-        raise(f"No model for model type {model_type}.")
 
     if weights_path: # initialize with loaded state if non-empty string passed
         model = model_class.load_from_checkpoint(weights_path, strict=False)
@@ -203,7 +204,9 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path = "/root/MorganFP_prediction/reproduce_previous_works/compute_ranking_lower_bound"
+    out_path =       "/workspace/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    out_path_final = "/root/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    os.makedirs(out_path_final, exist_ok=True)
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -218,7 +221,8 @@ def main():
     
     my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
     my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
-
+    my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
     # # try:
@@ -252,26 +256,32 @@ def main():
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module)
     else:
-        my_logger.info("[Main] Begin Training!")
-        trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
-        # if dist.is_initialized():
-        #     my_logger.info("[Main] Begin Testing:")
-        #     rank = dist.get_rank()
-        #     if rank == 0: # To only run the test once
-        #         model.change_ranker_for_testing()
-        #         # testlogger = CSVLogger(save_dir=out_path, name=path1, version=path2)
+        try:
+            my_logger.info("[Main] Begin Training!")
+            trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
+            # if dist.is_initialized():
+            #     my_logger.info("[Main] Begin Testing:")
+            #     rank = dist.get_rank()
+            #     if rank == 0: # To only run the test once
+            #         model.change_ranker_for_testing()
+            #         # testlogger = CSVLogger(save_dir=out_path, name=path1, version=path2)
 
-        #         test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
-        #         test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
-        #         # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
-        model.change_ranker_for_testing()
-        my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
-        trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
-    my_logger.info("[Main] Done!")
-    try:
-        my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
-    except:
-        my_logger.info(f'[Main] could not find GPU name')
+            #         test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
+            #         test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
+            #         # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
+            model.change_ranker_for_testing()
+            my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
+            test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
+        except Exception as e:
+            my_logger.error(f"[Main] Error: {e}")
+            raise(e)
+        finally: #Finally move all content from out_path to out_path_final
+            my_logger.info("[Main] Done!")
+            my_logger.info(f"[Main] test result: {test_result}")
+            os.system(f"mv {out_path}/* {out_path_final}/")
+
+        
+
 
 if __name__ == '__main__':
     torch.set_float32_matmul_precision('medium')

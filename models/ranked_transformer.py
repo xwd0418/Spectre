@@ -81,8 +81,23 @@ class HsqcRankedTransformer(pl.LightningModule):
             if k in RANKED_TNSFMER_ARGS:
                 self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
 
+
+        # === All Parameters ===
+        self.FP_length = out_dim # 6144 
+        if FP_choice == "R0_to_R4_30720_FP":
+            out_dim = self.FP_length * 5
+        if loss_func == "CE":
+            assert(FP_choice == "R2-6144-count-based-FP")
+            out_dim = self.FP_length * kwargs['num_class']
         self.bs = kwargs['bs']
         self.num_class = kwargs['num_class'] if loss_func == "CE" else None
+        self.lr = lr
+        self.noam_factor = noam_factor
+        self.weight_decay = weight_decay
+
+        self.scheduler = scheduler
+        self.warm_up_steps = warm_up_steps
+        self.dim_model = dim_model
         
         # don't set ranking set if you just want to treat it as a module
         if ranking_set_path:
@@ -135,25 +150,13 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.compute_metric_func = compute_metrics.cm
         
         
-        self.lr = lr
-        self.noam_factor = noam_factor
-        self.weight_decay = weight_decay
-
-        self.scheduler = scheduler
-        self.warm_up_steps = warm_up_steps
-        self.dim_model = dim_model
-
+        
+        # additional nn modules 
         self.validation_step_outputs = []
         self.training_step_outputs = []
         self.test_step_outputs = []
 
-        # === All Parameters ===
-        self.FP_length = out_dim # 6144 
-        if FP_choice == "R0_to_R4_30720_FP":
-            out_dim = self.FP_length * 5
-        if loss_func == "CE":
-            assert(FP_choice == "R2-6144-count-based-FP")
-            out_dim = self.FP_length * kwargs['num_class']
+        
             
         self.fc = nn.Linear(dim_model, out_dim)
         # (1, 1, dim_model)
