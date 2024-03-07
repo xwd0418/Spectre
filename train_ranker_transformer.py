@@ -11,8 +11,10 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch.distributed as dist
 
 from models.ranked_transformer import HsqcRankedTransformer
+from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 # from models.ranked_double_transformer import DoubleTransformer
 from datasets.hsqc_folder_dataset import FolderDataModule
+from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
 
 from argparse import ArgumentParser
@@ -40,7 +42,7 @@ def exp_string(expname, args):
     # limited hyperparameter experiment name, all hyperparameter string, expname + time
     return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited), f"{expname}_[{get_curr_time()}]"
 
-def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds):
+def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
     """
         constructs data module based on model_type, and also outputs dimensions of dummy data
         (for graph visualization)
@@ -48,6 +50,8 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds):
     choice = data_src
     kwargs = vars(parser.parse_args())
 
+    if args['optional_inputs']:
+        return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
     if model_type == "double_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
@@ -70,7 +74,7 @@ def apply_args(parser, model_type):
     else:
         raise(f"No model for model type {model_type}.")
 
-def model_mux(parser, model_type, weights_path, freeze):
+def model_mux(parser, model_type, weights_path, freeze, args):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
@@ -83,6 +87,8 @@ def model_mux(parser, model_type, weights_path, freeze):
     model_class = None
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         model_class = HsqcRankedTransformer
+    if args['optional_inputs']:
+        model_class = OptionalInputRankedTransformer
     # elif model_type == "double_transformer":
     #     model_class = DoubleTransformer
     else:
@@ -114,8 +120,6 @@ def init_logger(out_path, path1, path2):
     fh.setFormatter(formatter)
     logger.addHandler(fh)
     logger.addHandler(logging.StreamHandler(sys.stdout))
-    
-    
             
     return logger
 
@@ -131,8 +135,19 @@ def seed_everything(seed):
     # torch.use_deterministic_algorithms(True)
     
 def main():
-    seed_everything(seed=2024)
-    
+    seed_everything(seed=2024)    
+
+    def str2bool(v):    
+        # specifically used for arg-paser with boolean values
+        if isinstance(v, bool):
+            return v
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+            return False
+        else:
+            raise argparse.ArgumentTypeError('Boolean value expected.')    
+
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
     parser.add_argument("modelname", type=str)
@@ -150,8 +165,8 @@ def main():
     parser.add_argument("--metricmode", type=str, default="max")
 
     parser.add_argument("--load_all_weights", type=str, default="")
-    parser.add_argument("--freeze", type=bool, default=False)
-    parser.add_argument("--validate", type=bool, default=False)
+    parser.add_argument("--freeze", type=lambda x:bool(str2bool(x)), default=False)
+    parser.add_argument("--validate", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
     # different versions of input/output
@@ -164,11 +179,21 @@ def main():
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
     
-    parser.add_argument("--use_oneD_NMR_no_solvent",  type=bool, default=True, help="use detailed 1D NMR data")
-    parser.add_argument("--rank_by_soft_output",  type=bool, default=True, help="rank by soft output instead of binary output")
-    parser.add_argument("--use_MW",  type=bool, default=True, help="using mass spectra")
+    parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use detailed 1D NMR data")
+    parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
+    parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
+    
+    # count-based FP
+    parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
+    parser.add_argument("--loss_func",  type=str, default="MSE", help="either MSE or CE")
+    
+    # optional 2D input
+    parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
+    parser.add_argument("--drop_2d_rate",  type=float, default=0.6, help="rate of removing 2D input")
+    parser.add_argument("--drop_1d_rate",  type=float, default=0.3, help="rate of removing 1D input")
     
     args = vars(parser.parse_known_args()[0])
+    
 
     # general args
     apply_args(parser, args["modelname"])
@@ -195,7 +220,7 @@ def main():
     my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
 
     # Model and Data setup
-    model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"])
+    model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
     # # try:
     # import torch._dynamo
     # torch._dynamo.reset()
@@ -204,12 +229,15 @@ def main():
     # my_logger.info("[Main] Compiled Model")
     # # except:
     #     # my_logger.info("[Main] Compile failed, continuing without compilation")
-    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"])
+    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args)
 
     # Trainer, callbacks
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
-
+    if args['optional_inputs']:
+        my_logger.info("[Main] Using Optional Input")
+        metric = "val_all_inputs/mean_rank_1" # essientially the same as mean_rank_1, just naming purposes
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
+    
     checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
   
     early_stopping = EarlyStopping(monitor=metric, mode=metricmode, patience=patience)

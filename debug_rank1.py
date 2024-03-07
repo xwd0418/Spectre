@@ -9,7 +9,9 @@ torch.set_float32_matmul_precision('medium')
 
 # Load the checkpoint from the path
 checkpoint_path = \
-"/root/MorganFP_prediction/reproduce_previous_works/highest_precision/input_output_versions/r0_r4_reduced/checkpoints/epoch=25-step=44564.ckpt"
+"/root/MorganFP_prediction/reproduce_previous_works/compute_ranking_lower_bound/count_based_FP/count_based_CE/checkpoints/epoch=34-step=59990.ckpt"
+
+
 
 hyperpaerameters_path = checkpoint_path.split("checkpoints")[0] + "hparams.yaml"
 # # Load the YAML file

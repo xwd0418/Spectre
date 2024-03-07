@@ -1,5 +1,5 @@
 """
-building dataset with the of ranging from r3 to r10 and save
+building dataset, count based FP, size of 6144 , radius from 2
 """
 
 
@@ -14,13 +14,15 @@ import numpy as np
 def generate_FP(smile_str, radius):
     mol = Chem.MolFromSmiles(smile_str)
     mol_H = Chem.AddHs(mol) # add implicit Hs to the molecule
-    plain_fp = AllChem.GetMorganFingerprintAsBitVect(mol_H,radius=radius,nBits=6144)
-   
-    return torch.tensor(plain_fp).float()
+    fp =  AllChem.GetHashedMorganFingerprint(mol_H, radius=radius, nBits=6144)
+    fp_dict = fp.GetNonzeroElements()
+    fp_out = torch.zeros(6144)
+    fp_out[list(fp_dict.keys())] = torch.tensor( list(map(lambda x:float(x), fp_dict.values())))
+    return fp_out
 
-for radius in range(3, 11):
+for radius in range(2,3):
     for split in ["test", "train", "val"]:
-        os.makedirs(f'/workspace/SMILES_dataset/{split}/R{radius}-6144FP/', exist_ok=True)
+        os.makedirs(f'/workspace/SMILES_dataset/{split}/R{radius}-6144-count-based-FP/', exist_ok=True)
         
         file_names = os.listdir( f"/workspace/SMILES_dataset/{split}/HYUN_FP/")
         path_dir = f"/workspace/SMILES_dataset/{split}/"
@@ -31,7 +33,7 @@ for radius in range(3, 11):
             idx = int(f.split(".")[0])
             smile = smiles_dict[idx]
             fp = generate_FP(smile, radius=radius)
-            torch.save(fp, f'/workspace/SMILES_dataset/{split}/R{radius}-6144FP/{f}')
+            torch.save(fp, f'/workspace/SMILES_dataset/{split}/R{radius}-6144-count-based-FP/{f}')
         print(f"R{radius} with {split} done!")        
             
 

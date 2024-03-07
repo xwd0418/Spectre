@@ -27,7 +27,7 @@ RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
     # exclude save_params
     "gce_resolution", "r_dropout", "weight_decay", "out_dim", "pos_weight", "ranking_set_path", "FP_choice",
-    "lr", "noam_factor", "scheduler", "freeze_weights", "bs", "warm_up_steps"
+    "lr", "noam_factor", "scheduler", "freeze_weights", "bs", "warm_up_steps", "loss_func"
 ]
 
 
@@ -54,6 +54,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         save_params=True,
         ranking_set_path="",
         FP_choice="R2-6144FP",
+        loss_func = "",
         # training args
         lr=1e-5,
         noam_factor = 1,
@@ -81,13 +82,15 @@ class HsqcRankedTransformer(pl.LightningModule):
                 self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
 
         self.bs = kwargs['bs']
+        self.num_class = kwargs['num_class'] if loss_func == "CE" else None
+        
         # don't set ranking set if you just want to treat it as a module
         if ranking_set_path:
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
             assert (os.path.exists(ranking_set_path))
             self.rank_by_soft_output = kwargs['rank_by_soft_output']
-            self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs)
+            self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs, CE_num_class=self.num_class)
 
         if save_params:
             print("HsqcRankedTransformer saving args")
@@ -99,13 +102,15 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.out_logger.info(
             f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
+
+        ### Loss function 
         if pos_weight==None:
             self.bce_pos_weight = None
             self.out_logger.info("[RankedTransformer] bce_pos_weight = None")
         else:
             try:
                 pos_weight_value = float(pos_weight)
-                self.bce_pos_weight= torch.full((6144,), pos_weight_value)
+                self.bce_pos_weight= torch.full((self.FP_length,), pos_weight_value)
                 self.out_logger.info(f"[RankedTransformer] bce_pos_weight is {pos_weight_value}")
         
             except ValueError:
@@ -115,7 +120,21 @@ class HsqcRankedTransformer(pl.LightningModule):
                 else:
                     raise ValueError(f"pos_weight {pos_weight} is not valid")
         
-        self.loss = nn.BCEWithLogitsLoss(pos_weight=self.bce_pos_weight)
+        self.loss_func = loss_func
+        if FP_choice == "R2-6144-count-based-FP":
+            if loss_func == "MSE":
+                self.loss = nn.MSELoss()
+                self.compute_metric_func = compute_metrics.cm_count_based_mse
+            elif loss_func == "CE":
+                self.loss = nn.CrossEntropyLoss()
+                self.compute_metric_func = compute_metrics.cm_count_based_ce
+            else:
+                raise Exception("loss_func should be either MSE or CE when using count-based FP")
+        else:
+            self.loss = nn.BCEWithLogitsLoss(pos_weight=self.bce_pos_weight)
+            self.compute_metric_func = compute_metrics.cm
+        
+        
         self.lr = lr
         self.noam_factor = noam_factor
         self.weight_decay = weight_decay
@@ -129,8 +148,13 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.test_step_outputs = []
 
         # === All Parameters ===
+        self.FP_length = out_dim # 6144 
         if FP_choice == "R0_to_R4_30720_FP":
-            out_dim = 6144*5
+            out_dim = self.FP_length * 5
+        if loss_func == "CE":
+            assert(FP_choice == "R2-6144-count-based-FP")
+            out_dim = self.FP_length * kwargs['num_class']
+            
         self.fc = nn.Linear(dim_model, out_dim)
         # (1, 1, dim_model)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
@@ -233,14 +257,15 @@ class HsqcRankedTransformer(pl.LightningModule):
             should be zero-padded, such that all of the hsqc in the batch
             are the same length.
         """
-        out, _ = self.encode(hsqc)
-        out = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token
-        return out
+        out, _ = self.encode(hsqc)  # (b_s, seq_len, dim_model)
+        out_cls = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token : (b_s, dim_model) -> (b_s, out_dim)
+        return out_cls
 
     def training_step(self, batch, batch_idx):
         x, labels = batch
-        labels = labels.type(torch.float32)
         out = self.forward(x)
+        if self.loss_func == "CE":
+            out = out.view(out.shape[0],  self.num_class, self.FP_length)
         loss = self.loss(out, labels)
 
         self.log("tr/loss", loss, prog_bar=True)
@@ -249,28 +274,38 @@ class HsqcRankedTransformer(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         
         x, labels = batch
-        labels = labels.type(torch.float32)
         out = self.forward(x)
+        if self.loss_func == "CE":
+            out = out.view(out.shape[0],  self.num_class, self.FP_length)
+            preds = out.argmax(dim=1)
+        else:
+            preds = out
         loss = self.loss(out, labels)
-        metrics = compute_metrics.cm(
-            out, labels, self.ranker, loss, self.loss, thresh=0.0, 
+        metrics = self.compute_metric_func(
+            preds, labels, self.ranker, loss, self.loss, thresh=0.0, 
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx
             )
-        self.validation_step_outputs.append(metrics)
+        if type(self.validation_step_outputs)==list: # adapt for child class: optional_input_ranked_transformer
+            self.validation_step_outputs.append(metrics)
         return metrics
     
     def test_step(self, batch, batch_idx):
         x, labels = batch
-        labels = labels.type(torch.float32)
         out = self.forward(x)
+        if self.loss_func == "CE":
+            out = out.view(out.shape[0],  self.num_class, self.FP_length)
+            preds = out.argmax(dim=1)
+        else:
+            preds = out
         loss = self.loss(out, labels)
-        metrics = compute_metrics.cm(
-            out, labels, self.ranker, loss, self.loss, thresh=0.0,
+        metrics = self.compute_metric_func(
+            preds, labels, self.ranker, loss, self.loss, thresh=0.0,
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx
             )
-        self.test_step_outputs.append(metrics)
+        if type(self.test_step_outputs)==list:
+            self.test_step_outputs.append(metrics)
         return metrics
 
    
@@ -345,7 +380,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         
     def change_ranker_for_testing(self):
         test_ranking_set_path = self.ranking_set_path.replace("val", "test")
-        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs)
+        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs,  CE_num_class=self.num_class)
 
 
 

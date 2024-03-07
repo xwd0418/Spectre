@@ -11,9 +11,7 @@ do_accuracy = BinaryAccuracy()
 
 
 def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
-    # return {
-    #     "ce_loss": loss.item(),
-    # }
+
     global do_f1, do_recall, do_precision, do_accuracy
     do_f1 = do_f1.to(model_output)
     do_recall = do_recall.to(model_output)
@@ -65,16 +63,92 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
     # print("ranks", ranks)
     mean_rank = torch.mean(rank_res.float()).item()
     return {
-        "ce_loss": loss.item(),
-        "pos_loss": pos_loss.item(),
-        "neg_loss": neg_loss.item(),
-        "pos_neg_loss": (pos_loss + neg_loss).item(),
-        "cos": cos,
-        "active_bits": active,
-        "f1": f1,
-        "precision": prec,
-        "recall": rec,
-        "accuracy": acc,
-        "mean_rank": mean_rank,
+        f"ce_loss": loss.item(),
+        f"pos_loss": pos_loss.item(),
+        f"neg_loss": neg_loss.item(),
+        f"pos_neg_loss": (pos_loss + neg_loss).item(),
+        f"cos": cos,
+        f"active_bits": active,
+        f"f1": f1,
+        f"precision": prec,
+        f"recall": rec,
+        f"accuracy": acc,
+        f"mean_rank": mean_rank,
+        **ranks
+    }
+
+
+
+def cm_count_based_mse(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
+    # Fingeprint prediction
+    fp_pred = model_output 
+
+    # cos
+    cos = torch.mean(do_cos(fp_label, fp_pred)).item()
+
+    pos_contr = torch.where(fp_label == 0, fp_label, model_output) # negative is always correct
+    neg_contr = torch.where(fp_label != 0, fp_label, model_output) # positive is always correct 
+
+
+    # print( pos_contr.device, fp_label.device)
+    pos_loss = loss_fn(pos_contr, fp_label)
+    neg_loss = loss_fn(neg_contr, fp_label)
+
+    # === Do Ranking ===
+    rank_res = ranker.batched_rank(fp_pred, fp_label, query_idx_in_rankingset)
+    cts = [1, 5, 10]
+    # strictly less as batched_rank returns number of items STRICTLY greater
+    ranks = {
+        f"rank_{allow}": torch.sum(rank_res < allow).item() / torch.numel(rank_res)
+        for allow in cts
+    }
+    # print(f"rank_1: {ranks['rank_1']}")
+    # print("ranks", ranks)
+    mean_rank = torch.mean(rank_res.float()).item()
+    return {
+        f"mse_loss": loss.item(),
+        f"pos_loss": pos_loss.item(),
+        f"neg_loss": neg_loss.item(),
+        f"pos_neg_loss": (pos_loss + neg_loss).item(),
+        f"cos": cos,
+        f"mean_rank": mean_rank,
+        **ranks
+    }
+
+
+def cm_count_based_ce(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
+    # Fingeprint prediction
+    fp_pred = model_output 
+
+    fp_label, fp_pred = fp_label.float(), fp_pred.float()
+    # cos
+    cos = torch.mean(do_cos(fp_label, fp_pred)).item()
+
+    # pos_contr = torch.where(fp_label == 0, fp_label, model_output) # negative is always correct
+    # neg_contr = torch.where(fp_label != 0, fp_label, model_output) # positive is always correct 
+
+
+    # # print( pos_contr.device, fp_label.device)
+    # pos_loss = loss_fn(pos_contr, fp_label)
+    # neg_loss = loss_fn(neg_contr, fp_label)
+
+    # === Do Ranking ===
+    rank_res = ranker.batched_rank(fp_pred, fp_label, query_idx_in_rankingset)
+    cts = [1, 5, 10]
+    # strictly less as batched_rank returns number of items STRICTLY greater
+    ranks = {
+        f"rank_{allow}": torch.sum(rank_res < allow).item() / torch.numel(rank_res)
+        for allow in cts
+    }
+    # print(f"rank_1: {ranks['rank_1']}")
+    # print("ranks", ranks)
+    mean_rank = torch.mean(rank_res.float()).item()
+    return {
+        f"ce_loss": loss.item(),
+        # f"pos_loss": pos_loss.item(),
+        # f"neg_loss": neg_loss.item(),
+        # f"pos_neg_loss": (pos_loss + neg_loss).item(),
+        f"cos": cos,
+        f"mean_rank": mean_rank,
         **ranks
     }
