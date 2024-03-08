@@ -11,6 +11,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch.distributed as dist
 
 from models.ranked_transformer import HsqcRankedTransformer
+from models.ranked_resnet import HsqcRankedResNet
 from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 # from models.ranked_double_transformer import DoubleTransformer
 from datasets.hsqc_folder_dataset import FolderDataModule
@@ -56,6 +57,9 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+    elif model_type == "CNN":
+        num_channels = kwargs['num_input_channels']
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "ms_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "transformer_2d1d":
@@ -69,6 +73,8 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
 def apply_args(parser, model_type):
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         HsqcRankedTransformer.add_model_specific_args(parser)
+    elif model_type == "CNN":
+        HsqcRankedResNet.add_model_specific_args(parser)
     # elif model_type == "double_transformer":
     #     DoubleTransformer.add_model_specific_args(parser)
     else:
@@ -86,12 +92,18 @@ def model_mux(parser, model_type, weights_path, freeze, args):
 
     model_class = None
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
-        model_class = HsqcRankedTransformer
+        if args['optional_inputs']:
+            model_class = OptionalInputRankedTransformer
+        else:
+            model_class = HsqcRankedTransformer
+    
+    elif model_type == "CNN":
+        model_class = HsqcRankedResNet
+        
     else:
         raise(f"No model for model type {model_type}.")
     
-    if args['optional_inputs']:
-        model_class = OptionalInputRankedTransformer
+    
     # elif model_type == "double_transformer":
     #     model_class = DoubleTransformer
 
@@ -278,7 +290,7 @@ def main():
         finally: #Finally move all content from out_path to out_path_final
             my_logger.info("[Main] Done!")
             my_logger.info(f"[Main] test result: {test_result}")
-            os.system(f"mv {out_path}/* {out_path_final}/")
+            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
 
         
 
