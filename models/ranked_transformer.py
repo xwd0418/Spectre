@@ -48,7 +48,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         coord_enc="sce",
         wavelength_bounds=None,
         gce_resolution=1,
-        r_dropout=0,
+        dropout=0,
         out_dim=6144,
         # other business logic stuff
         save_params=True,
@@ -168,7 +168,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             nhead=heads,
             dim_feedforward=ff_dim,
             batch_first=True,
-            dropout=r_dropout,
+            dropout=dropout,
         )
         self.transformer_encoder = torch.nn.TransformerEncoder(
             layer,

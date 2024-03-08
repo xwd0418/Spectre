@@ -54,18 +54,25 @@ class FolderDataset(Dataset):
         def file_exist(src, filename):
             return os.path.exists(os.path.join(self.dir, src, filename))
         
-        # Load HSQC
-        hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
-        if self.parser_args['disable_hsqc_peaks']:
-            hsqc[:,2]=0
-        if self.parser_args['disable_hsqc_intensity']:
-            hsqc[:,2]=torch.sign(hsqc[:,2])
-        if self.parser_args['normalize_hsqc']:
-            hsqc = normalize_columns(hsqc)
-        if self.parser_args['enable_hsqc_delimeter_only_2d']:
-            assert (self.input_src == ["HSQC"])
-            hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
-        inputs = hsqc
+        # Load HSQC as 1-channel image 
+        if "HSQC_images_1channel" in self.input_src:
+            inputs = torch.load(f"{self.dir}/HSQC_images_1channel/{self.files[i]}")
+        elif "HSQC_images_2channel" in self.input_src:
+            inputs = torch.load(f"{self.dir}/HSQC_images_2channel/{self.files[i]}")
+        
+        # Load HSQC as sequence
+        elif "HSQC" in self.input_src:
+            hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
+            if self.parser_args['disable_hsqc_peaks']:
+                hsqc[:,2]=0
+            if self.parser_args['disable_hsqc_intensity']:
+                hsqc[:,2]=torch.sign(hsqc[:,2])
+            if self.parser_args['normalize_hsqc']:
+                hsqc = normalize_columns(hsqc)
+            if self.parser_args['enable_hsqc_delimeter_only_2d']:
+                assert (self.input_src == ["HSQC"])
+                hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
+            inputs = hsqc
         
         if "detailed_oneD_NMR" in self.input_src:
             c_tensor, h_tensor, solvent = torch.load(f"{self.dir}/detailed_oneD_NMR/{self.files[i]}") if file_exist("detailed_oneD_NMR", self.files[i]) \
