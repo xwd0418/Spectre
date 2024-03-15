@@ -3,32 +3,44 @@ from torch.utils.data import DataLoader, Dataset
 from datasets.hsqc_folder_dataset import FolderDataset, FolderDataModule, pad, get_delimeter
 import torch, os, pytorch_lightning as pl, glob
 import torch.nn.functional as F
-
+import pickle
 
 '''
 OneD Dataset, only for evaluting optional input
 '''
 class OneD_Dataset(Dataset):
-    def __init__(self, dir, FP_choice, split, oneD_type, parser_args):
+    def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False):
         self.dir = os.path.join(dir, split)
         self.fp_suffix = FP_choice
         self.split = split
+        self.has_HSQC = has_HSQC
         self.parser_args = parser_args
-        assert oneD_type in ["H_NMR", "C_NMR", "both"]
+        assert oneD_type in ["H_NMR", "C_NMR", "both", None]
         self.oneD_type = oneD_type
-        self.files = os.listdir(os.path.join(self.dir, "oneD_NMR"))
+        path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
         
     def __len__(self):
+        # return 200
         return len(self.files)
     
     def __getitem__(self, i):
-        c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
-        if self.oneD_type == "H_NMR":
+        
+        if self.oneD_type == None:
             c_tensor = torch.tensor([]).view(-1, 1)
-        elif self.oneD_type == "C_NMR":
             h_tensor = torch.tensor([]).view(-1, 1)
+        else:
+            c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")   # both
+            if self.oneD_type == "H_NMR":
+                c_tensor = torch.tensor([]).view(-1, 1)
+            elif self.oneD_type == "C_NMR":
+                h_tensor = torch.tensor([]).view(-1, 1)
          
-        hsqc =  torch.empty(0,3)
+        if self.has_HSQC:
+            hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").float()
+        else:
+            hsqc =  torch.empty(0,3)
+        
         if len(hsqc)==len(c_tensor)==len(h_tensor)==0:
             return None
         c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
@@ -38,7 +50,7 @@ class OneD_Dataset(Dataset):
                 get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
                 get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
                 ])   
-        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}").float()  
+        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
         if self.parser_args['loss_func'] == "CE":
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
@@ -55,22 +67,23 @@ class OptionalInputDataModule(FolderDataModule):
         if stage == "fit" or stage == "validate" or stage is None:
             self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="train", parser_args=self.parser_args)
             
-            self.val_all_inputs = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src,split="val", parser_args=self.parser_args)
-            self.parser_args['enable_hsqc_delimeter_only_2d'] = True
-            self.val_only_hsqc = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = ["HSQC"], split="val", parser_args=self.parser_args)
-            self.parser_args['enable_hsqc_delimeter_only_2d'] = False
-            self.val_only_1d = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both", parser_args=self.parser_args)
+            self.val_all_inputs = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True)
+            self.val_only_hsqc  = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True)
+            self.val_only_1d    = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both",  parser_args=self.parser_args)
             self.val_only_H_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="H_NMR", parser_args=self.parser_args)
+            self.val_HSQC_H_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True)
             self.val_only_C_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="C_NMR", parser_args=self.parser_args)
-            
+            self.val_HSQC_C_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True)
+
         if stage == "test":
-            self.test_all_inputs = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="test", parser_args=self.parser_args)
-            self.parser_args['enable_hsqc_delimeter_only_2d'] = True
-            self.test_only_hsqc = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = ["HSQC"], split="test", parser_args=self.parser_args)
-            self.parser_args['enable_hsqc_delimeter_only_2d'] = False
-            self.test_only_1d = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both", parser_args=self.parser_args)
+            self.test_all_inputs = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True)
+            self.test_only_hsqc  = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True)
+            self.test_only_1d    = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args)
             self.test_only_H_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args)
+            self.test_HSQC_H_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True)
             self.test_only_C_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args)
+            self.test_HSQC_C_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True)
+            
             
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
@@ -88,9 +101,13 @@ class OptionalInputDataModule(FolderDataModule):
                                       num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         loader_only_H_NMR = DataLoader(self.val_only_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn, 
                                       num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_HSQC_H_NMR = DataLoader(self.val_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         loader_only_C_NMR = DataLoader(self.val_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
-        return [loader_all_inputs, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
+        loader_HSQC_C_NMR = DataLoader(self.val_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
     
     def test_dataloader(self):
         loader_all_inputs = DataLoader(self.test_all_inputs, batch_size=self.batch_size, collate_fn=self.collate_fn, 
@@ -101,9 +118,13 @@ class OptionalInputDataModule(FolderDataModule):
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         loader_only_H_NMR = DataLoader(self.test_only_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_HSQC_H_NMR = DataLoader(self.test_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         loader_only_C_NMR = DataLoader(self.test_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
-        return [loader_all_inputs, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
+        loader_HSQC_C_NMR = DataLoader(self.test_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
       
 # used as collate_fn in the dataloader
 def collate_to_filter_bad_sample_and_pad(batch):

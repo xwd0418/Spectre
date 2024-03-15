@@ -26,8 +26,8 @@ from utils.lr_scheduler import NoamOpt
 RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
     # exclude save_params
-    "gce_resolution", "r_dropout", "weight_decay", "out_dim", "pos_weight", "ranking_set_path", "FP_choice",
-    "lr", "noam_factor", "scheduler", "freeze_weights", "bs", "warm_up_steps", "loss_func"
+    "gce_resolution", "dropout", "weight_decay", "out_dim", "pos_weight", "ranking_set_path", "FP_choice",
+    "lr", "noam_factor", "scheduler", "freeze_weights", "bs", "warm_up_steps", "loss_func", 
 ]
 
 
@@ -83,12 +83,15 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         # === All Parameters ===
+        
         self.FP_length = out_dim # 6144 
+        self.separate_classifier = kwargs['separate_classifier']
         if FP_choice == "R0_to_R4_30720_FP":
             out_dim = self.FP_length * 5
         if loss_func == "CE":
             assert(FP_choice == "R2-6144-count-based-FP")
             out_dim = self.FP_length * kwargs['num_class']
+        self.out_dim = out_dim
         self.bs = kwargs['bs']
         self.num_class = kwargs['num_class'] if loss_func == "CE" else None
         self.lr = lr
