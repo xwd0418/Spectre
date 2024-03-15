@@ -47,7 +47,7 @@ class FolderDataset(Dataset):
         logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
         
     def __len__(self):
-        # return 1000
+        # return 100
         return len(self.files)
 
     def __getitem__(self, i):
@@ -94,20 +94,19 @@ class FolderDataset(Dataset):
                 # randomly drop 1D and 2D NMRs if needed
                 if self.parser_args['optional_inputs']:
                     # drop 2D:
-                    if random.random() <= self.parser_args['drop_2d_rate'] and (len(c_tensor)>0 or len(h_tensor)>0):
+                    if random.random() <= 1/2: 
                         hsqc =  torch.empty(0,3)
-                        if len(c_tensor)>0 and len(h_tensor)>0:
-                            # it is fine to drop one of the oneD NMRs
-                            if random.random() <= self.parser_args['drop_1d_rate']:
-                                if random.random()<0.5:
-                                    c_tensor = torch.tensor([])
-                                else:
-                                    h_tensor = torch.tensor([])
-                    else:
-                        if random.random() <= self.parser_args['drop_1d_rate']:
+                    if len(c_tensor)>0 and len(h_tensor)>0:
+                        # it is fine to drop one of the oneD NMRs
+                        random_num_for_dropping =  random.random()
+                        
+                        if random_num_for_dropping <= 1/3:
                             c_tensor = torch.tensor([])
-                        if random.random() <= self.parser_args['drop_1d_rate']:
+                        elif random_num_for_dropping <= 2/3:
                             h_tensor = torch.tensor([])
+                        # else: keep both
+                            
+                  
                     assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                         
             else:
@@ -132,6 +131,20 @@ class FolderDataset(Dataset):
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
         combined = (inputs, mfp)
+        
+        if self.parser_args['separate_classifier']:
+            # input types are one of the following:
+            # ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]
+            input_type = 0
+            if len(hsqc):
+                input_type+=4
+            if len(h_tensor):
+                input_type+=2
+            if len(c_tensor):
+                input_type+=1
+            input_type = 7-input_type
+            combined = (inputs, mfp, input_type)
+
         return combined
    
 
@@ -172,10 +185,17 @@ def get_solvent(solvent_name):
 # used as collate_fn in the dataloader
 def pad(batch):
     items = tuple(zip(*batch))
-    fp = items[-1]
-    inputs = items[:-1]
-    inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
-    combined = (*inputs_2, torch.stack(fp))
+    if len(items) == 2:
+        fp = items[-1]
+        inputs = items[:-1]
+        inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
+        combined = (*inputs_2, torch.stack(fp))
+    if len(items) == 3:
+        input_type = items[-1]
+        fp = items[-2]
+        inputs = items[:-2]
+        inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
+        combined = (*inputs_2, torch.stack(fp), torch.tensor(input_type))
     return combined
 
 def normalize_columns(hsqc):

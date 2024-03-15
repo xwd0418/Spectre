@@ -94,6 +94,8 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         if args['optional_inputs']:
             model_class = OptionalInputRankedTransformer
+            kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"
+   
         else:
             model_class = HsqcRankedTransformer
     
@@ -202,8 +204,9 @@ def main():
     
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
-    parser.add_argument("--drop_2d_rate",  type=float, default=0.6, help="rate of removing 2D input")
-    parser.add_argument("--drop_1d_rate",  type=float, default=0.3, help="rate of removing 1D input")
+    # parser.add_argument("--drop_2d_rate",  type=float, default=0.6, help="rate of removing 2D input")
+    # parser.add_argument("--drop_1d_rate",  type=float, default=0.3, help="rate of removing 1D input")
+    parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
     
     args = vars(parser.parse_known_args()[0])
     
@@ -216,8 +219,9 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    out_path =       "/workspace/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
-    out_path_final = "/root/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    # out_path =       "/workspace/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    out_path       =      "/root/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    out_path_final =      "/root/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
     os.makedirs(out_path_final, exist_ok=True)
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
@@ -251,7 +255,7 @@ def main():
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
     if args['optional_inputs']:
         my_logger.info("[Main] Using Optional Input")
-        metric = "val_all_inputs/mean_rank_1" # essientially the same as mean_rank_1, just naming purposes
+        metric = "val_mean_rank_1_all_inputs" # essientially the same as mean_rank_1, just naming purposes
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     
     checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
@@ -290,7 +294,7 @@ def main():
         finally: #Finally move all content from out_path to out_path_final
             my_logger.info("[Main] Done!")
             my_logger.info(f"[Main] test result: {test_result}")
-            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
+            # os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
 
         
 
