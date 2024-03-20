@@ -182,6 +182,7 @@ def main():
     parser.add_argument("--load_all_weights", type=str, default="")
     parser.add_argument("--freeze", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--validate", type=lambda x:bool(str2bool(x)), default=False)
+    parser.add_argument("--test", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
     # different versions of input/output
@@ -271,6 +272,12 @@ def main():
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module)
+    elif args['test']:
+        my_logger.info("[Main] Just performing test step")
+        model.change_ranker_for_testing(test_ranking_set_path = "/workspace/ranking_sets_cleaned_by_inchi/SMILES_R0_to_R4_reduced_FP_ranking_sets_only_all_info_molecules/test/rankingset.pt")
+        # model.change_ranker_for_testing()
+        test_result = trainer.test(model, data_module,ckpt_path=args["checkpoint_path"])
+        my_logger.info(f"[Main] test result: {test_result}")
     else:
         try:
             my_logger.info("[Main] Begin Training!")

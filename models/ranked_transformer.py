@@ -192,9 +192,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}lr", type=float, default=1e-5)
         parser.add_argument(f"--{model_name}noam_factor", type=float, default=1.0)
         parser.add_argument(f"--{model_name}dim_model", type=int, default=384)
-        parser.add_argument(f"--{model_name}dim_coords",
+        parser.add_argument(f"--{model_name}dim_coords", metavar='N',
                             type=int, default=[180,180,24],
-                            nargs="*", action="store")
+                            nargs="+", action="store")
         parser.add_argument(f"--{model_name}heads", type=int, default=8)
         parser.add_argument(f"--{model_name}layers", type=int, default=8)
         parser.add_argument(f"--{model_name}ff_dim", type=int, default=512)
@@ -384,8 +384,9 @@ class HsqcRankedTransformer(pl.LightningModule):
             print(kwargs,"\n\n")
         super().log(name, value, *args, **kwargs)
         
-    def change_ranker_for_testing(self):
-        test_ranking_set_path = self.ranking_set_path.replace("val", "test")
+    def change_ranker_for_testing(self, test_ranking_set_path=None ):
+        if test_ranking_set_path is None:
+            test_ranking_set_path = self.ranking_set_path.replace("val", "test")
         self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs,  CE_num_class=self.num_class)
 
 

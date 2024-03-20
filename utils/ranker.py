@@ -129,7 +129,7 @@ class RankingSet(torch.nn.Module):
           (query_products >= thresh) | torch.isclose(query_products, thresh) , dim=0, keepdim=True, dtype=torch.int
       )
       ct_greater -= 1 # subtract the label(the sample itself) from the ranking set
-      
+ 
       if self.debug:
         
         # self.logger.info("thresh: ")
@@ -139,14 +139,16 @@ class RankingSet(torch.nn.Module):
         # self.logger.info(torch.nonzero(query_products > thresh))
         # self.logger.info(query_products[:5, :5])
         
-        # truth_products = data @ truths.T  # (n, q)
-        
+        truth_products = data @ truths.T  # (n, q)
+        print(truth_products.shape)
+        print("truth_products: \n", truth_products)
         # inspect candidates larger than threshold
-        print("thresh: \n", thresh)
+        # print("thresh: \n", thresh)
         # print("query_products: \n", query_products)
         # for i in range(q):
         #     print('biggest of current column: ', torch.topk(query_products[:,i], k=3).values)
         print("ct_greater: \n", ct_greater)
+        exit(0)
         
         
         
