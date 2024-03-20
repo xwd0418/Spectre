@@ -61,6 +61,7 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
     }
     # print(f"rank_1: {ranks['rank_1']}")
     # print("ranks", ranks)
+    # exit(0)
     mean_rank = torch.mean(rank_res.float()).item()
     return {
         f"ce_loss": loss.item(),

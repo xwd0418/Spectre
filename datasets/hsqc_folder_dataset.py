@@ -38,6 +38,10 @@ class FolderDataset(Dataset):
             self.mass_spec = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
 
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
+        
+        # path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        # self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+        
         logger = logging.getLogger("lightning")
         if dist.is_initialized():
             rank = dist.get_rank()
