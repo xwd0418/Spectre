@@ -172,7 +172,7 @@ def main():
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
     parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--patience", type=int, default=10)
+    parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--ds", type=str, default="")
     parser.add_argument("--num_workers", type=int, default=16)
     # for early stopping/model saving
@@ -220,9 +220,10 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
+    curr_exp_folder_name = "scale_up"
     # out_path =       "/workspace/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
-    out_path       =      "/root/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
-    out_path_final =      "/root/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    out_path       =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
@@ -278,6 +279,9 @@ def main():
         # model.change_ranker_for_testing()
         test_result = trainer.test(model, data_module,ckpt_path=args["checkpoint_path"])
         my_logger.info(f"[Main] test result: {test_result}")
+        ## !!! ATTENTION !!!
+        ## also need to files to be loaded in hsqc_folder_dataset.py
+        
     else:
         try:
             my_logger.info("[Main] Begin Training!")
