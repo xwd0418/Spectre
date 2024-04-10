@@ -72,7 +72,7 @@ class FolderDataset(Dataset):
             if self.parser_args['disable_hsqc_intensity']:
                 hsqc[:,2]=torch.sign(hsqc[:,2])
             if self.parser_args['normalize_hsqc']:
-                hsqc = normalize_columns(hsqc)
+                hsqc = normalize_hsqc(hsqc)
             if self.parser_args['enable_hsqc_delimeter_only_2d']:
                 assert (self.input_src == ["HSQC"])
                 hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
@@ -202,7 +202,7 @@ def pad(batch):
         combined = (*inputs_2, torch.stack(fp), torch.tensor(input_type))
     return combined
 
-def normalize_columns(hsqc):
+def normalize_hsqc(hsqc, style="minmax"):
     """
     Normalizes each column of the input HSQC to have zero mean and unit standard deviation.
     Parameters:
@@ -212,41 +212,43 @@ def normalize_columns(hsqc):
     """    
     
     assert(len(hsqc.shape)==2 and hsqc.shape[1]==3)
+    input_signs = torch.sign(hsqc)
+    copy_hsqc = hsqc.clone()
     '''cananical approach to normalize each field'''
     # Calculate the mean and standard deviation for each column
-    # mean = hsqc.mean(dim=0, keepdim=True)
-    # std = hsqc.std(dim=0, keepdim=True, unbiased=False)
-    # std = torch.where(std == 0, torch.tensor(1e-7), std)
-    
-    # # Normalize each column
-    # normalized_hsqc = (hsqc - mean) / std
-    
-    # return normalized_hsqc
     
     
     '''normalize only peak intensities, and separate positive and negative peaks'''
     selected_values = hsqc[hsqc[:,2] > 0, 2]
+    # do min_max normalization with in the range of 0.5 to 1.5
     if len(selected_values) > 1:
-        mean_pos = hsqc[hsqc[:,2]>0,2].mean()
-        std_pos = hsqc[hsqc[:,2]>0,2].std()
-        std_pos = torch.where(std_pos == 0, torch.tensor(1e-7), std_pos)
-        normalized_pos = (hsqc[hsqc[:,2]>0,2] - mean_pos) / std_pos
-        normalized_pos = torch.where(normalized_pos<0, torch.tensor(1e-7), normalized_pos)
-        hsqc[hsqc[:,2]>0,2] = normalized_pos
+        min_pos = selected_values.min()
+        max_pos = selected_values.max()
+        if min_pos == min_pos:
+            hsqc[hsqc[:,2]>0,2] = 1
+        else:
+            hsqc[hsqc[:,2]>0,2] = (selected_values - min_pos) / (max_pos - min_pos) + 0.5
     elif len(selected_values) == 1:
         hsqc[hsqc[:,2]>0,2] = 1
     
+    # do min_max normalization with in the range of -0.5 to -1.5
     selected_values = hsqc[hsqc[:,2] < 0, 2]
     if len(selected_values) > 1:
-        mean_neg = hsqc[hsqc[:,2]<0,2].mean()
-        std_neg = hsqc[hsqc[:,2]<0,2].std()
-        std_neg = torch.where(std_neg == 0, torch.tensor(1e-7), std_neg)
-        normalized_neg = (hsqc[hsqc[:,2]<0,2] - mean_neg) / std_neg
-        normalized_neg = torch.where(normalized_neg>0, torch.tensor(-1e-7), normalized_neg)
-        hsqc[hsqc[:,2]<0,2] = normalized_neg
+        min_neg = selected_values.min()
+        max_neg = selected_values.max()
+        if min_neg == max_neg:
+            hsqc[hsqc[:,2]<0,2] = -1
+        else:
+            hsqc[hsqc[:,2]<0,2] = (min_neg - selected_values ) / (max_neg - min_neg) - 0.5
     elif len(selected_values) == 1:
         hsqc[hsqc[:,2]<0,2] = -1
-        
+            
+    # output_signs = torch.sign(hsqc)  
+    # if (input_signs != output_signs).any():
+    #     print("signs are changed")
+    #     print(copy_hsqc)
+    #     print(hsqc)
+    #     exit(0)
     return hsqc
     
 

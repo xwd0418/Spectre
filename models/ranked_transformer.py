@@ -1,6 +1,6 @@
 import logging
 import pytorch_lightning as pl
-import torch
+import torch, pickle
 import math
 import torch.nn as nn
 import torch.nn.functional as F
@@ -244,7 +244,10 @@ class HsqcRankedTransformer(pl.LightningModule):
             mask = torch.cat(mask, dim=1)
             mask = mask.to(self.device)
 
+        # print(hsqc[0])
         points = self.enc(hsqc) # something like positional encoding 
+        # pickle.dump(points.cpu(), open("out_1.pkl", "wb"))
+        
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
@@ -265,6 +268,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         """
         out, _ = self.encode(hsqc)  # (b_s, seq_len, dim_model)
         out_cls = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token : (b_s, dim_model) -> (b_s, out_dim)
+        
         return out_cls
 
     def training_step(self, batch, batch_idx):
@@ -272,8 +276,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
-        loss = self.loss(out, labels)
+        
 
+        loss = self.loss(out, labels)
+        
         self.log("tr/loss", loss, prog_bar=True)
         return loss
 
