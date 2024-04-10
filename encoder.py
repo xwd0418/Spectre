@@ -190,7 +190,7 @@ class SignCoordinateEncoder(torch.nn.Module):
     """Encode coordinates
     Parameters
     ----------
-    X : torch.Tensor of shape (batch_size, n_coords, n_dimensions)
+    X : torch.Tensor of shape (batch_size, n_coords, n_dimensions) (32*50*3)
         The coordinates to embed
     Returns
     -------
@@ -200,9 +200,11 @@ class SignCoordinateEncoder(torch.nn.Module):
     assert (X.shape[2] == len(self.dim_coords))
     embeddings = []
     for dim, encoder in enumerate(self.positional_encoders):
-      embeddings.append(encoder(X[:, :, [dim]]))
+      embeddings.append(encoder(X[:, :, [dim]])) # 32*50*180, 32*50*180, 32*50*24
     if self.sign_embedding_dims:
-      signs = torch.where(
-          X[:, :, [-1] * self.sign_embedding_dims] >= 0, 1, -1).float()
-      embeddings.append(signs)
+        # signs = torch.where(
+        #     X[:, :, [-1] * self.sign_embedding_dims] >= 0, 1, -1).float()
+        # embeddings.append(signs)
+        peaks = X[:, :, [-1] * self.sign_embedding_dims].float() #   
+        embeddings.append(peaks)
     return torch.cat(embeddings, dim=2)

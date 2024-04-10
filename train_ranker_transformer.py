@@ -1,5 +1,5 @@
 import logging, os, sys, torch
-import random
+import random, pickle
 import numpy as np
 import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
@@ -150,7 +150,7 @@ def seed_everything(seed):
     # torch.use_deterministic_algorithms(True)
     
 def main():
-    seed_everything(seed=2024)    
+     
 
     def str2bool(v):    
         # specifically used for arg-paser with boolean values
@@ -208,10 +208,13 @@ def main():
     # parser.add_argument("--drop_2d_rate",  type=float, default=0.6, help="rate of removing 2D input")
     # parser.add_argument("--drop_1d_rate",  type=float, default=0.3, help="rate of removing 1D input")
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
+    parser.add_argument("--random_seed", type=int, default=42)
+    
     
     args = vars(parser.parse_known_args()[0])
     
-
+    seed_everything(seed=args["random_seed"])   
+    
     # general args
     apply_args(parser, args["modelname"])
 
@@ -220,8 +223,7 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    curr_exp_folder_name = "scale_up"
-    # out_path =       "/workspace/MorganFP_prediction/reproduce_previous_works/ranking_set_deduplicated"
+    curr_exp_folder_name = "explore_scaling"
     out_path       =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
@@ -243,6 +245,8 @@ def main():
     
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
+    from pytorch_lightning.utilities.model_summary import summarize
+    my_logger.info(f"[Main] Model Summary: {summarize(model)}")
     # # try:
     # import torch._dynamo
     # torch._dynamo.reset()
@@ -299,6 +303,10 @@ def main():
             model.change_ranker_for_testing()
             my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
             test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
+            # save test result as pickle
+            with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
+                pickle.dump(test_result, f)
+            
         except Exception as e:
             my_logger.error(f"[Main] Error: {e}")
             raise(e)
