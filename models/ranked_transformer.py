@@ -88,6 +88,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.separate_classifier = kwargs['separate_classifier']
         if FP_choice == "R0_to_R4_30720_FP":
             out_dim = self.FP_length * 5
+        elif FP_choice == "R0_to_R6_exact_R_concat_FP":
+            out_dim = self.FP_length * 7
         if loss_func == "CE":
             assert(FP_choice == "R2-6144-count-based-FP")
             out_dim = self.FP_length * kwargs['num_class']
@@ -116,7 +118,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
         # ranked encoder
         self.enc = build_encoder(
-            coord_enc, dim_model, dim_coords, wavelength_bounds, gce_resolution)
+            coord_enc, dim_model, dim_coords, wavelength_bounds, gce_resolution, kwargs['use_peak_values'])
         self.out_logger.info(
             f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
@@ -292,11 +294,13 @@ class HsqcRankedTransformer(pl.LightningModule):
             preds = out.argmax(dim=1)
         else:
             preds = out
+        # print((labels) )
+        # print("\n\n\n")
         loss = self.loss(out, labels)
         metrics = self.compute_metric_func(
             preds, labels, self.ranker, loss, self.loss, thresh=0.0, 
             rank_by_soft_output=self.rank_by_soft_output,
-            query_idx_in_rankingset=batch_idx
+            query_idx_in_rankingset=batch_idx,
             )
         if type(self.validation_step_outputs)==list: # adapt for child class: optional_input_ranked_transformer
             self.validation_step_outputs.append(metrics)
@@ -320,7 +324,14 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.test_step_outputs.append(metrics)
         return metrics
 
-   
+    def predict_step(self, batch, batch_idx):
+        x, smiles_chemical_name = batch
+        smiles, names = zip(*smiles_chemical_name)
+        # print(smiles, names)
+        out = self.forward(x)
+        preds = torch.sigmoid(out)
+        top_k_idxs = self.ranker.retrieve_idx(preds)
+        return top_k_idxs
             
     # def on_train_start(self, trainer, pl_module):
     #     if dist.is_initialized():

@@ -1,4 +1,5 @@
 
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 from torch.utils.data import DataLoader, Dataset
 from datasets.hsqc_folder_dataset import FolderDataset, FolderDataModule, pad, get_delimeter
 import torch, os, pytorch_lightning as pl, glob
@@ -9,7 +10,7 @@ import pickle
 OneD Dataset, only for evaluting optional input
 '''
 class OneD_Dataset(Dataset):
-    def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False):
+    def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False, show_smiles=False):
         self.dir = os.path.join(dir, split)
         self.fp_suffix = FP_choice
         self.split = split
@@ -19,6 +20,12 @@ class OneD_Dataset(Dataset):
         self.oneD_type = oneD_type
         path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
         self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+        self.show_smiles = show_smiles
+        if self.show_smiles:
+            self.index_to_chemical_names = pickle.load(open(f'/workspace/SMILES_dataset/{split}/Chemical/index.pkl', 'rb'))
+            self.index_to_smiles = pickle.load(open(f'/workspace/SMILES_dataset/{split}/SMILES/index.pkl', 'rb'))
+
+            
         
     def __len__(self):
         # return 200
@@ -50,10 +57,19 @@ class OneD_Dataset(Dataset):
                 get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
                 get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
                 ])   
+        
+        
+        if self.show_smiles: # prediction stage
+            file_index = int(self.files[i].split(".")[0])
+            smiles = self.index_to_smiles[file_index]
+            chemical_name = self.index_to_chemical_names[file_index]
+            return inputs, (smiles, chemical_name)
+        
         mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
         if self.parser_args['loss_func'] == "CE":
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
+            
         return (inputs, mfp)
 
 
@@ -86,7 +102,14 @@ class OptionalInputDataModule(FolderDataModule):
             
             
         if stage == "predict":
-            raise NotImplementedError("Predict setup not implemented")
+            self.predict_stage_all_inputs = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
+            self.predict_stage_only_hsqc  = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
+            self.predict_stage_only_1d    = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, show_smiles=True)
+            self.predict_stage_only_H_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, show_smiles=True)
+            self.predict_stage_HSQC_H_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
+            self.predict_stage_only_C_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, show_smiles=True)
+            self.predict_stage_HSQC_C_NMR = OneD_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
+            
 
     def train_dataloader(self):
         return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn, 
@@ -126,6 +149,26 @@ class OptionalInputDataModule(FolderDataModule):
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
       
+    def predict_dataloader(self):
+        loader_all_inputs = DataLoader(self.predict_stage_all_inputs, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_only_hsqc = DataLoader(self.predict_stage_only_hsqc, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_only_1d = DataLoader(self.predict_stage_only_1d, batch_size=self.batch_size, collate_fn=self.collate_fn,
+
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_only_H_NMR = DataLoader(self.predict_stage_only_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_HSQC_H_NMR = DataLoader(self.predict_stage_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_only_C_NMR = DataLoader(self.predict_stage_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        loader_HSQC_C_NMR = DataLoader(self.predict_stage_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+        return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
+
+
+
 # used as collate_fn in the dataloader
 def collate_to_filter_bad_sample_and_pad(batch):
     batch = list(filter(lambda x: x is not None, batch))

@@ -77,26 +77,28 @@ class RankingSet(torch.nn.Module):
     return tuple(nonzero[:, 0].tolist())
 
   def retrieve_idx(self, query, n=10):
-    query = F.normalize(query, dim=0, p=2.0).to(self.device).unsqueeze(0)
-    print(self.data.shape, query.shape)
-    # (n x 6144) * (6144 x 1) = n x 1
-    query_products = (self.data @ query.T).flatten()
-    _, idxs = torch.topk(query_products, k=n)
+    query = F.normalize(query, dim=1, p=2.0).to(self.data.device).unsqueeze(0)
+    # print(self.data.shape, query.shape)
+    # (n x 6144) * (6144 x bs) = n x bs
+    query_products = (self.data @ query.T.squeeze(2))
+    # query_products = (self.data @ query.T).flatten()
+    # print(query_products.shape)
+    _, idxs = torch.topk(query_products, k=n, dim=0)
     return idxs
 
-  def retrieve(self, query, n=10):
-    if not self.lookup:
-      raise Exception("No retrieval dict")
-    query = F.normalize(query, dim=0, p=2.0).to(self.device).unsqueeze(0)
-    # (n x 6144) * (6144 x 1) = n x 1
-    query_products = (self.data @ query.T).flatten()
+#   def retrieve(self, query, n=10):
+#     if not self.lookup:
+#       raise Exception("No retrieval dict")
+#     query = F.normalize(query, dim=0, p=2.0).to(self.device).unsqueeze(0)
+#     # (n x 6144) * (6144 x 1) = n x 1
+#     query_products = (self.data @ query.T).flatten()
 
-    _, idxs = torch.topk(query_products, k=n)
-    out = []
-    for idx in idxs:
-      nonzero = self.normalized_to_nonzero(self.data[idx])
-      out.append(self.lookup.get(nonzero, None))
-    return out
+#     _, idxs = torch.topk(query_products, k=n)
+#     out = []
+#     for idx in idxs:
+#       nonzero = self.normalized_to_nonzero(self.data[idx])
+#       out.append(self.lookup.get(nonzero, None))
+#     return out
 
   def dot_prod_rank(self, data, queries, truths, thresh, query_idx_in_rankingset):
     '''
