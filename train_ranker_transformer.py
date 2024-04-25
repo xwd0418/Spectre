@@ -149,8 +149,8 @@ def seed_everything(seed):
     random.seed(seed)
     # torch.use_deterministic_algorithms(True)
     
-def main():
-     
+def main(optuna_params=None):
+    torch.set_float32_matmul_precision('medium')
 
     def str2bool(v):    
         # specifically used for arg-paser with boolean values
@@ -190,11 +190,11 @@ def main():
     parser.add_argument("--FP_choice", type=str, default="R2-6144FP", help="use which fingerprint as ground truth, default: r2-6144fp") 
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
-    parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
-    parser.add_argument("--disable_hsqc_intensity", action='store_true', help="hsqc peaks tensor will be +/-1")    
+    # parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
+    # parser.add_argument("--disable_hsqc_intensity", action='store_true', help="hsqc peaks tensor will be +/-1")    
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
-    
+    parser.add_argument("--use_peak_values",  type=lambda x:bool(str2bool(x)), default=False, help="use peak values in addition to peak signs")
     parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use detailed 1D NMR data")
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
@@ -223,10 +223,11 @@ def main():
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    curr_exp_folder_name = "explore_scaling"
-    out_path       =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    curr_exp_folder_name = "all_2d1d_datasets"
+    out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
+    os.makedirs(out_path, exist_ok=True)
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
     if args["name_type"] == 0: # full hyperparameter string
@@ -303,6 +304,7 @@ def main():
             model.change_ranker_for_testing()
             my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
             test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
+            test_result['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
             # save test result as pickle
             with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
                 pickle.dump(test_result, f)
@@ -313,11 +315,12 @@ def main():
         finally: #Finally move all content from out_path to out_path_final
             my_logger.info("[Main] Done!")
             my_logger.info(f"[Main] test result: {test_result}")
-            # os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
+            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
 
+    return test_result['test/mean_rank_1']
         
 
 
 if __name__ == '__main__':
-    torch.set_float32_matmul_precision('medium')
+    
     main()

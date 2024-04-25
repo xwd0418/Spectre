@@ -67,11 +67,9 @@ class FolderDataset(Dataset):
         # Load HSQC as sequence
         elif "HSQC" in self.input_src:
             hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
-            if self.parser_args['disable_hsqc_peaks']:
-                hsqc[:,2]=0
-            if self.parser_args['disable_hsqc_intensity']:
-                hsqc[:,2]=torch.sign(hsqc[:,2])
-            if self.parser_args['normalize_hsqc']:
+            
+        
+            if self.parser_args['use_peak_values']:
                 hsqc = normalize_hsqc(hsqc)
             if self.parser_args['enable_hsqc_delimeter_only_2d']:
                 assert (self.input_src == ["HSQC"])
@@ -189,18 +187,25 @@ def get_solvent(solvent_name):
 # used as collate_fn in the dataloader
 def pad(batch):
     items = tuple(zip(*batch))
-    if len(items) == 2:
+    if len(items) == 2: #inputs, mfp,
         fp = items[-1]
-        inputs = items[:-1]
-        inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
-        combined = (*inputs_2, torch.stack(fp))
-    if len(items) == 3:
+        inputs = items[0]
+        inputs_2 = pad_sequence([v for v in inputs], batch_first=True) 
+        # print(fp)
+        if type(fp[0][0]) is str:
+            # print("i am tuple")
+            # print(fp)
+            combined = (inputs_2, fp) # actually, here fp is (smiles, name), used during prediction stage
+        else:
+            combined = (inputs_2, torch.stack(fp))
+    if len(items) == 3: #inputs, mfp, input_type(optional input)
         input_type = items[-1]
         fp = items[-2]
-        inputs = items[:-2]
-        inputs_2 = [pad_sequence([v for v in input], batch_first=True) for input in inputs]
-        combined = (*inputs_2, torch.stack(fp), torch.tensor(input_type))
+        inputs = items[0]
+        inputs_2 = pad_sequence([v for v in inputs], batch_first=True) 
+        combined = (inputs_2, torch.stack(fp), torch.tensor(input_type))
     return combined
+    
 
 def normalize_hsqc(hsqc, style="minmax"):
     """
@@ -276,11 +281,9 @@ class FolderDataModule(pl.LightningDataModule):
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def val_dataloader(self):
-        # 13738
         return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, 
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def test_dataloader(self):
-        # 13630
         return DataLoader(self.test, batch_size=self.batch_size, collate_fn=self.collate_fn, 
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
