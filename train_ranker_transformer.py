@@ -84,7 +84,8 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
-    kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
+    rankingset_dir = '/workspace/ranking_sets_cleaned_by_inchi' if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_2d1d_stacked' 
+    kwargs["ranking_set_path"] = f"{rankingset_dir}/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
    
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
@@ -94,7 +95,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         if args['optional_inputs']:
             model_class = OptionalInputRankedTransformer
-            kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"
+            kwargs["ranking_set_path"] = f"{rankingset_dir}/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"
    
         else:
             model_class = HsqcRankedTransformer
@@ -205,6 +206,7 @@ def main(optuna_params=None):
     
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
+    parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
     # parser.add_argument("--drop_2d_rate",  type=float, default=0.6, help="rate of removing 2D input")
     # parser.add_argument("--drop_1d_rate",  type=float, default=0.3, help="rate of removing 1D input")
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
@@ -280,6 +282,7 @@ def main(optuna_params=None):
         trainer.validate(model, data_module)
     elif args['test']:
         my_logger.info("[Main] Just performing test step")
+        raise Exception("should use test_on_all_info_subset.ipynb")
         model.change_ranker_for_testing(test_ranking_set_path = "/workspace/ranking_sets_cleaned_by_inchi/SMILES_R0_to_R4_reduced_FP_ranking_sets_only_all_info_molecules/test/rankingset.pt")
         # model.change_ranker_for_testing()
         test_result = trainer.test(model, data_module,ckpt_path=args["checkpoint_path"])
@@ -304,7 +307,7 @@ def main(optuna_params=None):
             model.change_ranker_for_testing()
             my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
             test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
-            test_result['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
+            test_result[0]['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
             # save test result as pickle
             with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
                 pickle.dump(test_result, f)
@@ -317,7 +320,7 @@ def main(optuna_params=None):
             my_logger.info(f"[Main] test result: {test_result}")
             os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
 
-    return test_result['test/mean_rank_1']
+    return test_result[0]['test/mean_rank_1']
         
 
 

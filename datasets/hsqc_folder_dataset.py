@@ -35,10 +35,15 @@ class FolderDataset(Dataset):
         for src in input_src:
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
         if parser_args['use_MW']:
-            self.mass_spec = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
-
+            self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
         
+        if "oneD_NMR" in self.input_src: # load 1D dataset as well 
+            self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
+            if parser_args['combine_oneD_only_dataset']:
+                self.mol_weight_1d = pickle.load(open(os.path.join(self.dir_1d, "MW/index.pkl"), 'rb'))
+            self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR/"))
+            
         # path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
         # self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
         
@@ -52,86 +57,120 @@ class FolderDataset(Dataset):
         
     def __len__(self):
         # return 100
-        return len(self.files)
+        length = len(self.files)
+        if self.parser_args['combine_oneD_only_dataset']:
+            length += len(self.files_1d)
+        return length
+        
 
-    def __getitem__(self, i):
-        def file_exist(src, filename):
-            return os.path.exists(os.path.join(self.dir, src, filename))
+
+    def __getitem__(self, idx):
         
-        # Load HSQC as 1-channel image 
-        if "HSQC_images_1channel" in self.input_src:
-            inputs = torch.load(f"{self.dir}/HSQC_images_1channel/{self.files[i]}")
-        elif "HSQC_images_2channel" in self.input_src:
-            inputs = torch.load(f"{self.dir}/HSQC_images_2channel/{self.files[i]}")
-        
-        # Load HSQC as sequence
-        elif "HSQC" in self.input_src:
-            hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
-            
-        
-            if self.parser_args['use_peak_values']:
-                hsqc = normalize_hsqc(hsqc)
-            if self.parser_args['enable_hsqc_delimeter_only_2d']:
-                assert (self.input_src == ["HSQC"])
-                hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
-            inputs = hsqc
-        
-        if "detailed_oneD_NMR" in self.input_src:
-            c_tensor, h_tensor, solvent = torch.load(f"{self.dir}/detailed_oneD_NMR/{self.files[i]}") if file_exist("detailed_oneD_NMR", self.files[i]) \
-                else (torch.tensor([]) , torch.tensor([]), "No_1D_NMR") # empty tensor, will be skipped duing v-stack
-    
-            c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-            c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (1, 1), "constant", 0)
-            inputs = torch.vstack([
-                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                ])    
-            if not self.parser_args['disable_solvent']: # add solvent info
-                inputs = torch.vstack([inputs, get_delimeter("solvent_start"), get_solvent(solvent), get_delimeter("solvent_end")])
-        
-        elif "oneD_NMR" in self.input_src:
-            if file_exist("oneD_NMR", self.files[i]):
-                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
-                # randomly drop 1D and 2D NMRs if needed
-                if self.parser_args['optional_inputs']:
-                    # drop 2D:
-                    if random.random() <= 1/2: 
-                        hsqc =  torch.empty(0,3)
-                    if len(c_tensor)>0 and len(h_tensor)>0:
-                        # it is fine to drop one of the oneD NMRs
-                        random_num_for_dropping =  random.random()
-                        
-                        if random_num_for_dropping <= 1/3:
-                            c_tensor = torch.tensor([])
-                        elif random_num_for_dropping <= 2/3:
-                            h_tensor = torch.tensor([])
-                        # else: keep both
-                            
-                  
-                    assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
-                        
-            else:
-                c_tensor, h_tensor = (torch.tensor([]) , torch.tensor([])) 
-                # then we should not drop 2D info anyawy
-                
+        if idx >= len(self.files): # load 1D dataset
+            i = idx - len(self.files)
+            # hsqc is empty tensor
+            hsqc = torch.empty(0,3)
+            c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
+            if self.parser_args['optional_inputs'] and len(c_tensor) > 0 and len(h_tensor) > 0:
+                random_num = random.random()
+                if random_num <= 1/3:
+                    c_tensor = torch.tensor([]) 
+                elif random_num <= 2/3:
+                    h_tensor = torch.tensor([])
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
+
+            
             inputs = torch.vstack([
-                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                ])    
+                    get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
+                    get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
+                    get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
+                    ])    
+            
+            
+            
+        else :
+            ### BEGINNING 2D dataset case
+            i = idx
+            def file_exist(src, filename):
+                return os.path.exists(os.path.join(self.dir, src, filename))
+            
+            # Load HSQC as 1-channel image 
+            if "HSQC_images_1channel" in self.input_src:
+                inputs = torch.load(f"{self.dir}/HSQC_images_1channel/{self.files[i]}")
+            elif "HSQC_images_2channel" in self.input_src:
+                inputs = torch.load(f"{self.dir}/HSQC_images_2channel/{self.files[i]}")
+            
+            # Load HSQC as sequence
+            elif "HSQC" in self.input_src:
+                hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
+                
+            
+                if self.parser_args['use_peak_values']:
+                    hsqc = normalize_hsqc(hsqc)
+                if self.parser_args['enable_hsqc_delimeter_only_2d']:
+                    assert (self.input_src == ["HSQC"])
+                    hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
+                inputs = hsqc
+            
+            if "oneD_NMR" in self.input_src:
+                if file_exist("oneD_NMR", self.files[i]):
+                    c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
+                    # randomly drop 1D and 2D NMRs if needed
+                    if self.parser_args['optional_inputs']:
+                        # drop 2D:
+                        if random.random() <= 1/2: 
+                            hsqc =  torch.empty(0,3)
+                        if len(c_tensor)>0 and len(h_tensor)>0:
+                            # it is fine to drop one of the oneD NMRs
+                            random_num_for_dropping =  random.random()
+                            
+                            if random_num_for_dropping <= 1/3:
+                                c_tensor = torch.tensor([])
+                            elif random_num_for_dropping <= 2/3:
+                                h_tensor = torch.tensor([])
+                            # else: keep both
+                                
+                    
+                        assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
+                            
+                else:
+                    c_tensor, h_tensor = (torch.tensor([]) , torch.tensor([])) 
+                    # then we should not drop 2D info anyawy
+                    
+                c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
+                c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
+                inputs = torch.vstack([
+                    get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
+                    get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
+                    get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
+                    ])    
+                
+            ### ENDING 2D dataset case
+            
+            
+        # loading MW and MFP in different datasets 
+        if idx >= len(self.files): # load 1D dataset    
+            mol_weight_dict = self.mol_weight_1d
+            dataset_files = self.files_1d
+            dataset_dir = self.dir_1d
+        else:
+            mol_weight_dict = self.mol_weight_2d
+            dataset_files = self.files
+            dataset_dir = self.dir
             
         if self.parser_args['use_MW']:
-            mass_spec = self.mass_spec[int(self.files[i].split(".")[0])]
-            mass_spec = torch.tensor([mass_spec,0,0]).float()
-            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mass_spec, get_delimeter("ms_end")])
-               
-        mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}").float()  
+            mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
+            mol_weight = torch.tensor([mol_weight,0,0]).float()
+            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
+            
+        mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
         if self.parser_args['loss_func'] == "CE":
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
+        
+            
+            
         combined = (inputs, mfp)
         
         if self.parser_args['separate_classifier']:
@@ -191,7 +230,7 @@ def pad(batch):
         fp = items[-1]
         inputs = items[0]
         inputs_2 = pad_sequence([v for v in inputs], batch_first=True) 
-        # print(fp)
+        # print(fp)h
         if type(fp[0][0]) is str:
             # print("i am tuple")
             # print(fp)

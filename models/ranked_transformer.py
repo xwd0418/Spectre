@@ -108,7 +108,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         if ranking_set_path:
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
-            assert (os.path.exists(ranking_set_path))
+            assert os.path.exists(ranking_set_path), f"{ranking_set_path} does not exist"
             self.rank_by_soft_output = kwargs['rank_by_soft_output']
             self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs, CE_num_class=self.num_class)
 

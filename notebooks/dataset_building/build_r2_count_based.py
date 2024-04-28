@@ -20,20 +20,25 @@ def generate_FP(smile_str, radius):
     fp_out[list(fp_dict.keys())] = torch.tensor( list(map(lambda x:float(x), fp_dict.values())))
     return fp_out
 
+
+
+dataset_to_add_FP = "OneD_Only_Dataset"
+sub_dir_of_all_molecules = "oneD_NMR" # "HYUN_FP"
+
+
 for radius in range(2,3):
     for split in ["test", "train", "val"]:
-        os.makedirs(f'/workspace/SMILES_dataset/{split}/R{radius}-6144-count-based-FP/', exist_ok=True)
+        os.makedirs(f'/workspace/{dataset_to_add_FP}/{split}/R{radius}-6144-count-based-FP/', exist_ok=True)
         
-        file_names = os.listdir( f"/workspace/SMILES_dataset/{split}/HYUN_FP/")
-        path_dir = f"/workspace/SMILES_dataset/{split}/"
+        file_names = os.listdir( f"/workspace/{dataset_to_add_FP}/{split}/{sub_dir_of_all_molecules}/")
+        path_dir = f"/workspace/{dataset_to_add_FP}/{split}/"
         smiles_dict = pickle.load(open(f"{path_dir}/SMILES/index.pkl", "rb"))
         
-    # %%    
         for f in tqdm.tqdm(file_names):
             idx = int(f.split(".")[0])
             smile = smiles_dict[idx]
             fp = generate_FP(smile, radius=radius)
-            torch.save(fp, f'/workspace/SMILES_dataset/{split}/R{radius}-6144-count-based-FP/{f}')
+            torch.save(fp, f'/workspace/{dataset_to_add_FP}/{split}/R{radius}-6144-count-based-FP/{f}')
         print(f"R{radius} with {split} done!")        
             
 
