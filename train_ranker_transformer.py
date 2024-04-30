@@ -84,7 +84,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
-    rankingset_dir = '/workspace/ranking_sets_cleaned_by_inchi' if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_2d1d_stacked' 
+    rankingset_dir = '/workspace/ranking_sets_2d1d_stacked'  if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_cleaned_by_inchi'
     kwargs["ranking_set_path"] = f"{rankingset_dir}/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
    
     for v in EXCLUDE_FROM_MODEL_ARGS:
@@ -95,7 +95,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         if args['optional_inputs']:
             model_class = OptionalInputRankedTransformer
-            kwargs["ranking_set_path"] = f"{rankingset_dir}/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"
+            kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"
    
         else:
             model_class = HsqcRankedTransformer
@@ -207,8 +207,7 @@ def main(optuna_params=None):
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
     parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
-    # parser.add_argument("--drop_2d_rate",  type=float, default=0.6, help="rate of removing 2D input")
-    # parser.add_argument("--drop_1d_rate",  type=float, default=0.3, help="rate of removing 1D input")
+    
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
     parser.add_argument("--random_seed", type=int, default=42)
     
@@ -264,7 +263,7 @@ def main(optuna_params=None):
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
     if args['optional_inputs']:
         my_logger.info("[Main] Using Optional Input")
-        metric = "val_mean_rank_1_all_inputs" # essientially the same as mean_rank_1, just naming purposes
+        metric = "val_mean_rank_1/all_nmr_combination_avg" # essientially the same as mean_rank_1, just naming purposes
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     
     checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
@@ -317,10 +316,13 @@ def main(optuna_params=None):
             raise(e)
         finally: #Finally move all content from out_path to out_path_final
             my_logger.info("[Main] Done!")
-            my_logger.info(f"[Main] test result: {test_result}")
+            my_logger.info("[Main] test result: \n")
+            for key, value in test_result[0].items():
+                my_logger.info(f"{key}: {value}")
             os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
 
-    return test_result[0]['test/mean_rank_1']
+    # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
+    # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
         
 
 

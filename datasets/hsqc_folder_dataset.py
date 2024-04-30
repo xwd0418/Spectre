@@ -72,10 +72,12 @@ class FolderDataset(Dataset):
             hsqc = torch.empty(0,3)
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
             if self.parser_args['optional_inputs'] and len(c_tensor) > 0 and len(h_tensor) > 0:
+                if not self.parser_args['combine_oneD_only_dataset'] :
+                    raise NotImplementedError("optional_inputs is only supported when combine_oneD_only_dataset is True")
                 random_num = random.random()
-                if random_num <= 1/3:
+                if random_num <= 0.385: # drop C rate 
                     c_tensor = torch.tensor([]) 
-                elif random_num <= 2/3:
+                elif random_num <= 0.385+0.229: # drop H rate
                     h_tensor = torch.tensor([])
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
@@ -125,9 +127,9 @@ class FolderDataset(Dataset):
                             # it is fine to drop one of the oneD NMRs
                             random_num_for_dropping =  random.random()
                             
-                            if random_num_for_dropping <= 1/3:
+                            if random_num_for_dropping <= 0.362:# drop C rate
                                 c_tensor = torch.tensor([])
-                            elif random_num_for_dropping <= 2/3:
+                            elif random_num_for_dropping <= 0.362+0.275: # drop H rate
                                 h_tensor = torch.tensor([])
                             # else: keep both
                                 
