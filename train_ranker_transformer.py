@@ -15,6 +15,7 @@ from models.ranked_resnet import HsqcRankedResNet
 from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 # from models.ranked_double_transformer import DoubleTransformer
 from datasets.hsqc_folder_dataset import FolderDataModule
+from datasets.oneD_dataset import OneDDataModule
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
 
@@ -53,7 +54,10 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
 
     if args['optional_inputs']:
         return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
-    if model_type == "double_transformer":
+    if args['only_oneD_NMR']:
+        # oned_dir = "/workspace/OneD_Only_Dataset"
+        return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
+    if model_type == "double_transformer": # wangdong: not using it
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
@@ -207,12 +211,18 @@ def main(optuna_params=None):
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
     parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
-    
+    parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR both C and H")
+    parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
+    parser.add_argument("--only_H_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD H_NMR. Need to use together with only_oneD_NMR")
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
     parser.add_argument("--random_seed", type=int, default=42)
     
     
     args = vars(parser.parse_known_args()[0])
+    if args['only_C_NMR'] or args['only_H_NMR']:
+        assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
+    if args['only_oneD_NMR']:
+        assert args['combine_oneD_only_dataset'], "oneD_NMR live in both datasets"
     
     seed_everything(seed=args["random_seed"])   
     
@@ -225,7 +235,8 @@ def main(optuna_params=None):
 
     # Tensorboard setup
     curr_exp_folder_name = "all_2d1d_datasets"
-    out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
+    # out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
+    out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
     os.makedirs(out_path, exist_ok=True)
