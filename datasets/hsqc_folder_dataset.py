@@ -38,10 +38,10 @@ class FolderDataset(Dataset):
             self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
         
-        if "oneD_NMR" in self.input_src: # load 1D dataset as well 
+        if parser_args['combine_oneD_only_dataset']: # load 1D dataset as well 
             self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
-            if parser_args['combine_oneD_only_dataset']:
-                self.mol_weight_1d = pickle.load(open(os.path.join(self.dir_1d, "MW/index.pkl"), 'rb'))
+            
+            self.mol_weight_1d = pickle.load(open(os.path.join(self.dir_1d, "MW/index.pkl"), 'rb'))
             self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR/"))
             
         # path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
@@ -110,11 +110,9 @@ class FolderDataset(Dataset):
             
                 if self.parser_args['use_peak_values']:
                     hsqc = normalize_hsqc(hsqc)
-                if self.parser_args['enable_hsqc_delimeter_only_2d']:
-                    assert (self.input_src == ["HSQC"])
-                    hsqc = torch.vstack([get_delimeter("HSQC_start"), hsqc, get_delimeter("HSQC_end")])   
                 inputs = hsqc
             
+            c_tensor, h_tensor = (torch.tensor([]) , torch.tensor([])) 
             if "oneD_NMR" in self.input_src:
                 if file_exist("oneD_NMR", self.files[i]):
                     c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
@@ -136,17 +134,15 @@ class FolderDataset(Dataset):
                     
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                             
-                else:
-                    c_tensor, h_tensor = (torch.tensor([]) , torch.tensor([])) 
-                    # then we should not drop 2D info anyawy
+                
                     
-                c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-                c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
-                inputs = torch.vstack([
-                    get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                    get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                    get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                    ])    
+            c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
+            c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
+            inputs = torch.vstack([
+                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
+                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
+                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
+                ])    
                 
             ### ENDING 2D dataset case
             
@@ -239,12 +235,16 @@ def pad(batch):
             combined = (inputs_2, fp) # actually, here fp is (smiles, name), used during prediction stage
         else:
             combined = (inputs_2, torch.stack(fp))
-    if len(items) == 3: #inputs, mfp, input_type(optional input)
+    elif len(items) == 3: #inputs, mfp, input_type(optional input)
         input_type = items[-1]
         fp = items[-2]
         inputs = items[0]
         inputs_2 = pad_sequence([v for v in inputs], batch_first=True) 
         combined = (inputs_2, torch.stack(fp), torch.tensor(input_type))
+    else:
+        print("batch size is ",len(batch))
+        print("len item is ",len(items))
+        raise NotImplementedError("not implemented yet")
     return combined
     
 

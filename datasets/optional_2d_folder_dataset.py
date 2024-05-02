@@ -49,6 +49,7 @@ class OneD_Dataset(Dataset):
             hsqc =  torch.empty(0,3)
         
         if len(hsqc)==len(c_tensor)==len(h_tensor)==0:
+            exit(f"Error: {self.files[i]} has no data")
             return None
         c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
         c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
