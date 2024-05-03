@@ -70,7 +70,7 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
         if kwargs['use_oneD_NMR_no_solvent']:
             return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
         else:
-            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "detailed_oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
     
     raise(f"No datamodule for model type {model_type}.")
 
@@ -200,7 +200,7 @@ def main(optuna_params=None):
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
     parser.add_argument("--use_peak_values",  type=lambda x:bool(str2bool(x)), default=False, help="use peak values in addition to peak signs")
-    parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use detailed 1D NMR data")
+    parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data")
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     
@@ -328,9 +328,11 @@ def main(optuna_params=None):
         finally: #Finally move all content from out_path to out_path_final
             my_logger.info("[Main] Done!")
             my_logger.info("[Main] test result: \n")
+            # my_logger.info(f"{test_result}")
             for key, value in test_result[0].items():
                 my_logger.info(f"{key}: {value}")
             os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
+            logging.shutdown()
 
     # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
     # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model

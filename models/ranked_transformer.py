@@ -22,6 +22,7 @@ from models.chemformer.molbart_utils import (
 )
 
 from utils.lr_scheduler import NoamOpt
+from utils.L1_decay import L1
 
 RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
@@ -60,6 +61,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         noam_factor = 1,
         pos_weight = None,
         weight_decay = 0.0,
+        L1_decay = 0.0,
         scheduler=None,  # None, "attention"
         warm_up_steps=0,
         freeze_weights=False,
@@ -181,6 +183,12 @@ class HsqcRankedTransformer(pl.LightningModule):
         )
         # === END Parameters ===
 
+        if L1_decay:
+            self.out_logger.info("[RankedTransformer] L1_decay is applied")
+            self.transformer_encoder = L1(self.transformer_encoder, L1_decay)
+            self.fc = L1(self.fc, L1_decay)
+            self.latent = L1(self.latent, L1_decay)
+            
         if freeze_weights:
             self.out_logger.info("[RankedTransformer] Freezing Weights")
             for parameter in self.parameters():
@@ -208,8 +216,8 @@ class HsqcRankedTransformer(pl.LightningModule):
                             help = "if none, then not to be used; if ratio,\
                                 then used the save tensor which is the ratio of num_0/num_1, \
                                 if float num ,then use this as the ratio")
-        parser.add_argument(
-            f"--{model_name}weight_decay", type=float, default=0.0)
+        parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
+        parser.add_argument(f"--{model_name}L1_decay", type=float, default=0.0)
         parser.add_argument(f"--{model_name}warm_up_steps", type=int, default=4000)
         parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
         parser.add_argument(f"--{model_name}coord_enc", type=str, default="sce")
@@ -376,9 +384,9 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     def configure_optimizers(self):
         if not self.scheduler:
-            return torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
+            return torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay = self.weight_decay)
         elif self.scheduler == "attention":
-            optim = torch.optim.Adam(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
+            optim = torch.optim.AdamW(self.parameters(), lr=self.lr, weight_decay = self.weight_decay, 
                                      betas=(0.9, 0.98), eps=1e-9)
             
             scheduler = NoamOpt(self.dim_model, self.warm_up_steps, optim, self.noam_factor)
@@ -425,399 +433,399 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
 
-MOONSHOT_ARGS = [
-    "pad_token_idx", "vocab_size", "d_model", "num_layers", "num_heads", "d_feedforward",
-    "activation", "max_seq_len", "dropout"
-]
-
-
-class Moonshot(HsqcRankedTransformer):
-    """
-      Only parameters, no sampling
-    """
-
-    def __init__(self,
-                 pad_token_idx,
-                 vocab_size,
-                 d_model,
-                 num_layers,
-                 num_heads,
-                 d_feedforward,
-                 # lr,
-                 # weight_decay,
-                 activation,
-                 # num_steps,
-                 max_seq_len,
-                 # schedule,
-                 # warm_up_steps,
-                 tokeniser,
-                 dropout=0.1,
-                 *args,
-                 **kwargs):
-        super().__init__(save_params=False, *args, **kwargs)
-        moonshot_params = locals()
-        moonshot_args = {k: moonshot_params[k] for k in MOONSHOT_ARGS}
-        ranked_tnsfm_args = {k: kwargs[k]
-                             for k in RANKED_TNSFMER_ARGS if k in kwargs}
-        to_save = {**ranked_tnsfm_args, **moonshot_args}
-        print(to_save)
-        self.save_hyperparameters(to_save, logger=True)
-
-        # _AbsTransformerModel
-        self.pad_token_idx = pad_token_idx
-        self.vocab_size = vocab_size
-        self.d_model = d_model
-        self.num_layers = num_layers
-        self.num_heads = num_heads
-        self.d_feedforward = d_feedforward
-        self.activation = activation
-        self.dropout = nn.Dropout(dropout)
-        self.max_seq_len = max_seq_len
-        self.tokeniser = tokeniser
-
-        # BART stuff
-        self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
-        dec_norm = nn.LayerNorm(d_model)
-        dec_layer = PreNormDecoderLayer(
-            d_model, num_heads, d_feedforward, dropout, activation)
-        self.decoder = nn.TransformerDecoder(
-            dec_layer, num_layers, norm=dec_norm)
-        self.token_fc = nn.Linear(d_model, vocab_size)
-        self.loss_fn = nn.CrossEntropyLoss(
-            reduction="none", ignore_index=pad_token_idx)
-        self.log_softmax = nn.LogSoftmax(dim=2)
-        self.register_buffer("pos_emb", self._positional_embs())
-
-    # Ripped from chemformer
-    def _construct_input(self, token_ids):
-        """
-          Expects tokens in (seq_len, b_s) format
-
-        Returns:
-          (seq_len, b_s, d_model) embedding (with dropout applied)
-        """
-        seq_len, _ = tuple(token_ids.size())
-        token_embs = self.emb(token_ids)
-
-        # Scaling the embeddings like this is done in other transformer libraries
-        token_embs = token_embs * math.sqrt(self.d_model)
-
-        positional_embs = self.pos_emb[:seq_len,
-                                       :].unsqueeze(0).transpose(0, 1)
-        embs = token_embs + positional_embs
-        embs = self.dropout(embs)
-        return embs
-
-    # Ripped from chemformer
-    def _positional_embs(self):
-        """ Produces a tensor of positional embeddings for the model
-
-        Returns a tensor of shape (self.max_seq_len, self.d_model) filled with positional embeddings,
-        which are created from sine and cosine waves of varying wavelength
-        """
-
-        encs = torch.tensor(
-            [dim / self.d_model for dim in range(0, self.d_model, 2)])
-        encs = 10000 ** encs
-        encs = [(torch.sin(pos / encs), torch.cos(pos / encs))
-                for pos in range(self.max_seq_len)]
-        encs = [torch.stack(enc, dim=1).flatten()[:self.d_model]
-                for enc in encs]
-        encs = torch.stack(encs)
-        return encs
-
-    def sample(self, hsqc):
-        """
-          hsqc: (bs, seq_len)
-        """
-        bs, _, _ = hsqc.size()
-        pad_token_idx = 0
-        begin_token_idx = 2
-        end_token_idx = 3
-        with torch.no_grad():
-            # (bs, seq_len)
-            tokens = torch.ones((bs, self.max_seq_len), dtype=torch.int64).to(
-                self.device) * pad_token_idx
-            tokens[:, 0] = begin_token_idx
-            # (bs, seq_len)
-            pad_mask = torch.zeros((bs, self.max_seq_len),
-                                   dtype=torch.bool).to(self.device)
-
-            memory, encoder_mask = self.encode(hsqc)
-
-            for i in range(1, self.max_seq_len):
-                decoder_inputs = tokens[:, :i]
-                decoder_mask = pad_mask[:, :i]
-                # (seq_len, bs, vocab_size) for token_output
-                model_output = self.decode(
-                    memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
-                best_ids = torch.argmax(
-                    model_output[[-1], :, :], dim=2).squeeze(0).long()  # (bs)
-
-                tokens[:, i] = best_ids
-                pad_mask[:, i] = (best_ids == end_token_idx) | (
-                    best_ids == pad_token_idx)
-
-                if torch.all(pad_mask):
-                    break
-            # (bs, seq_len)
-            my_tokens = tokens.transpose(0, 1).tolist()
-            str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
-            mol_strs = self.tokeniser.detokenise(str_tokens)
-            return mol_strs
-
-    def sample_rdm(self, hsqc, temperature=1.0, gen_len=None):
-        """
-          hsqc: (bs, seq_len)
-        """
-        bs, _, _ = hsqc.size()
-        pad_token_idx = 0
-        begin_token_idx = 2
-        end_token_idx = 3
-
-        max_len = self.max_seq_len
-        if gen_len:
-            max_len = gen_len
-
-        with torch.no_grad():
-            # (bs, seq_len)
-            tokens = torch.ones((bs, gen_len), dtype=torch.int64).to(
-                self.device) * pad_token_idx
-            tokens[:, 0] = begin_token_idx
-            # (bs, seq_len)
-            pad_mask = torch.zeros((bs, gen_len),
-                                   dtype=torch.bool).to(self.device)
-            print(f"Max seq len: {gen_len}")
-            memory, encoder_mask = self.encode(hsqc)
-
-            for i in tqdm.tqdm(range(1, gen_len)):
-                decoder_inputs = tokens[:, :i]
-                decoder_mask = pad_mask[:, :i]
-                # (seq_len, bs, vocab_size) for token_output
-                model_output = self.decode(
-                    memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
-                # (seq_len, bs, vocab_size)
-                probability_output = F.softmax(
-                    model_output / temperature, dim=2)
-                sampled_ids = torch.multinomial(
-                    probability_output[-1, :, :], num_samples=1).flatten()
-                tokens[:, i] = sampled_ids
-                pad_mask[:, i] = (sampled_ids == end_token_idx) | (
-                    sampled_ids == pad_token_idx)
-
-                if torch.all(pad_mask):
-                    break
-
-            # (bs, seq_len)
-            my_tokens = tokens.tolist()
-            str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
-            mol_strs = self.tokeniser.detokenise(str_tokens)
-            return {
-                "mol_strs": mol_strs,
-                "token_ids": my_tokens,
-                "tokens": str_tokens,
-            }
-
-    def decode(self, memory, encoder_mask, decoder_inputs, decoder_mask):
-        """
-
-        Args:
-            memory: (b_s, seq_len, dim_model)
-            encoder_padding_mask : (b_s, seq_len)
-            decoder_inputs: (b_s, seq_len)
-            decoder_mask: (b_s, seq_len)
-
-        Returns:
-            {
-              model_output: (s_l, b_s, d_model)
-              token_output: (s_l, b_s, vocab_size)
-            }
-        """
-        _, s_l = decoder_mask.size()
-
-        # (s_l, s_l)
-        tgt_mask = generate_square_subsequent_mask(s_l, device=self.device)
-        # (b_s, s_l, dim)
-        decoder_embs = self._construct_input(decoder_inputs)
-
-        # embs, memory need seq_len, batch_size convention
-        # (s_l, b_s, dim), (s_l, b_s, dim)
-        decoder_embs, memory = decoder_embs.transpose(
-            0, 1), memory.transpose(0, 1)
-
-        model_output = self.decoder(
-            decoder_embs,
-            memory,
-            tgt_mask=tgt_mask,  # prevent cheating mask
-            tgt_key_padding_mask=decoder_mask,  # padding mask
-            memory_key_padding_mask=encoder_mask  # padding mask
-        )
-
-        token_output = self.token_fc(model_output)
-
-        return {
-            "model_output": model_output,
-            "token_output": token_output,
-        }
-
-    def forward(self, batch):
-        # I use (batch_size, seq_len convention)
-        # see datasets/dataset_utils.py:tokenise_and_mask
-        hsqc, collated_smiles = batch
-
-        # encoder
-        # (b_s, seq_len, dim_model), (b_s, seq_len)
-        memory, encoder_mask = self.encode(hsqc)
-
-        # decode
-        decoder_inputs = collated_smiles["decoder_inputs"]
-        decoder_mask = collated_smiles["decoder_mask"]
-
-        return self.decode(memory, encoder_mask, decoder_inputs, decoder_mask)
-
-    def _calc_loss(self, batch_input, model_output):
-        """ Calculate the loss for the model
-
-        Args:
-            batch_input (dict): Input given to model,
-            model_output (dict): Output from model
-
-        Returns:
-            loss (singleton tensor),
-        """
-
-        target = batch_input["target"]  # (b_s, s_l)
-        target_mask = batch_input["target_mask"]  # (b_s, s_l)
-        token_output = model_output["token_output"]  # (s_l, b_s, vocab_size)
-
-        assert (target.size()[0] == token_output.size()[1])
-
-        batch_size, seq_len = tuple(target.size())
-
-        token_pred = token_output.reshape((seq_len * batch_size, -1)).float()
-        loss = self.loss_fn(
-            token_pred, target.reshape(-1)
-        ).reshape((seq_len, batch_size))
-
-        inv_target_mask = ~(target_mask > 0)
-        num_tokens = inv_target_mask.sum()
-        loss = loss.sum() / num_tokens
-
-        return loss
-
-    def _calc_perplexity(self, batch_input, model_output):
-        target_ids = batch_input["target"]  # bs, seq_len
-        target_mask = batch_input["target_mask"]  # bs, seq_len
-        vocab_dist_output = model_output["token_output"]  # seq_len, bs
-
-        inv_target_mask = ~(target_mask > 0)
-
-        # choose probabilities of token indices
-        # logits = log_probabilities
-        log_probs = vocab_dist_output.transpose(
-            0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)
-        log_probs = log_probs * inv_target_mask
-        log_probs = log_probs.sum(dim=1)
-
-        seq_lengths = inv_target_mask.sum(dim=1)
-        exp = - (1 / seq_lengths)
-        perp = torch.pow(log_probs.exp(), exp)
-        return perp.mean()
-
-    def _calc_my_perplexity(self, batch_input, model_output):
-        target_ids = batch_input["target"]  # bs, seq_len
-        target_mask = batch_input["target_mask"]  # bs, seq_len
-        # seq_len, bs, vocab_size
-        vocab_dist_output = model_output["token_output"]
-
-        inv_target_mask = ~(target_mask > 0)  # bs, seq_len
-
-        # seq_len, bs, vocab_size
-        l_probs = F.log_softmax(vocab_dist_output, dim=2)
-        target_l_probs = l_probs.transpose(
-            0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)  # bs, seq_len
-        target_l_probs = target_l_probs * inv_target_mask
-        target_l_probs = target_l_probs.sum(dim=1)
-
-        seq_lengths = inv_target_mask.sum(dim=1)
-        neg_normalized_l_probs = -target_l_probs / seq_lengths
-        perplexity = torch.pow(2, neg_normalized_l_probs)
-
-        return perplexity.mean(), neg_normalized_l_probs.mean()
-
-    def _predicted_accuracy(self, batch_input, model_output):
-        target_ids = batch_input["target"]  # bs, seq_len
-        target_mask = batch_input["target_mask"]  # bs, seq_len
-        inv_mask = ~target_mask
-        # seq_len, bs, vocab_size
-        predicted_logits = model_output["token_output"]
-
-        predicted_ids = torch.argmax(
-            predicted_logits, dim=2).transpose(0, 1)  # bs, seq_len
-
-        masked_correct = (predicted_ids == target_ids) & inv_mask
-        return torch.sum(masked_correct) / torch.sum(inv_mask)
-
-    def _full_accuracy(self, batch_input, model_output):
-        target_ids = batch_input["target"]  # bs, seq_len
-        target_mask = batch_input["target_mask"]  # bs, seq_len
-        inv_mask = ~target_mask
-        # seq_len, bs, vocab_size
-        predicted_logits = model_output["token_output"]
-
-        predicted_ids = torch.argmax(
-            predicted_logits, dim=2).transpose(0, 1)  # bs, seq_len
-
-        masked_correct = (predicted_ids == target_ids) & inv_mask
-        seq_sum_eq_mask_sum = torch.sum(
-            masked_correct, dim=1) == torch.sum(inv_mask, dim=1)
-        return seq_sum_eq_mask_sum.float().mean()
-
-    def training_step(self, batch, batch_idx):
-        hsqc, collated_smiles = batch
-
-        out = self.forward(batch)
-        loss = self._calc_loss(collated_smiles, out)
-        with torch.no_grad():
-            perplexity = self._calc_perplexity(collated_smiles, out)
-            my_perplexity, my_nnll = self._calc_my_perplexity(
-                collated_smiles, out)
-            accuracy = self._predicted_accuracy(collated_smiles, out)
-            full_accuracy = self._full_accuracy(collated_smiles, out)
-        self.log("tr/loss", loss)
-        metrics = {
-            "loss": loss.detach().item(),
-            "perplexity": perplexity.detach().item(),
-            "my_perplexity": my_perplexity.detach().item(),
-            "my_nnll": my_nnll.detach().item(),
-            "accuracy": accuracy.detach().item(),
-            "full_accuracy": full_accuracy.detach().item()
-        }
-        self.training_step_outputs.append(metrics)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-        _, collated_smiles = batch
-
-        out = self.forward(batch)
-        loss = self._calc_loss(collated_smiles, out)
-        perplexity = self._calc_perplexity(collated_smiles, out)
-        my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
-        accuracy = self._predicted_accuracy(collated_smiles, out)
-        full_accuracy = self._full_accuracy(collated_smiles, out)
-        metrics = {
-            "loss": loss.detach().item(),
-            "perplexity": perplexity.detach().item(),
-            "my_perplexity": my_perplexity.detach().item(),
-            "my_nnll": my_nnll.detach().item(),
-            "accuracy": accuracy.detach().item(),
-            "full_accuracy": full_accuracy.detach().item()
-        }
-        self.validation_step_outputs.append(metrics)
-        return metrics
-
-    @staticmethod
-    def add_model_specific_args(parent_parser, model_name=""):
-        HsqcRankedTransformer.add_model_specific_args(
-            parent_parser, model_name)
-        return parent_parser
+# MOONSHOT_ARGS = [
+#     "pad_token_idx", "vocab_size", "d_model", "num_layers", "num_heads", "d_feedforward",
+#     "activation", "max_seq_len", "dropout"
+# ]
+
+
+# class Moonshot(HsqcRankedTransformer):
+#     """
+#       Only parameters, no sampling
+#     """
+
+#     def __init__(self,
+#                  pad_token_idx,
+#                  vocab_size,
+#                  d_model,
+#                  num_layers,
+#                  num_heads,
+#                  d_feedforward,
+#                  # lr,
+#                  # weight_decay,
+#                  activation,
+#                  # num_steps,
+#                  max_seq_len,
+#                  # schedule,
+#                  # warm_up_steps,
+#                  tokeniser,
+#                  dropout=0.1,
+#                  *args,
+#                  **kwargs):
+#         super().__init__(save_params=False, *args, **kwargs)
+#         moonshot_params = locals()
+#         moonshot_args = {k: moonshot_params[k] for k in MOONSHOT_ARGS}
+#         ranked_tnsfm_args = {k: kwargs[k]
+#                              for k in RANKED_TNSFMER_ARGS if k in kwargs}
+#         to_save = {**ranked_tnsfm_args, **moonshot_args}
+#         print(to_save)
+#         self.save_hyperparameters(to_save, logger=True)
+
+#         # _AbsTransformerModel
+#         self.pad_token_idx = pad_token_idx
+#         self.vocab_size = vocab_size
+#         self.d_model = d_model
+#         self.num_layers = num_layers
+#         self.num_heads = num_heads
+#         self.d_feedforward = d_feedforward
+#         self.activation = activation
+#         self.dropout = nn.Dropout(dropout)
+#         self.max_seq_len = max_seq_len
+#         self.tokeniser = tokeniser
+
+#         # BART stuff
+#         self.emb = nn.Embedding(vocab_size, d_model, padding_idx=pad_token_idx)
+#         dec_norm = nn.LayerNorm(d_model)
+#         dec_layer = PreNormDecoderLayer(
+#             d_model, num_heads, d_feedforward, dropout, activation)
+#         self.decoder = nn.TransformerDecoder(
+#             dec_layer, num_layers, norm=dec_norm)
+#         self.token_fc = nn.Linear(d_model, vocab_size)
+#         self.loss_fn = nn.CrossEntropyLoss(
+#             reduction="none", ignore_index=pad_token_idx)
+#         self.log_softmax = nn.LogSoftmax(dim=2)
+#         self.register_buffer("pos_emb", self._positional_embs())
+
+#     # Ripped from chemformer
+#     def _construct_input(self, token_ids):
+#         """
+#           Expects tokens in (seq_len, b_s) format
+
+#         Returns:
+#           (seq_len, b_s, d_model) embedding (with dropout applied)
+#         """
+#         seq_len, _ = tuple(token_ids.size())
+#         token_embs = self.emb(token_ids)
+
+#         # Scaling the embeddings like this is done in other transformer libraries
+#         token_embs = token_embs * math.sqrt(self.d_model)
+
+#         positional_embs = self.pos_emb[:seq_len,
+#                                        :].unsqueeze(0).transpose(0, 1)
+#         embs = token_embs + positional_embs
+#         embs = self.dropout(embs)
+#         return embs
+
+#     # Ripped from chemformer
+#     def _positional_embs(self):
+#         """ Produces a tensor of positional embeddings for the model
+
+#         Returns a tensor of shape (self.max_seq_len, self.d_model) filled with positional embeddings,
+#         which are created from sine and cosine waves of varying wavelength
+#         """
+
+#         encs = torch.tensor(
+#             [dim / self.d_model for dim in range(0, self.d_model, 2)])
+#         encs = 10000 ** encs
+#         encs = [(torch.sin(pos / encs), torch.cos(pos / encs))
+#                 for pos in range(self.max_seq_len)]
+#         encs = [torch.stack(enc, dim=1).flatten()[:self.d_model]
+#                 for enc in encs]
+#         encs = torch.stack(encs)
+#         return encs
+
+#     def sample(self, hsqc):
+#         """
+#           hsqc: (bs, seq_len)
+#         """
+#         bs, _, _ = hsqc.size()
+#         pad_token_idx = 0
+#         begin_token_idx = 2
+#         end_token_idx = 3
+#         with torch.no_grad():
+#             # (bs, seq_len)
+#             tokens = torch.ones((bs, self.max_seq_len), dtype=torch.int64).to(
+#                 self.device) * pad_token_idx
+#             tokens[:, 0] = begin_token_idx
+#             # (bs, seq_len)
+#             pad_mask = torch.zeros((bs, self.max_seq_len),
+#                                    dtype=torch.bool).to(self.device)
+
+#             memory, encoder_mask = self.encode(hsqc)
+
+#             for i in range(1, self.max_seq_len):
+#                 decoder_inputs = tokens[:, :i]
+#                 decoder_mask = pad_mask[:, :i]
+#                 # (seq_len, bs, vocab_size) for token_output
+#                 model_output = self.decode(
+#                     memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
+#                 best_ids = torch.argmax(
+#                     model_output[[-1], :, :], dim=2).squeeze(0).long()  # (bs)
+
+#                 tokens[:, i] = best_ids
+#                 pad_mask[:, i] = (best_ids == end_token_idx) | (
+#                     best_ids == pad_token_idx)
+
+#                 if torch.all(pad_mask):
+#                     break
+#             # (bs, seq_len)
+#             my_tokens = tokens.transpose(0, 1).tolist()
+#             str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
+#             mol_strs = self.tokeniser.detokenise(str_tokens)
+#             return mol_strs
+
+#     def sample_rdm(self, hsqc, temperature=1.0, gen_len=None):
+#         """
+#           hsqc: (bs, seq_len)
+#         """
+#         bs, _, _ = hsqc.size()
+#         pad_token_idx = 0
+#         begin_token_idx = 2
+#         end_token_idx = 3
+
+#         max_len = self.max_seq_len
+#         if gen_len:
+#             max_len = gen_len
+
+#         with torch.no_grad():
+#             # (bs, seq_len)
+#             tokens = torch.ones((bs, gen_len), dtype=torch.int64).to(
+#                 self.device) * pad_token_idx
+#             tokens[:, 0] = begin_token_idx
+#             # (bs, seq_len)
+#             pad_mask = torch.zeros((bs, gen_len),
+#                                    dtype=torch.bool).to(self.device)
+#             print(f"Max seq len: {gen_len}")
+#             memory, encoder_mask = self.encode(hsqc)
+
+#             for i in tqdm.tqdm(range(1, gen_len)):
+#                 decoder_inputs = tokens[:, :i]
+#                 decoder_mask = pad_mask[:, :i]
+#                 # (seq_len, bs, vocab_size) for token_output
+#                 model_output = self.decode(
+#                     memory, encoder_mask, decoder_inputs, decoder_mask)["token_output"]
+#                 # (seq_len, bs, vocab_size)
+#                 probability_output = F.softmax(
+#                     model_output / temperature, dim=2)
+#                 sampled_ids = torch.multinomial(
+#                     probability_output[-1, :, :], num_samples=1).flatten()
+#                 tokens[:, i] = sampled_ids
+#                 pad_mask[:, i] = (sampled_ids == end_token_idx) | (
+#                     sampled_ids == pad_token_idx)
+
+#                 if torch.all(pad_mask):
+#                     break
+
+#             # (bs, seq_len)
+#             my_tokens = tokens.tolist()
+#             str_tokens = self.tokeniser.convert_ids_to_tokens(my_tokens)
+#             mol_strs = self.tokeniser.detokenise(str_tokens)
+#             return {
+#                 "mol_strs": mol_strs,
+#                 "token_ids": my_tokens,
+#                 "tokens": str_tokens,
+#             }
+
+#     def decode(self, memory, encoder_mask, decoder_inputs, decoder_mask):
+#         """
+
+#         Args:
+#             memory: (b_s, seq_len, dim_model)
+#             encoder_padding_mask : (b_s, seq_len)
+#             decoder_inputs: (b_s, seq_len)
+#             decoder_mask: (b_s, seq_len)
+
+#         Returns:
+#             {
+#               model_output: (s_l, b_s, d_model)
+#               token_output: (s_l, b_s, vocab_size)
+#             }
+#         """
+#         _, s_l = decoder_mask.size()
+
+#         # (s_l, s_l)
+#         tgt_mask = generate_square_subsequent_mask(s_l, device=self.device)
+#         # (b_s, s_l, dim)
+#         decoder_embs = self._construct_input(decoder_inputs)
+
+#         # embs, memory need seq_len, batch_size convention
+#         # (s_l, b_s, dim), (s_l, b_s, dim)
+#         decoder_embs, memory = decoder_embs.transpose(
+#             0, 1), memory.transpose(0, 1)
+
+#         model_output = self.decoder(
+#             decoder_embs,
+#             memory,
+#             tgt_mask=tgt_mask,  # prevent cheating mask
+#             tgt_key_padding_mask=decoder_mask,  # padding mask
+#             memory_key_padding_mask=encoder_mask  # padding mask
+#         )
+
+#         token_output = self.token_fc(model_output)
+
+#         return {
+#             "model_output": model_output,
+#             "token_output": token_output,
+#         }
+
+#     def forward(self, batch):
+#         # I use (batch_size, seq_len convention)
+#         # see datasets/dataset_utils.py:tokenise_and_mask
+#         hsqc, collated_smiles = batch
+
+#         # encoder
+#         # (b_s, seq_len, dim_model), (b_s, seq_len)
+#         memory, encoder_mask = self.encode(hsqc)
+
+#         # decode
+#         decoder_inputs = collated_smiles["decoder_inputs"]
+#         decoder_mask = collated_smiles["decoder_mask"]
+
+#         return self.decode(memory, encoder_mask, decoder_inputs, decoder_mask)
+
+#     def _calc_loss(self, batch_input, model_output):
+#         """ Calculate the loss for the model
+
+#         Args:
+#             batch_input (dict): Input given to model,
+#             model_output (dict): Output from model
+
+#         Returns:
+#             loss (singleton tensor),
+#         """
+
+#         target = batch_input["target"]  # (b_s, s_l)
+#         target_mask = batch_input["target_mask"]  # (b_s, s_l)
+#         token_output = model_output["token_output"]  # (s_l, b_s, vocab_size)
+
+#         assert (target.size()[0] == token_output.size()[1])
+
+#         batch_size, seq_len = tuple(target.size())
+
+#         token_pred = token_output.reshape((seq_len * batch_size, -1)).float()
+#         loss = self.loss_fn(
+#             token_pred, target.reshape(-1)
+#         ).reshape((seq_len, batch_size))
+
+#         inv_target_mask = ~(target_mask > 0)
+#         num_tokens = inv_target_mask.sum()
+#         loss = loss.sum() / num_tokens
+
+#         return loss
+
+#     def _calc_perplexity(self, batch_input, model_output):
+#         target_ids = batch_input["target"]  # bs, seq_len
+#         target_mask = batch_input["target_mask"]  # bs, seq_len
+#         vocab_dist_output = model_output["token_output"]  # seq_len, bs
+
+#         inv_target_mask = ~(target_mask > 0)
+
+#         # choose probabilities of token indices
+#         # logits = log_probabilities
+#         log_probs = vocab_dist_output.transpose(
+#             0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)
+#         log_probs = log_probs * inv_target_mask
+#         log_probs = log_probs.sum(dim=1)
+
+#         seq_lengths = inv_target_mask.sum(dim=1)
+#         exp = - (1 / seq_lengths)
+#         perp = torch.pow(log_probs.exp(), exp)
+#         return perp.mean()
+
+#     def _calc_my_perplexity(self, batch_input, model_output):
+#         target_ids = batch_input["target"]  # bs, seq_len
+#         target_mask = batch_input["target_mask"]  # bs, seq_len
+#         # seq_len, bs, vocab_size
+#         vocab_dist_output = model_output["token_output"]
+
+#         inv_target_mask = ~(target_mask > 0)  # bs, seq_len
+
+#         # seq_len, bs, vocab_size
+#         l_probs = F.log_softmax(vocab_dist_output, dim=2)
+#         target_l_probs = l_probs.transpose(
+#             0, 1).gather(2, target_ids.unsqueeze(2)).squeeze(2)  # bs, seq_len
+#         target_l_probs = target_l_probs * inv_target_mask
+#         target_l_probs = target_l_probs.sum(dim=1)
+
+#         seq_lengths = inv_target_mask.sum(dim=1)
+#         neg_normalized_l_probs = -target_l_probs / seq_lengths
+#         perplexity = torch.pow(2, neg_normalized_l_probs)
+
+#         return perplexity.mean(), neg_normalized_l_probs.mean()
+
+#     def _predicted_accuracy(self, batch_input, model_output):
+#         target_ids = batch_input["target"]  # bs, seq_len
+#         target_mask = batch_input["target_mask"]  # bs, seq_len
+#         inv_mask = ~target_mask
+#         # seq_len, bs, vocab_size
+#         predicted_logits = model_output["token_output"]
+
+#         predicted_ids = torch.argmax(
+#             predicted_logits, dim=2).transpose(0, 1)  # bs, seq_len
+
+#         masked_correct = (predicted_ids == target_ids) & inv_mask
+#         return torch.sum(masked_correct) / torch.sum(inv_mask)
+
+#     def _full_accuracy(self, batch_input, model_output):
+#         target_ids = batch_input["target"]  # bs, seq_len
+#         target_mask = batch_input["target_mask"]  # bs, seq_len
+#         inv_mask = ~target_mask
+#         # seq_len, bs, vocab_size
+#         predicted_logits = model_output["token_output"]
+
+#         predicted_ids = torch.argmax(
+#             predicted_logits, dim=2).transpose(0, 1)  # bs, seq_len
+
+#         masked_correct = (predicted_ids == target_ids) & inv_mask
+#         seq_sum_eq_mask_sum = torch.sum(
+#             masked_correct, dim=1) == torch.sum(inv_mask, dim=1)
+#         return seq_sum_eq_mask_sum.float().mean()
+
+#     def training_step(self, batch, batch_idx):
+#         hsqc, collated_smiles = batch
+
+#         out = self.forward(batch)
+#         loss = self._calc_loss(collated_smiles, out)
+#         with torch.no_grad():
+#             perplexity = self._calc_perplexity(collated_smiles, out)
+#             my_perplexity, my_nnll = self._calc_my_perplexity(
+#                 collated_smiles, out)
+#             accuracy = self._predicted_accuracy(collated_smiles, out)
+#             full_accuracy = self._full_accuracy(collated_smiles, out)
+#         self.log("tr/loss", loss)
+#         metrics = {
+#             "loss": loss.detach().item(),
+#             "perplexity": perplexity.detach().item(),
+#             "my_perplexity": my_perplexity.detach().item(),
+#             "my_nnll": my_nnll.detach().item(),
+#             "accuracy": accuracy.detach().item(),
+#             "full_accuracy": full_accuracy.detach().item()
+#         }
+#         self.training_step_outputs.append(metrics)
+#         return loss
+
+#     def validation_step(self, batch, batch_idx):
+#         _, collated_smiles = batch
+
+#         out = self.forward(batch)
+#         loss = self._calc_loss(collated_smiles, out)
+#         perplexity = self._calc_perplexity(collated_smiles, out)
+#         my_perplexity, my_nnll = self._calc_my_perplexity(collated_smiles, out)
+#         accuracy = self._predicted_accuracy(collated_smiles, out)
+#         full_accuracy = self._full_accuracy(collated_smiles, out)
+#         metrics = {
+#             "loss": loss.detach().item(),
+#             "perplexity": perplexity.detach().item(),
+#             "my_perplexity": my_perplexity.detach().item(),
+#             "my_nnll": my_nnll.detach().item(),
+#             "accuracy": accuracy.detach().item(),
+#             "full_accuracy": full_accuracy.detach().item()
+#         }
+#         self.validation_step_outputs.append(metrics)
+#         return metrics
+
+#     @staticmethod
+#     def add_model_specific_args(parent_parser, model_name=""):
+#         HsqcRankedTransformer.add_model_specific_args(
+#             parent_parser, model_name)
+#         return parent_parser
