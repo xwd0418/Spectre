@@ -56,7 +56,7 @@ class FolderDataset(Dataset):
         logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
         
     def __len__(self):
-        # return 100
+        # return 300
         length = len(self.files)
         if self.parser_args['combine_oneD_only_dataset']:
             length += len(self.files_1d)
