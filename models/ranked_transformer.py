@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
 import torch.distributed as dist
+from datasets.dataset_utils import specific_radius_mfp_loader
 
 from utils import ranker, constants
 from models import compute_metrics
@@ -107,11 +108,22 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.dim_model = dim_model
         
         # don't set ranking set if you just want to treat it as a module
-        if ranking_set_path:
+        self.FP_choice=FP_choice
+        self.rank_by_soft_output = kwargs['rank_by_soft_output']
+        if FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
+            if kwargs['combine_oneD_only_dataset']:
+                self.dataset_name = "both"
+            elif  kwargs['only_oneD_NMR']:
+                self.dataset_name = "1d"
+            else:
+                self.dataset_name = "2d"
+            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset(self.dataset_name, "val"),
+                                             batch_size=self.bs, CE_num_class=self.num_class)
+            
+        elif ranking_set_path:
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
             assert os.path.exists(ranking_set_path), f"{ranking_set_path} does not exist"
-            self.rank_by_soft_output = kwargs['rank_by_soft_output']
             self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs, CE_num_class=self.num_class)
 
         if save_params:
@@ -152,7 +164,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                 self.compute_metric_func = compute_metrics.cm_count_based_ce
             else:
                 raise Exception("loss_func should be either MSE or CE when using count-based FP")
-        else:
+        else: #  Bit based FP
             self.loss = nn.BCEWithLogitsLoss(pos_weight=self.bce_pos_weight)
             self.compute_metric_func = compute_metrics.cm
         
@@ -187,7 +199,6 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.out_logger.info("[RankedTransformer] L1_decay is applied")
             self.transformer_encoder = L1(self.transformer_encoder, L1_decay)
             self.fc = L1(self.fc, L1_decay)
-            self.latent = L1(self.latent, L1_decay)
             
         if freeze_weights:
             self.out_logger.info("[RankedTransformer] Freezing Weights")
@@ -410,6 +421,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         super().log(name, value, *args, **kwargs)
         
     def change_ranker_for_testing(self, test_ranking_set_path=None ):
+        if self.FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
+            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset(self.dataset_name, "test"),
+                                             batch_size=self.bs, CE_num_class=self.num_class)
+            return
         if test_ranking_set_path is None:
             test_ranking_set_path = self.ranking_set_path.replace("val", "test")
         self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs,  CE_num_class=self.num_class)

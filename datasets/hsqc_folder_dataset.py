@@ -5,6 +5,7 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
+from datasets.dataset_utils import specific_radius_mfp_loader
 
 
 class FolderDataset(Dataset):
@@ -29,7 +30,6 @@ class FolderDataset(Dataset):
         self.input_src = input_src
         self.parser_args = parser_args
 
-        print(self.dir)
         assert(os.path.exists(self.dir))
         assert(split in ["train", "val", "test"])
         for src in input_src:
@@ -37,15 +37,17 @@ class FolderDataset(Dataset):
         if parser_args['use_MW']:
             self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
         self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
-        
+        self.files.sort() # sorted because we need to find correct weight mappings 
         if parser_args['combine_oneD_only_dataset']: # load 1D dataset as well 
             self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
             
             self.mol_weight_1d = pickle.load(open(os.path.join(self.dir_1d, "MW/index.pkl"), 'rb'))
             self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR/"))
+            self.files_1d.sort()
             
         # path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
         # self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+        
         
         logger = logging.getLogger("lightning")
         if dist.is_initialized():
@@ -54,6 +56,8 @@ class FolderDataset(Dataset):
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
         logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
+        
+        
         
     def __len__(self):
         # return 300
@@ -67,6 +71,7 @@ class FolderDataset(Dataset):
     def __getitem__(self, idx):
         
         if idx >= len(self.files): # load 1D dataset
+            current_dataset = "1d"
             i = idx - len(self.files)
             # hsqc is empty tensor
             hsqc = torch.empty(0,3)
@@ -93,6 +98,7 @@ class FolderDataset(Dataset):
             
         else :
             ### BEGINNING 2D dataset case
+            current_dataset = "2d"
             i = idx
             def file_exist(src, filename):
                 return os.path.exists(os.path.join(self.dir, src, filename))
@@ -149,11 +155,13 @@ class FolderDataset(Dataset):
             
         # loading MW and MFP in different datasets 
         if idx >= len(self.files): # load 1D dataset    
-            mol_weight_dict = self.mol_weight_1d
+            if self.parser_args['use_MW']:
+                mol_weight_dict = self.mol_weight_1d
             dataset_files = self.files_1d
             dataset_dir = self.dir_1d
         else:
-            mol_weight_dict = self.mol_weight_2d
+            if self.parser_args['use_MW']:
+                mol_weight_dict = self.mol_weight_2d
             dataset_files = self.files
             dataset_dir = self.dir
             
@@ -162,7 +170,17 @@ class FolderDataset(Dataset):
             mol_weight = torch.tensor([mol_weight,0,0]).float()
             inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
             
-        mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
+        # remember build ranking set
+        if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
+            mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
+            # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
+            # print("current dataset is ", current_dataset)
+            # print("load path is ", f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}") 
+            # print("i is ", i, "split is ", self.split)
+            # assert (mfp==mfp_orig).all(), f"mfp should be the same\n mfp is " #{mfp.nonzero()}\n mfp_orig is {mfp_orig.nonzero()}"
+        else:   
+            mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
+
         if self.parser_args['loss_func'] == "CE":
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
@@ -171,7 +189,7 @@ class FolderDataset(Dataset):
             
         combined = (inputs, mfp)
         
-        if self.parser_args['separate_classifier']:
+        if self.parser_args['separate_classifier'] :
             # input types are one of the following:
             # ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]
             input_type = 0
@@ -185,6 +203,73 @@ class FolderDataset(Dataset):
             combined = (inputs, mfp, input_type)
 
         return combined
+    
+    def get_weight_of_samples_based_on_input_type(self):
+
+        # ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]
+        path = "/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/input_type_weights.pt"
+        if os.path.exists(path):
+            type_of_each_sample =  torch.load(path)
+        else:
+            type_of_each_sample = self.build_input_types_of_each(path)
+        
+        if self.parser_args['sampling_strategy'] == "fewer_HSQC":
+            weight_map = {
+                0: 1, # all_inputs
+                1: 1, # HSQC_H_NMR
+                2: 1, # HSQC_C_NMR
+                3: 0.3, # only_hsqc
+                4: 1, # only_1d
+                5: 1, # only_H_NMR
+                6: 1, # only_C_NMR       
+            }
+        elif self.parser_args['sampling_strategy'] == "match_probability":
+            weight_map = {
+                0: 1/0.04, # all_inputs
+                1: 1/0.04, # HSQC_H_NMR
+                2: 1/0.04, # HSQC_C_NMR
+                3: 1/0.261, # only_hsqc
+                4: 1/0.206, # only_1d
+                5: 1/0.206, # only_H_NMR
+                6: 1/0.206, # only_C_NMR       
+            }    
+        else:
+            raise NotImplementedError(f"sampling strategy is not implemented yet: {self.parser_args['sampling_strategy']}")
+        
+        weights_of_sampling = torch.tensor([weight_map[i] for i in type_of_each_sample]).float()
+        return weights_of_sampling
+        
+
+    def build_input_types_of_each(self, path):
+        type_of_each_sample = [0]*self.__len__()
+        for idx in range(self.__len__()):
+            if idx >= len(self.files): # load 1D dataset
+                i = idx - len(self.files)
+                    # hsqc is empty tensor
+                has_hsqc = False
+                c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
+            else:
+                i = idx
+                c_tensor, h_tensor = (torch.tensor([]) , torch.tensor([])) 
+                if os.path.exists(f"{self.dir}/oneD_NMR/"+ self.files[i]):
+                    c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
+                if os.path.exists(f"{self.dir}/HSQC/{self.files[i]}"):
+                    has_hsqc = True
+            has_c = len(c_tensor) > 0
+            has_h = len(h_tensor) > 0
+            input_type = 0
+            if has_hsqc:
+                input_type+=4
+            if has_h:
+                input_type+=2
+            if has_c:
+                input_type+=1
+            input_type = 7-input_type    
+        torch.save(type_of_each_sample, path)
+        return type_of_each_sample
+                
+        
+        
    
 
 
@@ -318,7 +403,8 @@ class FolderDataModule(pl.LightningDataModule):
             raise NotImplementedError("Predict setup not implemented")
 
     def train_dataloader(self):
-        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn, 
+            
+        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn,
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
 
     def val_dataloader(self):
