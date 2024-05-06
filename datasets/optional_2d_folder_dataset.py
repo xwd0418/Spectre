@@ -113,7 +113,16 @@ class OptionalInputDataModule(FolderDataModule):
             
 
     def train_dataloader(self):
-        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn, 
+        sampler = None
+        should_shuffle = True
+        if self.parser_args['weighted_sample_based_on_input_type']:
+            sampler = torch.utils.data.WeightedRandomSampler(
+                weights=self.train.get_weight_of_samples_based_on_input_type(),
+                num_samples=len(self.train),
+                replacement=True
+            )
+            should_shuffle = False
+        return DataLoader(self.train, shuffle=should_shuffle, batch_size=self.batch_size, collate_fn=self.collate_fn, sampler=sampler,
                           num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         
     def val_dataloader(self):

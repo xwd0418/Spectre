@@ -21,6 +21,8 @@ from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get
 
 from argparse import ArgumentParser
 from functools import reduce
+from datasets.dataset_utils import specific_radius_mfp_loader
+
 
 def exp_string(expname, args):
     """
@@ -211,10 +213,12 @@ def main(optuna_params=None):
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
     parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
-    parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR both C and H")
+    parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
     parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
     parser.add_argument("--only_H_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD H_NMR. Need to use together with only_oneD_NMR")
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
+    parser.add_argument("--weighted_sample_based_on_input_type",  type=lambda x:bool(str2bool(x)), default=False, help="use weighted loss based on input type")
+    parser.add_argument("--sampling_strategy",  type=str, default="none", help="sampling strategy for weighted loss")
     parser.add_argument("--random_seed", type=int, default=42)
     
     
@@ -223,6 +227,13 @@ def main(optuna_params=None):
         assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
     if args['only_oneD_NMR']:
         assert args['combine_oneD_only_dataset'], "oneD_NMR live in both datasets"
+    if args['weighted_sample_based_on_input_type']:
+        assert args['combine_oneD_only_dataset'] and args['optional_inputs'], "Only available for combined dataset"
+    
+    if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
+            only_2d = not args['use_oneD_NMR_no_solvent']
+            specific_radius_mfp_loader.setup(only_2d=only_2d)
+            specific_radius_mfp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
     
     seed_everything(seed=args["random_seed"])   
     
@@ -235,8 +246,8 @@ def main(optuna_params=None):
 
     # Tensorboard setup
     curr_exp_folder_name = "all_2d1d_datasets"
-    # out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
-    out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
+    # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
     os.makedirs(out_path, exist_ok=True)
