@@ -187,33 +187,20 @@ class Specific_Radius_MFP_loader():
         assert(len(mfp) == 6144)
         return torch.tensor(mfp).float()
     
-    def build_rankingset(self, dataset, split):
-        if dataset == '1d':
-            if split == 'val':
-                FP_on_bits_mappings = self.val_1d
-            elif split == 'test':
-                FP_on_bits_mappings = self.test_1d
-        elif dataset == '2d':      
-            if split == 'val':
-                FP_on_bits_mappings = self.val_2d
-            elif split == 'test':
-                FP_on_bits_mappings = self.test_2d
-         
+    def build_rankingset(self, dataset, split):         
         if dataset == '1d' or dataset == '2d':   
-            files = [self.build_mfp(file_idx, dataset, split) for file_idx in FP_on_bits_mappings.keys()]             
+            file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{dataset}.npy')
+            files = [self.build_mfp(file_idx, dataset, split) for file_idx in sorted(file_idx_for_ranking_set)]             
         elif dataset == "both":
-            if split == 'val':
-                files  = [self.build_mfp(file_idx, '1d', split) for file_idx in self.val_1d.keys()]
-                files += [self.build_mfp(file_idx, '2d', split) for file_idx in self.val_2d.keys()]
-            elif split == 'test':
-                files  = [self.build_mfp(file_idx, '1d', split) for file_idx in self.test_1d.keys()]
-                files += [self.build_mfp(file_idx, '2d', split) for file_idx in self.test_2d.keys()]
+            files = []
+            for curr_dataset in ['1d', '2d']:
+                file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{curr_dataset}.npy')
+                files  += [self.build_mfp(file_idx, curr_dataset, split) for file_idx in sorted(file_idx_for_ranking_set)]
                 
         out = torch.vstack(files)
         return out
     
     
-
 specific_radius_mfp_loader = Specific_Radius_MFP_loader()
 
 # def s(dataset, file_index, fp_suffix):

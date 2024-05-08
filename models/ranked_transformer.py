@@ -117,6 +117,8 @@ class HsqcRankedTransformer(pl.LightningModule):
                 self.dataset_name = "1d"
             else:
                 self.dataset_name = "2d"
+            # print(self.dataset_name)
+            # exit(0)
             self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset(self.dataset_name, "val"),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             
