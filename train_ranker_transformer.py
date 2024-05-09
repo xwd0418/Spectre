@@ -271,32 +271,30 @@ def main(optuna_params=None):
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
     from pytorch_lightning.utilities.model_summary import summarize
     my_logger.info(f"[Main] Model Summary: {summarize(model)}")
-    # # try:
-    # import torch._dynamo
-    # torch._dynamo.reset()
-    # compiled_model = torch.compile(model, mode="reduce-overhead")
-    # model = compiled_model
-    # my_logger.info("[Main] Compiled Model")
-    # # except:
-    #     # my_logger.info("[Main] Compile failed, continuing without compilation")
+    
     data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args)
+    tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
 
     # Trainer, callbacks
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
     if args['optional_inputs']:
+        checkpoint_callbacks = []
         my_logger.info("[Main] Using Optional Input")
-        metric = "val_mean_rank_1/all_nmr_combination_avg" # essientially the same as mean_rank_1, just naming purposes
-    tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
-    
-    checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)
-  
-    early_stopping = EarlyStopping(monitor=metric, mode=metricmode, patience=patience)
+        # metric = "val_mean_rank_1/all_nmr_combination_avg" # essientially the same as mean_rank_1, just naming purposes
+        for metric in  ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]:
+            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f"val_mean_rank_1/{metric}", mode=metricmode,
+                                                           filename= "{epoch}-"+metric)) 
+    else:
+        checkpoint_callbacks =[cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)]
+        
+    early_stop_metric = 'val_mean_rank_1/all_inputs' if args['optional_inputs'] else args["metric"]
+    early_stopping = EarlyStopping(monitor=early_stop_metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
                          accelerator="gpu",
                          logger=tbl, 
-                         callbacks=[checkpoint_callback, early_stopping, lr_monitor],
+                         callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
                         )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
@@ -304,34 +302,34 @@ def main(optuna_params=None):
     elif args['test']:
         my_logger.info("[Main] Just performing test step")
         raise Exception("should use test_on_all_info_subset.ipynb")
-        model.change_ranker_for_testing(test_ranking_set_path = "/workspace/ranking_sets_cleaned_by_inchi/SMILES_R0_to_R4_reduced_FP_ranking_sets_only_all_info_molecules/test/rankingset.pt")
-        # model.change_ranker_for_testing()
-        test_result = trainer.test(model, data_module,ckpt_path=args["checkpoint_path"])
-        my_logger.info(f"[Main] test result: {test_result}")
-        ## !!! ATTENTION !!!
-        ## also need to files to be loaded in hsqc_folder_dataset.py
         
     else:
         try:
             my_logger.info("[Main] Begin Training!")
             trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
-            # if dist.is_initialized():
-            #     my_logger.info("[Main] Begin Testing:")
-            #     rank = dist.get_rank()
-            #     if rank == 0: # To only run the test once
-            #         model.change_ranker_for_testing()
-            #         # testlogger = CSVLogger(save_dir=out_path, name=path1, version=path2)
 
-            #         test_trainer = pl.Trainer(accelerator="gpu", logger=tbl, devices=1,)
-            #         test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path )
-            #         # test_trainer.test(model, data_module,ckpt_path=checkpoint_callback.last_model_path )
             model.change_ranker_for_testing()
-            my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
-            test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
-            test_result[0]['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
-            # save test result as pickle
-            with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
-                pickle.dump(test_result, f)
+            if not args['optional_inputs']:
+                my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
+                test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
+                test_result[0]['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
+                # save test result as pickle
+                with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
+                    pickle.dump(test_result, f)
+            else:
+                # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
+                data_module.setup("test")
+                all_7_dataloaders = data_module.test_dataloader()
+                all_test_results = [{}]
+                for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
+                    model.only_test_this_loader(loader_idx=loader_idx)
+                    my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
+                    test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
+                    test_result[0][f'best_epoch_{checkpoint_callback.monitor.split("/")[-1]}'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
+                    all_test_results[0].update(test_result[0])
+                # save test result as pickle
+                with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
+                    pickle.dump(all_test_results, f)
             
         except Exception as e:
             my_logger.error(f"[Main] Error: {e}")

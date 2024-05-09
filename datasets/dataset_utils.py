@@ -164,15 +164,15 @@ class Specific_Radius_MFP_loader():
         # self.indices_kept = list(self.indices_kept)
         assert len(self.indices_kept) == 6144, "should keep only 6144 highest entropy bits"
         
-    def build_mfp(self, file_idx, dataset, split):
-        if dataset == '1d':
+    def build_mfp(self, file_idx, dataset_src, split):
+        if dataset_src == '1d':
             if split == 'train':
                 FP_on_bits = self.train_1d[file_idx]
             elif split == 'val':
                 FP_on_bits = self.val_1d[file_idx]
             elif split == 'test':
                 FP_on_bits = self.test_1d[file_idx]
-        elif dataset == '2d':
+        elif dataset_src == '2d':
             if split == 'train':
                 FP_on_bits = self.train_2d[file_idx]
             elif split == 'val':
@@ -187,16 +187,23 @@ class Specific_Radius_MFP_loader():
         assert(len(mfp) == 6144)
         return torch.tensor(mfp).float()
     
-    def build_rankingset(self, dataset, split):         
-        if dataset == '1d' or dataset == '2d':   
-            file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{dataset}.npy')
-            files = [self.build_mfp(file_idx, dataset, split) for file_idx in sorted(file_idx_for_ranking_set)]             
-        elif dataset == "both":
-            files = []
-            for curr_dataset in ['1d', '2d']:
-                file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{curr_dataset}.npy')
-                files  += [self.build_mfp(file_idx, curr_dataset, split) for file_idx in sorted(file_idx_for_ranking_set)]
-                
+    def build_rankingset(self, dataset_type, split):         
+        if dataset_type == '1d' or dataset_type == '2d':   
+            file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{dataset_type}.npy')
+            files = [self.build_mfp(file_idx, dataset_type, split) for file_idx in sorted(file_idx_for_ranking_set)]             
+        elif dataset_type == "both":
+            ### Commented Out : ranking set of all molecules in test set, both 1d and 2d
+            # files = []
+            # for curr_dataset in ['1d', '2d']:
+            #     file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{curr_dataset}.npy')
+            #     files  += [self.build_mfp(file_idx, curr_dataset, split) for file_idx in sorted(file_idx_for_ranking_set)]
+            
+            ### What we use : all info molecules 
+            # file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{curr_dataset}.npy')
+            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
+             
         out = torch.vstack(files)
         return out
     
