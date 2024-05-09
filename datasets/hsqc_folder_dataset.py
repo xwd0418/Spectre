@@ -60,7 +60,7 @@ class FolderDataset(Dataset):
         
         
     def __len__(self):
-        # return 300
+        # return 500
         length = len(self.files)
         if self.parser_args['combine_oneD_only_dataset']:
             length += len(self.files_1d)

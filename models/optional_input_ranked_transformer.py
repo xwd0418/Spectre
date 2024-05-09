@@ -12,6 +12,10 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         if self.separate_classifier:
             self.classifiers = nn.ModuleList([nn.Linear(self.dim_model, self.out_dim) for i in range(len(self.all_dataset_names))])
             self.fc = None
+        self.loader_idx = None    
+        
+    def only_test_this_loader(self, loader_idx):
+        self.loader_idx = loader_idx
     
     def training_step(self, batch, batch_idx):
         if not self.separate_classifier:
@@ -44,6 +48,9 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         return metrics
     
     def test_step(self, batch, batch_idx, dataloader_idx):
+        if self.loader_idx != None  and self.loader_idx != dataloader_idx:
+            # print(f"skipping loader {dataloader_idx} because self.loader_idx is {self.loader_idx}")
+            return
         if self.separate_classifier:
             self.fc = self.classifiers[dataloader_idx]
         current_batch_name = self.all_dataset_names[dataloader_idx]
@@ -72,9 +79,9 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
             for k, v in di.items():
                 self.log(k, v, on_epoch=True, prog_bar="rank_1" in k)
                 
-        # log the avg metric for all datasets
-        for k, v in total_features.items():
-            self.log(f"val_mean_{k}/all_nmr_combination_avg", np.mean(v), on_epoch=True, prog_bar="rank_1" in k)
+        # # log the avg metric for all datasets
+        # for k, v in total_features.items():
+        #     self.log(f"val_mean_{k}/all_nmr_combination_avg", np.mean(v), on_epoch=True, prog_bar="rank_1" in k)
             
         self.validation_step_outputs.clear()
         
@@ -83,6 +90,8 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         # return
         total_features = defaultdict(list)
         for dataset_name in self.all_dataset_names:
+            if self.test_step_outputs[dataset_name] == []:
+                continue
             feats = self.test_step_outputs[dataset_name][0].keys()
             di = {}
             # log individual metrics for each dataset
@@ -93,8 +102,8 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
             for k, v in di.items():
                 self.log(k, v, on_epoch=True, prog_bar="rank_1" in k)
                 
-        # log the avg metric for all datasets
-        for k, v in total_features.items():
-            self.log(f"test_mean_{k}/all_nmr_combination_avg", np.mean(v), on_epoch=True, prog_bar="rank_1" in k)
+        # # log the avg metric for all datasets
+        # for k, v in total_features.items():
+        #     self.log(f"test_mean_{k}/all_nmr_combination_avg", np.mean(v), on_epoch=True, prog_bar="rank_1" in k)
             
         self.test_step_outputs.clear()
