@@ -5,6 +5,8 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
 from datasets.hsqc_folder_dataset import get_delimeter, pad
+from datasets.dataset_utils import specific_radius_mfp_loader
+
 
 class OneDDataset(Dataset):
     '''
@@ -45,7 +47,13 @@ class OneDDataset(Dataset):
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
         logger.info(f"[OneD Dataset]: dir={dir}, split={split},FP={FP_choice}")
+        logger.info(f"[FolderDataset]: dataset size is {len(self)}")
         
+        if parser_args['train_on_all_info_set']:
+            logger.info(f"[OneD Dataset]: only all info datasets")
+            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            return 
         if self.parser_args['only_C_NMR']:
             def filter_unavailable_1d(x):
                 c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{x}")
@@ -74,6 +82,8 @@ class OneDDataset(Dataset):
     def __len__(self):
         # return 100
         length = len(self.files)
+        if self.parser_args['train_on_all_info_set']:
+           return length 
         length += len(self.files_1d)
         return length
         
@@ -110,23 +120,32 @@ class OneDDataset(Dataset):
             ])    
                 
             
-            
         # loading MW and MFP in different datasets 
         if idx >= len(self.files): # load 1D dataset    
             mol_weight_dict = self.mol_weight_1d
             dataset_files = self.files_1d
             dataset_dir = self.dir_1d
+            current_dataset = "1d"
         else:
             mol_weight_dict = self.mol_weight_2d
             dataset_files = self.files
             dataset_dir = self.dir
+            current_dataset = "2d"
             
         if self.parser_args['use_MW']:
             mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
             inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
             
-        mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
+        if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
+            mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
+            # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
+            # print("current dataset is ", current_dataset)
+            # print("load path is ", f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}") 
+            # print("i is ", i, "split is ", self.split)
+            # assert (mfp==mfp_orig).all(), f"mfp should be the same\n mfp is " #{mfp.nonzero()}\n mfp_orig is {mfp_orig.nonzero()}"
+        else:   
+            mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
      
         combined = (inputs, mfp)
         
@@ -149,7 +168,7 @@ class OneDDataset(Dataset):
 
     
 
-class OneDDataModule(pl.LightningDataModule):
+class  OneDDataModule(pl.LightningDataModule):
     def __init__(self, dir, FP_choice, batch_size: int = 32, parser_args=None):
         super().__init__()
         self.batch_size = batch_size

@@ -29,6 +29,7 @@ class FolderDataset(Dataset):
         self.fp_suffix = FP_choice
         self.input_src = input_src
         self.parser_args = parser_args
+        logger = logging.getLogger("lightning")
 
         assert(os.path.exists(self.dir))
         assert(split in ["train", "val", "test"])
@@ -36,7 +37,13 @@ class FolderDataset(Dataset):
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
         if parser_args['use_MW']:
             self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
-        self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
+        if parser_args['train_on_all_info_set']:
+            logger.info(f"[FolderDataset]: only all info datasets")
+            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            assert (not parser_args['combine_oneD_only_dataset'])
+        else:    
+            self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
         self.files.sort() # sorted because we need to find correct weight mappings 
         if parser_args['combine_oneD_only_dataset']: # load 1D dataset as well 
             self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
@@ -45,17 +52,26 @@ class FolderDataset(Dataset):
             self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR/"))
             self.files_1d.sort()
             
-        # path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
-        # self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
         
-        
-        logger = logging.getLogger("lightning")
         if dist.is_initialized():
             rank = dist.get_rank()
             if rank != 0:
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
         logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
+        logger.info(f"[FolderDataset]: dataset size is {len(self)}")
+        
+        if self.parser_args['only_C_NMR']:
+            def filter_unavailable(x):
+                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
+                return len(c_tensor)>0
+            self.files = list(filter(filter_unavailable, self.files))
+        elif self.parser_args['only_H_NMR']:
+            def filter_unavailable(x):
+                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
+                return len(h_tensor)>0
+            self.files = list(filter(filter_unavailable, self.files))
+
         
         
         
@@ -124,9 +140,9 @@ class FolderDataset(Dataset):
                     c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
                     # randomly drop 1D and 2D NMRs if needed
                     if self.parser_args['optional_inputs']:
-                        # drop 2D:
-                        if random.random() <= 1/2: 
-                            hsqc =  torch.empty(0,3)
+                        # DO NOT drop 2D, cuz we have enough amount of 1D data 
+                        # if random.random() <= 1/2: 
+                        #     hsqc =  torch.empty(0,3)
                         if len(c_tensor)>0 and len(h_tensor)>0:
                             # it is fine to drop one of the oneD NMRs
                             random_num_for_dropping =  random.random()
@@ -141,7 +157,10 @@ class FolderDataset(Dataset):
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                             
                 
-                    
+            if self.parser_args['only_C_NMR']:
+                h_tensor = torch.tensor([])
+            if self.parser_args['only_H_NMR']:
+                c_tensor = torch.tensor([])
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
             inputs = torch.vstack([

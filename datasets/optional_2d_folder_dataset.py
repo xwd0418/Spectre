@@ -83,6 +83,8 @@ class All_Info_Dataset(Dataset):
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
             
+        # print(mfp.nonzero())
+        # exit(0)
         return (inputs, mfp)
 
 

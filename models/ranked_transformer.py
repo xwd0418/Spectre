@@ -111,18 +111,12 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.FP_choice=FP_choice
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
         if FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
-            if kwargs['combine_oneD_only_dataset']:
-                self.dataset_name = "both"
-            elif  kwargs['only_oneD_NMR']:
-                self.dataset_name = "1d"
-            else:
-                self.dataset_name = "2d"
-            # print(self.dataset_name)
-            # exit(0)
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset(self.dataset_name, "val"),
+          
+            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val"),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             
         elif ranking_set_path:
+            assert ("all_info_molecules" in ranking_set_path), "ranking_set_path should be all-info only. haven't implemented yet"
             self.ranking_set_path = ranking_set_path
             # print(ranking_set_path)
             assert os.path.exists(ranking_set_path), f"{ranking_set_path} does not exist"
@@ -299,7 +293,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         out = self.forward(x)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
-        
 
         loss = self.loss(out, labels)
         
@@ -424,7 +417,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         
     def change_ranker_for_testing(self, test_ranking_set_path=None ):
         if self.FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset(self.dataset_name, "test"),
+            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("test"),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             return
         if test_ranking_set_path is None:

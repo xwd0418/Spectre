@@ -12,9 +12,11 @@ import torch.distributed as dist
 
 from models.ranked_transformer import HsqcRankedTransformer
 from models.ranked_resnet import HsqcRankedResNet
+from models.deepSAT_model import DeepSATModel
 from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 # from models.ranked_double_transformer import DoubleTransformer
 from datasets.hsqc_folder_dataset import FolderDataModule
+from datasets.deepSAT_dataset import DeepSATDataModule
 from datasets.oneD_dataset import OneDDataModule
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
@@ -59,10 +61,12 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
     if args['only_oneD_NMR']:
         # oned_dir = "/workspace/OneD_Only_Dataset"
         return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
-    if model_type == "double_transformer": # wangdong: not using it
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
+    # if model_type == "double_transformer": # wangdong: not using it
+    #     return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+    elif model_type == "DeepSAT":
+        return DeepSATDataModule(dir=choice, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "CNN":
         num_channels = kwargs['num_input_channels']
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], batch_size=batch_size, parser_args=kwargs)
@@ -81,8 +85,8 @@ def apply_args(parser, model_type):
         HsqcRankedTransformer.add_model_specific_args(parser)
     elif model_type == "CNN":
         HsqcRankedResNet.add_model_specific_args(parser)
-    # elif model_type == "double_transformer":
-    #     DoubleTransformer.add_model_specific_args(parser)
+    elif model_type == "DeepSAT":
+        DeepSATModel.add_model_specific_args(parser)
     else:
         raise(f"No model for model type {model_type}.")
 
@@ -91,8 +95,10 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     kwargs = vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
     rankingset_dir = '/workspace/ranking_sets_2d1d_stacked'  if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_cleaned_by_inchi'
-    kwargs["ranking_set_path"] = f"{rankingset_dir}/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"
-   
+    kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
+    if ranking_set_type == "HYUN_FP":
+        kwargs["ranking_set_path"] = '/root/MorganFP_prediction/reproduce_previous_works/smart4.5/reproducing_deepsat/ranking_sets/HYUN_FP_only_all_info_molecules/val/rankingset.pt'
+
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
@@ -101,11 +107,11 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     if model_type == "hsqc_transformer" or model_type == "ms_transformer" or model_type == "transformer_2d1d":
         if args['optional_inputs']:
             model_class = OptionalInputRankedTransformer
-            kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"
-   
         else:
             model_class = HsqcRankedTransformer
-    
+    elif model_type == "DeepSAT":
+        model_class = DeepSATModel
+        kwargs['num_classes'] = 78 # number of classes in the dataset
     elif model_type == "CNN":
         model_class = HsqcRankedResNet
         
@@ -220,19 +226,23 @@ def main(optuna_params=None):
     parser.add_argument("--weighted_sample_based_on_input_type",  type=lambda x:bool(str2bool(x)), default=False, help="use weighted loss based on input type")
     parser.add_argument("--sampling_strategy",  type=str, default="none", help="sampling strategy for weighted loss")
     parser.add_argument("--random_seed", type=int, default=42)
+    parser.add_argument("--train_on_all_info_set", type=lambda x:bool(str2bool(x)), default=False)
     
+    # entropy based FP
+    parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact")
     
     args = vars(parser.parse_known_args()[0])
-    if args['only_C_NMR'] or args['only_H_NMR']:
-        assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
-    if args['only_oneD_NMR']:
-        assert args['combine_oneD_only_dataset'], "oneD_NMR live in both datasets"
+    # if args['only_C_NMR'] or args['only_H_NMR']:
+    #     assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
+    # if args['only_oneD_NMR']:
+    #     assert args['combine_oneD_only_dataset'], "oneD_NMR live in both datasets"
     if args['weighted_sample_based_on_input_type']:
         assert args['combine_oneD_only_dataset'] and args['optional_inputs'], "Only available for combined dataset"
     
     if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             only_2d = not args['use_oneD_NMR_no_solvent']
-            specific_radius_mfp_loader.setup(only_2d=only_2d)
+            FP_building_type = args['FP_building_type'].split("_")[-1]
+            specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
             specific_radius_mfp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
     
     seed_everything(seed=args["random_seed"])   
@@ -245,7 +255,7 @@ def main(optuna_params=None):
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    curr_exp_folder_name = "all_2d1d_datasets"
+    curr_exp_folder_name = "all_info_datasets"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
@@ -309,6 +319,7 @@ def main(optuna_params=None):
             trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
 
             model.change_ranker_for_testing()
+            checkpoint_callback = checkpoint_callbacks[0]
             if not args['optional_inputs']:
                 my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
                 test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
@@ -338,9 +349,9 @@ def main(optuna_params=None):
             my_logger.info("[Main] Done!")
             my_logger.info("[Main] test result: \n")
             # my_logger.info(f"{test_result}")
+            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
             for key, value in test_result[0].items():
                 my_logger.info(f"{key}: {value}")
-            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
             logging.shutdown()
 
     # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
