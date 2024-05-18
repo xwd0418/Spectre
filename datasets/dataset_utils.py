@@ -135,32 +135,34 @@ class Specific_Radius_MFP_loader():
     def __init__(self) -> None:
         self.path_pickles = '/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/'
         
-    def setup(self, only_2d = False):
-        self.train_1d = pickle.load(open(self.path_pickles + 'Normal_FP_on_bits_r0_r15_len_6144_1d_train.pkl', 'rb'))
-        self.train_2d = pickle.load(open(self.path_pickles + 'Normal_FP_on_bits_r0_r15_len_6144_2d_train.pkl', 'rb'))
+    def setup(self, only_2d = False, FP_building_type = "Normal"):
+        assert (FP_building_type in ["Normal", "Exact"]), "Only Normal/Exact FP is supported"
+        self.single_FP_size = 6144 if FP_building_type == "Normal" else 1024
+        self.train_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_train.pkl', 'rb'))
+        self.train_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_train.pkl', 'rb'))
         
-        self.count = np.zeros(6144*16)
+        self.count = np.zeros(self.single_FP_size*16)
         if not only_2d:
             for FP_on_bits in self.train_1d.values():
-                self.count += convert_bits_positions_to_array(FP_on_bits, 6144*16)
+                self.count += convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
         for FP_on_bits in self.train_2d.values():
-            self.count += convert_bits_positions_to_array(FP_on_bits, 6144*16)
+            self.count += convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
   
         # also val and test
-        self.val_1d = pickle.load(open(self.path_pickles + 'Normal_FP_on_bits_r0_r15_len_6144_1d_val.pkl', 'rb'))
-        self.test_1d = pickle.load(open(self.path_pickles + 'Normal_FP_on_bits_r0_r15_len_6144_1d_test.pkl', 'rb'))
-        self.val_2d = pickle.load(open(self.path_pickles + 'Normal_FP_on_bits_r0_r15_len_6144_2d_val.pkl', 'rb'))
-        self.test_2d = pickle.load(open(self.path_pickles + 'Normal_FP_on_bits_r0_r15_len_6144_2d_test.pkl', 'rb'))
+        self.val_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_val.pkl', 'rb'))
+        self.test_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_test.pkl', 'rb'))
+        self.val_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_val.pkl', 'rb'))
+        self.test_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_test.pkl', 'rb'))
        
     
     def set_max_radius(self, max_radius, only_2d = False):
         self.max_radius = max_radius
-        count_for_current_radius = self.count[:6144*(max_radius+1)]
+        count_for_current_radius = self.count[:self.single_FP_size*(max_radius+1)]
         if only_2d:
             total_dataset_size = len(self.train_2d)
         else:
             total_dataset_size = len(self.train_1d) + len(self.train_2d)
-        __entropy, self.indices_kept = keep_smallest_entropy(count_for_current_radius, total_dataset_size)
+        self.entropy, self.indices_kept = keep_smallest_entropy(count_for_current_radius, total_dataset_size)
         # self.indices_kept = list(self.indices_kept)
         assert len(self.indices_kept) == 6144, "should keep only 6144 highest entropy bits"
         
@@ -182,27 +184,15 @@ class Specific_Radius_MFP_loader():
         else:
             raise ValueError("dataset should be either 1d or 2d")
         
-        mfp = convert_bits_positions_to_array(FP_on_bits, 6144*16)
+        mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
         mfp = mfp[self.indices_kept]
         assert(len(mfp) == 6144)
         return torch.tensor(mfp).float()
     
-    def build_rankingset(self, dataset_type, split):         
-        if dataset_type == '1d' or dataset_type == '2d':   
-            file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{dataset_type}.npy')
-            files = [self.build_mfp(file_idx, dataset_type, split) for file_idx in sorted(file_idx_for_ranking_set)]             
-        elif dataset_type == "both":
-            ### Commented Out : ranking set of all molecules in test set, both 1d and 2d
-            # files = []
-            # for curr_dataset in ['1d', '2d']:
-            #     file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{curr_dataset}.npy')
-            #     files  += [self.build_mfp(file_idx, curr_dataset, split) for file_idx in sorted(file_idx_for_ranking_set)]
-            
-            ### What we use : all info molecules 
-            # file_idx_for_ranking_set = np.load(f'/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/{split}_indicies_unique_smiles_{curr_dataset}.npy')
-            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
-            file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
-            files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
+    def build_rankingset(self, split):         
+        path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
+        files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
              
         out = torch.vstack(files)
         return out

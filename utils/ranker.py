@@ -9,7 +9,7 @@ import logging
 
 @set_float32_highest_precision
 class RankingSet(torch.nn.Module):
-  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0, CE_num_class = None):
+  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0, CE_num_class = None, use_actaul_mw_for_retrival=None):
     '''
       Creates a ranking set. Assumes the file specified at file_path is a pickle file of 
       a numpy array of fingerprints. Fingerprints should be (n, 6144) dimension, and on load,
@@ -34,6 +34,10 @@ class RankingSet(torch.nn.Module):
     self.logger.debug("[Ranker] Initializing Ranker")
 
     with torch.no_grad():
+        
+      if  use_actaul_mw_for_retrival is not None:
+        self.register_buffer("MWs",torch.load(file_path.replace("rankingset", "MW")).float(), persistent=False)
+        
       if store is not None:
         self.register_buffer("data", F.normalize(store, dim=1, p=2.0), persistent=False)
       else:
@@ -100,7 +104,7 @@ class RankingSet(torch.nn.Module):
 #       out.append(self.lookup.get(nonzero, None))
 #     return out
 
-  def dot_prod_rank(self, data, queries, truths, thresh, query_idx_in_rankingset):
+  def dot_prod_rank(self, data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival):
     '''
       Perform a dot-product ranking. Assumes that data, queries, and truths are already
       normalized. 
@@ -117,6 +121,15 @@ class RankingSet(torch.nn.Module):
         ranking set 
     '''
     assert (queries.size() == truths.size())
+    if mw is not None:
+        # filtering some mols in rankingset
+        if use_actaul_mw_for_retrival:
+            idx_to_keep = torch.abs(mw[0]-self.MWs)<20
+        else:
+            idx_to_keep = torch.abs(self.MWs-mw[0])/self.MWs<0.2
+        data = data[idx_to_keep]
+    
+    
     with torch.no_grad():
       q = queries.size()[0]
       n = data.size()[0]
@@ -178,7 +191,7 @@ class RankingSet(torch.nn.Module):
         
       return ct_greater
 
-  def batched_rank(self, queries, truths, query_idx_in_rankingset):
+  def batched_rank(self, queries, truths, query_idx_in_rankingset , mw, use_actaul_mw_for_retrival):
     '''
         Perform a batched ranking
 
@@ -199,7 +212,7 @@ class RankingSet(torch.nn.Module):
         # sum dim 0, keepdims -> (1, q)
         thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
 
-        return self.dot_prod_rank(self.data, queries, truths, thresh, query_idx_in_rankingset)
+        return self.dot_prod_rank(self.data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival)
 
   def batched_rank_tfidf(self, queries, truths):
     '''

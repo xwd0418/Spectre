@@ -10,7 +10,7 @@ do_precision = BinaryPrecision()
 do_accuracy = BinaryAccuracy()
 
 
-def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
+def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None, mw=None,use_actaul_mw_for_retrival=None):
 
     global do_f1, do_recall, do_precision, do_accuracy
     do_f1 = do_f1.to(model_output)
@@ -19,7 +19,7 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
     do_accuracy = do_accuracy.to(model_output)
 
     # Fingeprint prediction
-    fp_pred = (model_output >= thresh).type(torch.cuda.FloatTensor)
+    fp_pred = (model_output >= thresh).float()
 
     # cos
     cos = torch.mean(do_cos(fp_label, fp_pred)).item()
@@ -50,9 +50,9 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
 
     # === Do Ranking ===
     if rank_by_soft_output:
-        rank_res = ranker.batched_rank(torch.sigmoid(model_output), fp_label, query_idx_in_rankingset)
+        rank_res = ranker.batched_rank(torch.sigmoid(model_output), fp_label, query_idx_in_rankingset, mw=mw, use_actaul_mw_for_retrival=use_actaul_mw_for_retrival)
     else:
-        rank_res = ranker.batched_rank(fp_pred, fp_label, query_idx_in_rankingset)
+        rank_res = ranker.batched_rank(fp_pred, fp_label, query_idx_in_rankingset, mw=mw, use_actaul_mw_for_retrival=use_actaul_mw_for_retrival)
     cts = [1, 5, 10]
     # strictly less as batched_rank returns number of items STRICTLY greater
     ranks = {
