@@ -37,13 +37,15 @@ class FolderDataset(Dataset):
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
         if parser_args['use_MW']:
             self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
-        if parser_args['train_on_all_info_set']:
+        if parser_args['train_on_all_info_set'] or split in ["val", "test"]:
             logger.info(f"[FolderDataset]: only all info datasets")
             path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
             assert (not parser_args['combine_oneD_only_dataset'])
+        elif self.parser_args['only_C_NMR'] or self.parser_args['only_H_NMR'] :
+            self.files = os.listdir(os.path.join(self.dir, "oneD_NMR"))
         else:    
-            self.files = os.listdir(os.path.join(self.dir, "HYUN_FP"))
+            self.files = os.listdir(os.path.join(self.dir, "HSQC"))
         self.files.sort() # sorted because we need to find correct weight mappings 
         if parser_args['combine_oneD_only_dataset']: # load 1D dataset as well 
             self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
@@ -59,7 +61,6 @@ class FolderDataset(Dataset):
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
         logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
-        logger.info(f"[FolderDataset]: dataset size is {len(self)}")
         
         if self.parser_args['only_C_NMR']:
             def filter_unavailable(x):
@@ -72,6 +73,7 @@ class FolderDataset(Dataset):
                 return len(h_tensor)>0
             self.files = list(filter(filter_unavailable, self.files))
 
+        logger.info(f"[FolderDataset]: dataset size is {len(self)}")
         
         
         
@@ -96,9 +98,9 @@ class FolderDataset(Dataset):
                 if not self.parser_args['combine_oneD_only_dataset'] :
                     raise NotImplementedError("optional_inputs is only supported when combine_oneD_only_dataset is True")
                 random_num = random.random()
-                if random_num <= 0.385: # drop C rate 
+                if random_num <= 0.413: # drop C rate 
                     c_tensor = torch.tensor([]) 
-                elif random_num <= 0.385+0.229: # drop H rate
+                elif random_num <= 0.413+0.174: # drop H rate
                     h_tensor = torch.tensor([])
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
@@ -147,9 +149,9 @@ class FolderDataset(Dataset):
                             # it is fine to drop one of the oneD NMRs
                             random_num_for_dropping =  random.random()
                             
-                            if random_num_for_dropping <= 0.362:# drop C rate
+                            if random_num_for_dropping <= 0.363:# drop C rate
                                 c_tensor = torch.tensor([])
-                            elif random_num_for_dropping <= 0.362+0.275: # drop H rate
+                            elif random_num_for_dropping <= 0.363+0.274: # drop H rate
                                 h_tensor = torch.tensor([])
                             # else: keep both
                                 

@@ -340,7 +340,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     def predict_step(self, batch, batch_idx):
         x, smiles_chemical_name = batch
-        smiles, names = zip(*smiles_chemical_name)
+        # smiles, names = zip(*smiles_chemical_name)
         # print(smiles, names)
         out = self.forward(x)
         preds = torch.sigmoid(out)

@@ -255,7 +255,7 @@ def main(optuna_params=None):
     li_args = list(args_with_model.items())
 
     # Tensorboard setup
-    curr_exp_folder_name = "all_info_datasets"
+    curr_exp_folder_name = "weird_H_and_tautomer_cleaned"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
@@ -349,9 +349,9 @@ def main(optuna_params=None):
             my_logger.info("[Main] Done!")
             my_logger.info("[Main] test result: \n")
             # my_logger.info(f"{test_result}")
-            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
             for key, value in test_result[0].items():
                 my_logger.info(f"{key}: {value}")
+            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
             logging.shutdown()
 
     # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
