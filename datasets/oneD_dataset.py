@@ -39,7 +39,7 @@ class OneDDataset(Dataset):
             self.mol_weight_1d = pickle.load(open(os.path.join(self.dir_1d, "MW/index.pkl"), 'rb'))
         self.files = os.listdir(os.path.join(self.dir, "oneD_NMR"))
         self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR"))
-        
+
         logger = logging.getLogger("lightning")
         if dist.is_initialized():
             rank = dist.get_rank()
@@ -47,12 +47,12 @@ class OneDDataset(Dataset):
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
         logger.info(f"[OneD Dataset]: dir={dir}, split={split},FP={FP_choice}")
-        logger.info(f"[FolderDataset]: dataset size is {len(self)}")
         
-        if parser_args['train_on_all_info_set']:
-            logger.info(f"[OneD Dataset]: only all info datasets")
+        if parser_args['train_on_all_info_set']  or split in ["val", "test"]:
+            logger.info(f"[OneD Dataset]: only all info datasets: {split}")
             path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
             return 
         if self.parser_args['only_C_NMR']:
             def filter_unavailable_1d(x):
@@ -78,6 +78,7 @@ class OneDDataset(Dataset):
         
         self.files = list(filter(filter_unavailable, self.files))
         self.files_1d = list(filter(filter_unavailable_1d, self.files_1d))
+        logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
         
     def __len__(self):
         # return 100

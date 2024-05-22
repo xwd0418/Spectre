@@ -107,3 +107,9 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         #     self.log(f"test_mean_{k}/all_nmr_combination_avg", np.mean(v), on_epoch=True, prog_bar="rank_1" in k)
             
         self.test_step_outputs.clear()
+        
+    def on_train_epoch_end(self):
+        if self.separate_classifier:
+            for i, classifier in enumerate(self.classifiers):
+                self.log(f"tr/weight_{self.all_dataset_names[i]}", classifier.weight.mean().item())
+                self.log(f"tr/bias_{self.all_dataset_names[i]}", classifier.bias.mean().item())

@@ -22,10 +22,14 @@ class All_Info_Dataset(Dataset):
         self.oneD_type = oneD_type
         path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
         self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+        self.files.sort()
         self.show_smiles = show_smiles
         if self.show_smiles:
             self.index_to_chemical_names = pickle.load(open(f'/workspace/SMILES_dataset/{split}/Chemical/index.pkl', 'rb'))
             self.index_to_smiles = pickle.load(open(f'/workspace/SMILES_dataset/{split}/SMILES/index.pkl', 'rb'))
+            
+        if parser_args['use_MW']:
+            self.mol_weight = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
 
             
         
@@ -59,7 +63,12 @@ class All_Info_Dataset(Dataset):
                 get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
                 get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
                 get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                ])   
+                ])  
+        
+        if self.parser_args['use_MW']:
+            mol_weight = self.mol_weight[int(self.files[i].split(".")[0])]
+            mol_weight = torch.tensor([mol_weight,0,0]).float()
+            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")]) 
         
         
         if self.show_smiles: # prediction stage
@@ -85,6 +94,7 @@ class All_Info_Dataset(Dataset):
             
         # print(mfp.nonzero())
         # exit(0)
+        # print("should print inputs: \n", inputs)
         return (inputs, mfp)
 
 
