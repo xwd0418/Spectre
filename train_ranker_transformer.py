@@ -58,9 +58,10 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
 
     if args['optional_inputs']:
         return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
-    if args['only_oneD_NMR']:
-        # oned_dir = "/workspace/OneD_Only_Dataset"
-        return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
+    # OneD datamodule is somewhat buggy, so we will not use hsqc_folder_dataset.py 
+    # if args['only_oneD_NMR']:
+    #     # oned_dir = "/workspace/OneD_Only_Dataset"
+    #     return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
     # if model_type == "double_transformer": # wangdong: not using it
     #     return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
