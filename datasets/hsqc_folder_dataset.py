@@ -41,11 +41,11 @@ class FolderDataset(Dataset):
             logger.info(f"[FolderDataset]: only all info datasets")
             path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
-            assert (not parser_args['combine_oneD_only_dataset'])
-        elif self.parser_args['only_C_NMR'] or self.parser_args['only_H_NMR'] :
+            # assert (not parser_args['combine_oneD_only_dataset'])
+        elif self.parser_args['only_C_NMR'] or self.parser_args['only_H_NMR'] or self.parser_args['only_oneD_NMR']:
             self.files = os.listdir(os.path.join(self.dir, "oneD_NMR"))
         else:    
-            self.files = os.listdir(os.path.join(self.dir, "HSQC"))
+            self.files = os.listdir(os.path.join(self.dir, "HSQC")) 
         self.files.sort() # sorted because we need to find correct weight mappings 
         if parser_args['combine_oneD_only_dataset']: # load 1D dataset as well 
             self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
@@ -71,6 +71,13 @@ class FolderDataset(Dataset):
             def filter_unavailable(x):
                 c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
                 return len(h_tensor)>0
+            self.files = list(filter(filter_unavailable, self.files))
+            
+        # Just testing,,, should delete the following 
+        elif self.parser_args['only_oneD_NMR']:
+            def filter_unavailable(x):
+                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
+                return len(h_tensor)>0 and len(c_tensor)>0
             self.files = list(filter(filter_unavailable, self.files))
 
         logger.info(f"[FolderDataset]: dataset size is {len(self)}")
@@ -158,7 +165,9 @@ class FolderDataset(Dataset):
                     
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                             
-                
+            # Just testing,,, should delete the following 
+            if self.parser_args['only_oneD_NMR']:
+                hsqc = torch.empty(0,3)                
             if self.parser_args['only_C_NMR']:
                 h_tensor = torch.tensor([])
             if self.parser_args['only_H_NMR']:
