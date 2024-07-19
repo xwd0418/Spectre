@@ -347,7 +347,7 @@ def pad(batch):
         if type(fp[0][0]) is str:
             # print("i am tuple")
             # print(fp)
-            combined = (inputs_2, fp) # actually, here fp is (smiles, name), used during prediction stage
+            combined = (inputs_2, fp) # actually, here "mfp" is (smiles, name, path), used during prediction stage
         else:
             combined = (inputs_2, torch.stack(fp))
     elif len(items) == 3: #inputs, mfp, input_type(optional input)

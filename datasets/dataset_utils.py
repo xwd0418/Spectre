@@ -1,7 +1,8 @@
 import numpy as np, pickle
 import torch
 from torch.nn.utils.rnn import pad_sequence
-
+from rdkit.Chem import rdMolDescriptors
+from rdkit import Chem
 
 def pad(sequence):
   """
@@ -122,7 +123,7 @@ def keep_smallest_entropy(data, total_dataset_size, size=6144,  use_natural_log=
     return total_entropy, indices_of_min_6144
 
 ''' 
-I have a pre-built 15*6144 fp 
+I have a pre-built [0~15]*6144 fp 
 now I select top 6144 bits of highest entropy, from r0 up to r(x)
 '''
 def convert_bits_positions_to_array(FP_on_bits, length):
@@ -130,6 +131,14 @@ def convert_bits_positions_to_array(FP_on_bits, length):
     out = np.zeros(length)
     out[FP_on_bits] = 1
     return out
+
+def generate_normal_FP_on_bits(mol, radius=2, length=6144):
+    # Dictionary to store information about which substructures contribute to setting which bits
+    bitInfo = {}
+    # Generate the fingerprint with bitInfo to track the substructures contributing to each bit
+    fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=radius, nBits=length, bitInfo=bitInfo)
+    on_bits = np.array(fp.GetOnBits())
+    return on_bits
 
 class Specific_Radius_MFP_loader():
     def __init__(self) -> None:
@@ -197,9 +206,49 @@ class Specific_Radius_MFP_loader():
         out = torch.vstack(files)
         return out
     
+    # def build_inference_ranking_set_with_everything(self):
+        # train_files_2d = [self.build_mfp(file_idx, "2d", "train") for file_idx in range(len(self.train_2d))]
+        # val_files_2d = [self.build_mfp(file_idx, "2d", "val") for file_idx in range(len(self.val_2d))]
+        # test_files_2d = [self.build_mfp(file_idx, "2d", "test") for file_idx in range(len(self.test_2d))]
+        # train_files_1d = [self.build_mfp(file_idx, "1d", "train") for file_idx in range(len(self.train_1d))]
+        # val_files_1d = [self.build_mfp(file_idx, "1d", "val") for file_idx in range(len(self.val_1d))]
+        # test_files_1d = [self.build_mfp(file_idx, "1d", "test") for file_idx in range(len(self.test_1d))]
+                         
+        # out = torch.vstack(train_files_2d + val_files_2d + test_files_2d + train_files_1d + val_files_1d + test_files_1d)
+        # return torch.vstack(train_files_2d)
+    def build_mfp_for_new_SMILES(self, smiles):
+        num_plain_FPs = 16 # radius from 0 to 15
+        
+        mol = Chem.MolFromSmiles(smiles)
+        mol_H = Chem.AddHs(mol) # add implicit Hs to the molecule
+        all_plain_fps_on_bits = []
+        for radius in range(num_plain_FPs):
+            all_plain_fps_on_bits.append(generate_normal_FP_on_bits(mol_H, radius=radius, length=self.single_FP_size) + radius*self.single_FP_size)
+        FP_on_bits = np.concatenate(all_plain_fps_on_bits)
+        
+        mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
+        mfp = mfp[self.indices_kept]
+        assert(len(mfp) == 6144)
+        return torch.tensor(mfp).float()
     
 specific_radius_mfp_loader = Specific_Radius_MFP_loader()
 
 # def s(dataset, file_index, fp_suffix):
+if __name__ == "__main__":
+    specific_radius_mfp_loader.setup(only_2d = False, FP_building_type = "Normal")
+    specific_radius_mfp_loader.set_max_radius(2, only_2d = False)
+    
+    for file_idx in range(len(specific_radius_mfp_loader.train_2d)):
+        mfp = specific_radius_mfp_loader.build_mfp(file_idx, "2d", "train")
+        print(mfp)
+        break
+    # train_files_2d = [self.build_mfp(file_idx, "2d", "train") )]
+        # val_files_2d = [self.build_mfp(file_idx, "2d", "val") for file_idx in range(len(self.val_2d))]
+        # test_files_2d = [self.build_mfp(file_idx, "2d", "test") for file_idx in range(len(self.test_2d))]
+        # train_files_1d = [self.build_mfp(file_idx, "1d", "train") for file_idx in range(len(self.train_1d))]
+        # val_files_1d = [self.build_mfp(file_idx, "1d", "val") for file_idx in range(len(self.val_1d))]
+        # test_files_1d = [self.build_mfp(file_idx, "1d", "test") for file_idx in range(len(self.test_1d))]
+        
+    print("Done")
                 
     
