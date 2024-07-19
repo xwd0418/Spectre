@@ -58,11 +58,11 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         self.test_step_outputs[current_batch_name].append(metrics)
         return metrics
     
-    def predict_step(self, batch, batch_idx, dataloader_idx):
+    def predict_step(self, batch, batch_idx, dataloader_idx,return_representations=False):
         if self.separate_classifier:
             self.fc = self.classifiers[dataloader_idx]
         current_batch_name = self.all_dataset_names[dataloader_idx]
-        query_products = super().predict_step(batch, batch_idx)
+        query_products = super().predict_step(batch, batch_idx, return_representations)
         return query_products
     
     def on_validation_epoch_end(self):

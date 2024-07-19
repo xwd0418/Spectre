@@ -80,7 +80,8 @@ class RankingSet(torch.nn.Module):
     nonzero = torch.nonzero(torch.isclose(fp, hi))
     return tuple(nonzero[:, 0].tolist())
 
-  def retrieve_idx(self, query, n=10):
+# how many of the top n to be retrieved
+  def retrieve_idx(self, query, n=50):
     query = F.normalize(query, dim=1, p=2.0).to(self.data.device).unsqueeze(0)
     # print(self.data.shape, query.shape)
     # (n x 6144) * (6144 x bs) = n x bs

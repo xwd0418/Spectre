@@ -268,11 +268,12 @@ class HsqcRankedTransformer(pl.LightningModule):
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
+        print(latent.device, points.device)
         points = torch.cat([latent, points], dim=1)
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out, mask
 
-    def forward(self, hsqc):
+    def forward(self, hsqc, return_representations=False):
         """The forward pass.
         Parameters
         ----------
@@ -286,6 +287,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         out, _ = self.encode(hsqc)  # (b_s, seq_len, dim_model)
         out_cls = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token : (b_s, dim_model) -> (b_s, out_dim)
         
+        if return_representations:
+            return out.detach().cpu().numpy()
         return out_cls
 
     def training_step(self, batch, batch_idx):
@@ -338,10 +341,12 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.test_step_outputs.append(metrics)
         return metrics
 
-    def predict_step(self, batch, batch_idx):
+    def predict_step(self, batch, batch_idx, return_representations=False):
         x, smiles_chemical_name = batch
         # smiles, names = zip(*smiles_chemical_name)
         # print(smiles, names)
+        if return_representations:
+            return self.forward(x, return_representations=True)
         out = self.forward(x)
         preds = torch.sigmoid(out)
         top_k_idxs = self.ranker.retrieve_idx(preds)
@@ -425,7 +430,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs,  CE_num_class=self.num_class)
 
 
-
+    def change_ranker_for_inference(self, test_ranking_set_path=None ):
+        self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_inference_ranking_set_with_everything(),
+                                          batch_size=self.bs, CE_num_class=self.num_class)
 
 
 

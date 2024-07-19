@@ -38,6 +38,7 @@ class All_Info_Dataset(Dataset):
         return len(self.files)
     
     def __getitem__(self, i):
+        NMR_path= f"{self.dir}/oneD_NMR/{self.files[i]}"
         
         if self.oneD_type == None:
             c_tensor = torch.tensor([]).view(-1, 1)
@@ -75,7 +76,7 @@ class All_Info_Dataset(Dataset):
             file_index = int(self.files[i].split(".")[0])
             smiles = self.index_to_smiles[file_index]
             chemical_name = self.index_to_chemical_names[file_index]
-            return inputs, (smiles, chemical_name)
+            return inputs, (smiles, chemical_name, NMR_path)
         
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             mfp = specific_radius_mfp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
