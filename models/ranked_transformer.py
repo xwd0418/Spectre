@@ -268,7 +268,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
-        print(latent.device, points.device)
+        # print(latent.device, points.device)
         points = torch.cat([latent, points], dim=1)
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out, mask
