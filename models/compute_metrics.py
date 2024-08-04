@@ -4,13 +4,20 @@ import numpy as np
 from torchmetrics.classification import BinaryRecall, BinaryPrecision, BinaryF1Score, BinaryAccuracy
 
 do_cos = nn.CosineSimilarity(dim=1)
+def do_jaccard(pred, label):
+    pred = pred > 0
+    label = label > 0
+    intersection = torch.sum(pred * label, axis=1)
+    union = torch.sum((pred + label)>0, axis=1)
+    return intersection / union
 do_f1 = BinaryF1Score()
 do_recall = BinaryRecall()
 do_precision = BinaryPrecision()
 do_accuracy = BinaryAccuracy()
 
 
-def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None, mw=None,use_actaul_mw_for_retrival=None):
+def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, 
+       query_idx_in_rankingset=None, mw=None,use_actaul_mw_for_retrival=None, use_Jaccard = False):
 
     global do_f1, do_recall, do_precision, do_accuracy
     do_f1 = do_f1.to(model_output)
@@ -23,6 +30,7 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
 
     # cos
     cos = torch.mean(do_cos(fp_label, fp_pred)).item()
+    jaccard = torch.mean(do_jaccard(fp_label, fp_pred)).item()
     # bit activity
     active = torch.mean(torch.sum(fp_pred, axis=1)).item()
     # bit metrics
@@ -49,10 +57,13 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
     neg_loss = loss_fn(neg_contr, fp_label)
 
     # === Do Ranking ===
-    if rank_by_soft_output:
-        rank_res = ranker.batched_rank(torch.sigmoid(model_output), fp_label, query_idx_in_rankingset, mw=mw, use_actaul_mw_for_retrival=use_actaul_mw_for_retrival)
+    if use_Jaccard:
+        queries = fp_pred
+    elif rank_by_soft_output:
+        queries = torch.sigmoid(model_output)
     else:
-        rank_res = ranker.batched_rank(fp_pred, fp_label, query_idx_in_rankingset, mw=mw, use_actaul_mw_for_retrival=use_actaul_mw_for_retrival)
+        queries = fp_pred
+    rank_res = ranker.batched_rank(queries, fp_label, query_idx_in_rankingset, mw=mw, use_actaul_mw_for_retrival=use_actaul_mw_for_retrival, use_jaccard=use_Jaccard)
     cts = [1, 5, 10]
     # strictly less as batched_rank returns number of items STRICTLY greater
     ranks = {
@@ -69,6 +80,7 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
         f"neg_loss": neg_loss.item(),
         f"pos_neg_loss": (pos_loss + neg_loss).item(),
         f"cos": cos,
+        f"jaccard": jaccard,
         f"active_bits": active,
         f"f1": f1,
         f"precision": prec,

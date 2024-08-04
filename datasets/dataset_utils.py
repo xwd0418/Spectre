@@ -108,6 +108,7 @@ def tokenise_and_mask_encoder(smiles, tokeniser):
 
 # utils about entropy and MFP
 def compute_entropy(data, total_dataset_size, use_natural_log=False):
+    # data: an array of counts of each bit, by default in the size of self.out_dim*(max_radius+1)
     probability = data/(total_dataset_size)
     if use_natural_log:
         entropy = (probability * np.log(np.clip(probability,1e-7 ,1)) )
@@ -115,7 +116,7 @@ def compute_entropy(data, total_dataset_size, use_natural_log=False):
         entropy = (probability * np.log2(np.clip(probability,1e-7 ,1)) )
     return entropy
 
-def keep_smallest_entropy(data, total_dataset_size, size=6144,  use_natural_log=False):
+def keep_smallest_entropy(data, total_dataset_size, size,  use_natural_log=False):
     entropy = compute_entropy(data, total_dataset_size, use_natural_log)
     indices_of_min_6144 = np.argsort(entropy)[:size]
     # print(entropy, indices_of_min_6144)
@@ -123,8 +124,7 @@ def keep_smallest_entropy(data, total_dataset_size, size=6144,  use_natural_log=
     return total_entropy, indices_of_min_6144
 
 ''' 
-I have a pre-built [0~15]*6144 fp 
-now I select top 6144 bits of highest entropy, from r0 up to r(x)
+convert the on bit positions to an array of 0s and 1s
 '''
 def convert_bits_positions_to_array(FP_on_bits, length):
     FP_on_bits= FP_on_bits.astype(int)
@@ -141,11 +141,12 @@ def generate_normal_FP_on_bits(mol, radius=2, length=6144):
     return on_bits
 
 class Specific_Radius_MFP_loader():
-    def __init__(self) -> None:
+    def __init__(self, ) -> None:
         self.path_pickles = '/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/'
         
-    def setup(self, only_2d = False, FP_building_type = "Normal"):
+    def setup(self, only_2d = False, FP_building_type = "Normal", out_dim=6144):
         assert (FP_building_type in ["Normal", "Exact"]), "Only Normal/Exact FP is supported"
+        self.out_dim = out_dim
         self.single_FP_size = 6144 if FP_building_type == "Normal" else 1024
         self.train_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_train.pkl', 'rb'))
         self.train_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_train.pkl', 'rb'))
@@ -171,9 +172,9 @@ class Specific_Radius_MFP_loader():
             total_dataset_size = len(self.train_2d)
         else:
             total_dataset_size = len(self.train_1d) + len(self.train_2d)
-        self.entropy, self.indices_kept = keep_smallest_entropy(count_for_current_radius, total_dataset_size)
+        self.total_entropy_of_all_bits, self.indices_kept = keep_smallest_entropy(count_for_current_radius, total_dataset_size, self.out_dim)
         # self.indices_kept = list(self.indices_kept)
-        assert len(self.indices_kept) == 6144, "should keep only 6144 highest entropy bits"
+        assert len(self.indices_kept) == self.out_dim, f"should keep only {self.out_dim} highest entropy bits"
         
     def build_mfp(self, file_idx, dataset_src, split):
         if dataset_src == '1d':
@@ -195,7 +196,6 @@ class Specific_Radius_MFP_loader():
         
         mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
         mfp = mfp[self.indices_kept]
-        assert(len(mfp) == 6144)
         return torch.tensor(mfp).float()
     
     def build_rankingset(self, split):         
@@ -228,7 +228,6 @@ class Specific_Radius_MFP_loader():
         
         mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
         mfp = mfp[self.indices_kept]
-        assert(len(mfp) == 6144)
         return torch.tensor(mfp).float()
     
 specific_radius_mfp_loader = Specific_Radius_MFP_loader()
