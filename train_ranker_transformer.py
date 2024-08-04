@@ -21,6 +21,7 @@ from datasets.oneD_dataset import OneDDataModule
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
 
+import argparse
 from argparse import ArgumentParser
 from functools import reduce
 from datasets.dataset_utils import specific_radius_mfp_loader
@@ -212,6 +213,7 @@ def main(optuna_params=None):
     parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data")
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
+    parser.add_argument("--use_Jaccard",  type=lambda x:bool(str2bool(x)), default=False, help="using Jaccard similarity instead of cosine similarity")
     
     # count-based FP
     parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
@@ -231,6 +233,7 @@ def main(optuna_params=None):
     
     # entropy based FP
     parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact")
+    parser.add_argument("--out_dim", type=int, default="6144", help="the size of output fingerprint to be predicted")
     
     args = vars(parser.parse_known_args()[0])
     # if args['only_C_NMR'] or args['only_H_NMR']:
@@ -243,7 +246,7 @@ def main(optuna_params=None):
     if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             only_2d = not args['use_oneD_NMR_no_solvent']
             FP_building_type = args['FP_building_type'].split("_")[-1]
-            specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
+            specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
             specific_radius_mfp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
     
     seed_everything(seed=args["random_seed"])   
@@ -254,9 +257,11 @@ def main(optuna_params=None):
     # Model args
     args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args_with_model.items())
+    if args['foldername'] == "debug":
+        args["epochs"] = 2
 
     # Tensorboard setup
-    curr_exp_folder_name = "weird_H_and_tautomer_cleaned"
+    curr_exp_folder_name = "RemoveIsomericInfoSMILES"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"

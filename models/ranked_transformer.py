@@ -51,7 +51,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         wavelength_bounds=None,
         gce_resolution=1,
         dropout=0,
-        out_dim=6144,
         # other business logic stuff
         save_params=True,
         ranking_set_path="",
@@ -66,6 +65,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         scheduler=None,  # None, "attention"
         warm_up_steps=0,
         freeze_weights=False,
+        use_Jaccard = False,
         *args,
         **kwargs,
     ):
@@ -86,7 +86,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         # === All Parameters ===
-        
+        out_dim = kwargs['out_dim']
         self.FP_length = out_dim # 6144 
         self.separate_classifier = kwargs['separate_classifier']
         if FP_choice == "R0_to_R4_30720_FP":
@@ -106,6 +106,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.scheduler = scheduler
         self.warm_up_steps = warm_up_steps
         self.dim_model = dim_model
+        
+        self.use_Jaccard = use_Jaccard
+        print("Using jaccard: ", use_Jaccard)
         
         # don't set ranking set if you just want to treat it as a module
         self.FP_choice=FP_choice
@@ -218,7 +221,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}wavelength_bounds",
                             type=float, default=None, nargs='+', action='append')
         parser.add_argument(f"--{model_name}dropout", type=float, default=0.0)
-        # parser.add_argument(f"--{model_name}out_dim", type=int, default=6144)
         parser.add_argument(f"--{model_name}pos_weight", type=str, default=None, 
                             help = "if none, then not to be used; if ratio,\
                                 then used the save tensor which is the ratio of num_0/num_1, \
@@ -318,6 +320,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             preds, labels, self.ranker, loss, self.loss, thresh=0.0, 
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx,
+            use_Jaccard = self.use_Jaccard
             )
         if type(self.validation_step_outputs)==list: # adapt for child class: optional_input_ranked_transformer
             self.validation_step_outputs.append(metrics)
@@ -335,7 +338,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         metrics = self.compute_metric_func(
             preds, labels, self.ranker, loss, self.loss, thresh=0.0,
             rank_by_soft_output=self.rank_by_soft_output,
-            query_idx_in_rankingset=batch_idx
+            query_idx_in_rankingset=batch_idx,
+            use_Jaccard = self.use_Jaccard
             )
         if type(self.test_step_outputs)==list:
             self.test_step_outputs.append(metrics)

@@ -105,6 +105,37 @@ class RankingSet(torch.nn.Module):
 #       out.append(self.lookup.get(nonzero, None))
 #     return out
 
+  def jaccard_rank(self, data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival):
+    assert (queries.size() == truths.size())
+    if mw is not None:
+        # filtering some mols in rankingset
+        if use_actaul_mw_for_retrival:
+            idx_to_keep = torch.abs(mw[0]-self.MWs)<20
+        else:
+            idx_to_keep = torch.abs(self.MWs-mw[0])/self.MWs<0.2
+        data = data[idx_to_keep]
+    
+    
+    ct_greater = []
+    with torch.no_grad():
+        # compute jaccard of each query with each data
+        for idx, query in enumerate(queries):
+            jaccard = torch.sum((data*query)>0, dim=1) / torch.sum((data+query) > 0, dim=1)
+            ct_greater.append(torch.sum(jaccard >= thresh[idx], dtype=torch.int))
+            # print("query", query.nonzero())
+            # print("truths", truths[idx].nonzero())
+            # print("data", data[0].nonzero())
+            # # print("torch.sum(data*query, dim=1): ", torch.sum(data*query, dim=1))
+            # # print("intersection: ", torch.sum(data*query, dim=1), torch.sum(data*query, dim=1).shape)
+            # # print("union: ", torch.sum((data+query ) > 0, dim=1), torch.sum((data+query ) > 0, dim=1).shape)
+            # print("jaccard: ", jaccard.sort(descending=True))
+            # print("thresh: ", thresh, thresh.shape)
+            # print(jaccard >= thresh[idx])
+            # exit(0)
+        ct_greater = torch.tensor(ct_greater)
+        ct_greater -= 1 # subtract the label(the sample itself) from the ranking set
+    return ct_greater        
+
   def dot_prod_rank(self, data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival):
     '''
       Perform a dot-product ranking. Assumes that data, queries, and truths are already
@@ -147,14 +178,7 @@ class RankingSet(torch.nn.Module):
       ct_greater -= 1 # subtract the label(the sample itself) from the ranking set
  
       if self.debug:
-        
-        # self.logger.info("thresh: ")
-        # self.logger.info(thresh)
-        # self.logger.info("ct_greater: ")
-        # self.logger.info(ct_greater)
-        # self.logger.info(torch.nonzero(query_products > thresh))
-        # self.logger.info(query_products[:5, :5])
-        
+     
         truth_products = data @ truths.T  # (n, q)
         print(truth_products.shape)
         print("truth_products: \n", truth_products)
@@ -164,35 +188,10 @@ class RankingSet(torch.nn.Module):
         # for i in range(q):
         #     print('biggest of current column: ', torch.topk(query_products[:,i], k=3).values)
         print("ct_greater: \n", ct_greater)
-        exit(0)
-        
-        
-        
-        # print('data[0]:\n', torch.nonzero(data[0]))
-        # print("idx mask :\n ",torch.nonzero(idx_mask==False))
-        # rows, cols = zip(*torch.nonzero(idx_mask==False))
-        # print("supposed to be all ones: ", truth_products[rows,cols])
-        # print("masked query products: ",query_products[])s
-        # print("mask shape: ",equality_mask[:,0].shape)
-        # print("mask shape: ",match_mask[:,0].shape)
-
-        # print("where is larger?:\n",torch.nonzero(query_products > thresh))
-        # print(query_products[:5, :5])
-        print()
-        
-        
-        # # check if same products are all from same FPs
-        # same_product = torch.isclose(query_products, thresh) # shape of (n, q)
-        # idx_rankingset, idx_batch = same_product.nonzero()[:,0], same_product.nonzero()[:,1]
-
-        # if not (self.data[idx_rankingset] == truths[idx_batch]).all():
-        #     print( "indices of same_product that product is same but FPs are not the same" , ((self.data[idx_rankingset] == truths[idx_batch]).all(dim=1) == False).nonzero())
-        #     print("not all same products are from same FPs")
-
-        
+        exit(0)        
       return ct_greater
 
-  def batched_rank(self, queries, truths, query_idx_in_rankingset , mw, use_actaul_mw_for_retrival):
+  def batched_rank(self, queries, truths, query_idx_in_rankingset , mw, use_actaul_mw_for_retrival, use_jaccard):
     '''
         Perform a batched ranking
 
@@ -205,15 +204,21 @@ class RankingSet(torch.nn.Module):
     '''
     
     with torch.no_grad():
-        #   q = queries.size()[0]
-        queries = F.normalize(queries, dim=1, p=2.0)  # (q, 6144)
-        truths = F.normalize(truths, dim=1, p=2.0)  # (q, 6144)
+        if use_jaccard:
+            intersection = torch.sum(queries*truths, dim=1)
+            union = torch.sum((queries+truths)>0, dim=1)
+            thresh = intersection/union
+            return self.jaccard_rank(self.data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival)
+        else:
+            #   q = queries.size()[0]
+            queries = F.normalize(queries, dim=1, p=2.0)  # (q, 6144)
+            truths = F.normalize(truths, dim=1, p=2.0)  # (q, 6144)
 
-        # transpose and element-wise dot ->(6144, q)
-        # sum dim 0, keepdims -> (1, q)
-        thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
+            # transpose and element-wise dot ->(6144, q)
+            # sum dim 0, keepdims -> (1, q)
+            thresh = torch.sum((queries * truths).T, dim=0, keepdim=True)
 
-        return self.dot_prod_rank(self.data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival)
+            return self.dot_prod_rank(self.data, queries, truths, thresh, query_idx_in_rankingset, mw, use_actaul_mw_for_retrival)
 
   def batched_rank_tfidf(self, queries, truths):
     '''

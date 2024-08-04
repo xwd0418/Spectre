@@ -179,7 +179,7 @@ class OptionalInputDataModule(FolderDataModule):
         loader_HSQC_H_NMR = DataLoader(self.test_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         loader_only_C_NMR = DataLoader(self.test_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], spin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         loader_HSQC_C_NMR = DataLoader(self.test_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
                                         num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
         return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
