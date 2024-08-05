@@ -101,7 +101,7 @@ class HsqcRankedResNet(pl.LightningModule):
         
             except ValueError:
                 if pos_weight == "ratio":
-                    self.bce_pos_weight = torch.load('/root/MorganFP_prediction/reproduce_previous_works/smart4.5/pos_weight_array_based_on_ratio.pt')
+                    self.bce_pos_weight = torch.load('/root/MorganFP_prediction/reproduce_previous_works/Spectre/pos_weight_array_based_on_ratio.pt')
                     self.out_logger.info("[RankedResNet] bce_pos_weight is loaded ")
                 else:
                     raise ValueError(f"pos_weight {pos_weight} is not valid")

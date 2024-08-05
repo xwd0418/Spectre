@@ -142,7 +142,7 @@ def generate_normal_FP_on_bits(mol, radius=2, length=6144):
 
 class Specific_Radius_MFP_loader():
     def __init__(self, ) -> None:
-        self.path_pickles = '/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/FP_on_bits_pickles/'
+        self.path_pickles = '/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/FP_on_bits_pickles/'
         
     def setup(self, only_2d = False, FP_building_type = "Normal", out_dim=6144):
         assert (FP_building_type in ["Normal", "Exact"]), "Only Normal/Exact FP is supported"
@@ -199,7 +199,7 @@ class Specific_Radius_MFP_loader():
         return torch.tensor(mfp).float()
     
     def build_rankingset(self, split):         
-        path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/{split}_indices_of_full_info_NMRs.pkl"
         file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
         files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
              

@@ -1,6 +1,6 @@
 {
     "python.analysis.extraPaths": [
-        "/workspace/smart4.5"
+        "/workspace/Spectre"
     ],
     "notebook.output.textLineLimit": 30,
     "notebook.output.scrolling": true,

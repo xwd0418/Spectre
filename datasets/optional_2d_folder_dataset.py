@@ -20,7 +20,7 @@ class All_Info_Dataset(Dataset):
         self.parser_args = parser_args
         assert oneD_type in ["H_NMR", "C_NMR", "both", None]
         self.oneD_type = oneD_type
-        path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/{split}_indices_of_full_info_NMRs.pkl"
         self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
         self.files.sort()
         self.show_smiles = show_smiles
