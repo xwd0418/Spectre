@@ -1,8 +1,0 @@
-
-all_inputs: rank_1: 0.3900, rank_5: 0.6014, mean_rank: 60.7325, cos: 0.6511, f1: 0.6233, 
-HSQC_H_NMR: rank_1: 0.7065, rank_5: 0.8613, mean_rank: 18.7045, cos: 0.7510, f1: 0.7470, 
-HSQC_C_NMR: rank_1: 0.4797, rank_5: 0.7107, mean_rank: 36.7375, cos: 0.6784, f1: 0.6571, 
-only_hsqc : rank_1: 0.8732, rank_5: 0.9604, mean_rank: 5.3643, cos: 0.8318, f1: 0.8414, 
-only_1d   : rank_1: 0.0003, rank_5: 0.0033, mean_rank: 1658.0645, cos: 0.3180, f1: 0.2283, 
-only_H_NMR: rank_1: 0.0005, rank_5: 0.0018, mean_rank: 1918.9147, cos: 0.2435, f1: 0.1342, 
-only_C_NMR: rank_1: 0.0000, rank_5: 0.0028, mean_rank: 1679.0469, cos: 0.2463, f1: 0.1619, 
