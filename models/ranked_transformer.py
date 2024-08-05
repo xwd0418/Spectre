@@ -18,10 +18,6 @@ from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_sc
 import numpy as np
 import os
 
-from models.chemformer.molbart_utils import (
-    PreNormDecoderLayer
-)
-
 from utils.lr_scheduler import NoamOpt
 from utils.L1_decay import L1
 

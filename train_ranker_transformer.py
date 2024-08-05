@@ -12,11 +12,9 @@ import torch.distributed as dist
 
 from models.ranked_transformer import HsqcRankedTransformer
 from models.ranked_resnet import HsqcRankedResNet
-from models.deepSAT_model import DeepSATModel
 from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 # from models.ranked_double_transformer import DoubleTransformer
 from datasets.hsqc_folder_dataset import FolderDataModule
-from datasets.deepSAT_dataset import DeepSATDataModule
 from datasets.oneD_dataset import OneDDataModule
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
@@ -67,8 +65,6 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
     #     return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
-    elif model_type == "DeepSAT":
-        return DeepSATDataModule(dir=choice, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "CNN":
         num_channels = kwargs['num_input_channels']
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], batch_size=batch_size, parser_args=kwargs)
@@ -87,8 +83,7 @@ def apply_args(parser, model_type):
         HsqcRankedTransformer.add_model_specific_args(parser)
     elif model_type == "CNN":
         HsqcRankedResNet.add_model_specific_args(parser)
-    elif model_type == "DeepSAT":
-        DeepSATModel.add_model_specific_args(parser)
+   
     else:
         raise(f"No model for model type {model_type}.")
 
@@ -98,9 +93,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     ranking_set_type = kwargs["FP_choice"] 
     rankingset_dir = '/workspace/ranking_sets_2d1d_stacked'  if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_cleaned_by_inchi'
     kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
-    if ranking_set_type == "HYUN_FP":
-        kwargs["ranking_set_path"] = '/root/MorganFP_prediction/reproduce_previous_works/Spectre/reproducing_deepsat/ranking_sets/HYUN_FP_only_all_info_molecules/val/rankingset.pt'
-
+   
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
@@ -111,9 +104,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
             model_class = OptionalInputRankedTransformer
         else:
             model_class = HsqcRankedTransformer
-    elif model_type == "DeepSAT":
-        model_class = DeepSATModel
-        kwargs['num_classes'] = 78 # number of classes in the dataset
+    
     elif model_type == "CNN":
         model_class = HsqcRankedResNet
         
@@ -281,7 +272,7 @@ def main(optuna_params=None):
     
     my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
     my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
-    my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    # my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
     
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
@@ -308,7 +299,7 @@ def main(optuna_params=None):
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
-                         accelerator="gpu",
+                         accelerator="cpu",
                          logger=tbl, 
                          callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
                         )
