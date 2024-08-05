@@ -14,7 +14,9 @@ In our repo, we have hard-coded our datasets' name and file paths.
 
 Here `OneD_Only_Dataset` contains compounds where only 1D NMRs are available. `SMILES_dataset` contains compounds where 2D HSQC NMRs are always availabel and 1D NMRs are sometimes available 
 
-The dataset root path in our project is `/workspace`.
+The dataset root path in our project is `/workspace`. Our dataset, with HSQC spectra removed due to legal concerns, is available at [here](https://drive.google.com/file/d/16eKPJz2hwsfnPIKweJyKrfi9cZiGVErD/view?usp=sharing).
+
+After downloadind the dataset, please run `unzip -q DatasetWithoutHSQC.zip -d /workspace/`
 
 HYUN_FP refers to Hyunwoo Kim's proposed fingerprint used in previous SOTA method: DeepSAT. MW/index.pkl, Chemical/index.pkl, and SMILES/index.pkl records the molecular weight, chemical name, and SMILES string of each comound.
 
