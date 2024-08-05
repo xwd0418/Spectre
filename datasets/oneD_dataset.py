@@ -52,7 +52,7 @@ class OneDDataset(Dataset):
         
         if parser_args['train_on_all_info_set']  or split in ["val", "test"]:
             logger.info(f"[OneD Dataset]: only all info datasets: {split}")
-            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
             logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
             return 

@@ -6,7 +6,7 @@ pip install -r requirements.txt
 ```
 
 ## Cloning the repo
-Please clone the repo at `/root/MorganFP_prediction/reproduce_previous_works/` directory to best reproduce the code
+Please unzip the repo as `/root/MorganFP_prediction/reproduce_previous_works/Spectre` to best reproduce the code
 
 
 ## Dataset Structure
@@ -182,8 +182,26 @@ HYUN_FP refers to Hyunwoo Kim's proposed fingerprint used in previous SOTA metho
 
 ### Running
 
-To train a model that can take any input NMR combination to predict entropy-based-fingerprint, specifically using r0-r4 entropy-based Morgan fingerprint
+To train a model that can take any input NMR combination to predict entropy-based-fingerprint, specifically using r0-r4 entropy-based Morgan fingerprint as target
 - ` python train_ranker_transformer.py transformer_2d1d --foldername flexible_models_best_FP  --expname r0_r4_FP_trial_3 --optional_inputs true --combine_oneD_only_dataset true --random_seed 303 --FP_choice pick_entropy_r4 --scheduler attention --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0 ` 
 
-To train a model that takes only HSQC:
-- `python train_ranker_transformer.py transformer_2d1d --train_on_all_info_set true --foldername entropy_radius_exps_only_HSQC --random_seed 101 --expname R0_to_R15_only_hsqc_trial_1 --use_oneD_NMR_no_solvent false  --FP_choice pick_entropy_r15 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0 `
+To train a model that takes only HSQC, using r0-r5 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d --foldername train_on_all_data_possible --random_seed 101 --expname only_hsqc_trial_1 --use_oneD_NMR_no_solvent false  --FP_choice pick_entropy_r3 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0 `
+
+To train a model that takes only H-NMR, using r0-r3 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d --foldername train_on_all_data_possible --random_seed 101 --only_H_NMR true --only_oneD_NMR true --combine_oneD_only_dataset true --expname only_h_trial_1   --FP_choice pick_entropy_r4 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0  `
+
+To train a model that takes only C-NMR, using r0-r2 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d --foldername train_on_all_data_possible --random_seed 101 --only_C_NMR true --only_oneD_NMR true --combine_oneD_only_dataset true --expname only_c_trial_1   --FP_choice pick_entropy_r3 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0  `
+
+To train a model that takes HSQC and C-NMR, using r0-r2 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d  --foldername train_on_all_data_possible --random_seed 101 --expname HSQC_and_C_trial_1 --only_C_NMR true  --FP_choice pick_entropy_r3 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0 `
+
+To train a model that takes HSQC and H-NMR, using r0-r2 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d  --foldername train_on_all_data_possible --random_seed 101 --expname HSQC_and_H_trial_1 --only_H_NMR true  --FP_choice pick_entropy_r4 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0`
+
+To train a model that takes C-NMR and H-NMR, using r0-r2 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d --train_on_all_info_set true --foldername entropy_radius_exps_1d --random_seed 101 --only_oneD_NMR true --expname R0_to_R13_only_1d_trial_1   --FP_choice pick_entropy_r2 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0`
+
+To train a model that takes all three kinds of NMRs, using r0-r2 entropy-based Morgan fingerprint:
+- `python train_ranker_transformer.py transformer_2d1d --train_on_all_info_set true --foldername entropy_radius_exps_all_info --random_seed 101 --expname R0_to_R8_all_info_trial_1  --FP_choice pick_entropy_r2 --scheduler attention  --wavelength_bounds 0.01 400.0 --wavelength_bounds 0.01 20.0  `

@@ -73,7 +73,7 @@ def generate_FPs_and_concat(smile_str, num_FPs , exact_radius = False):
 if __name__ == "__main__":
 
     # MOST IMPORTANT PART: CONFIGURATIONS
-    previously_computed_indices_to_keep = np.load("/root/MorganFP_prediction/reproduce_previous_works/smart4.5/notebooks/dataset_building/indices_kept_r0_to_r4.npy")
+    previously_computed_indices_to_keep = np.load("/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/indices_kept_r0_to_r4.npy")
     new_FP_name =  "R0_to_R4_reduced_FP"
     num_FPs = 5 # from r0 to r?
     dataset_to_add_FP = "OneD_Only_Dataset"

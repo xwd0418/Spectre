@@ -99,7 +99,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     rankingset_dir = '/workspace/ranking_sets_2d1d_stacked'  if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_cleaned_by_inchi'
     kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
     if ranking_set_type == "HYUN_FP":
-        kwargs["ranking_set_path"] = '/root/MorganFP_prediction/reproduce_previous_works/smart4.5/reproducing_deepsat/ranking_sets/HYUN_FP_only_all_info_molecules/val/rankingset.pt'
+        kwargs["ranking_set_path"] = '/root/MorganFP_prediction/reproduce_previous_works/Spectre/reproducing_deepsat/ranking_sets/HYUN_FP_only_all_info_molecules/val/rankingset.pt'
 
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:

@@ -71,7 +71,7 @@ class DM(pl.LightningDataModule):
 
 def main():
     model, dm = DummyModule(), DM()
-    tbl = TensorBoardLogger(save_dir="/workspace/smart4.5/ignore", name="path1", version="v1")
+    tbl = TensorBoardLogger(save_dir="/workspace/Spectre/ignore", name="path1", version="v1")
     cb = EarlyStopping(monitor="val/my_loss", mode="min", verbose=True, patience=1)
     cb2 = MyCallback()
     trainer = pl.Trainer(max_epochs=5, gpus=0, logger = tbl, callbacks=[cb, cb2])

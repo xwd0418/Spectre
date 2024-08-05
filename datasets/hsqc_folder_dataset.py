@@ -39,7 +39,7 @@ class FolderDataset(Dataset):
             self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
         if parser_args['train_on_all_info_set'] or split in ["val", "test"]:
             logger.info(f"[FolderDataset]: only all info datasets")
-            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
             # assert (not parser_args['combine_oneD_only_dataset'])
         elif self.parser_args['only_C_NMR'] or self.parser_args['only_H_NMR'] or self.parser_args['only_oneD_NMR']:
@@ -237,7 +237,7 @@ class FolderDataset(Dataset):
     def get_weight_of_samples_based_on_input_type(self):
 
         # ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]
-        path = "/root/MorganFP_prediction/reproduce_previous_works/smart4.5/datasets/input_type_weights.pt"
+        path = "/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/input_type_weights.pt"
         if os.path.exists(path):
             type_of_each_sample =  torch.load(path)
         else:
