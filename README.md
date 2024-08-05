@@ -165,6 +165,15 @@ HYUN_FP refers to Hyunwoo Kim's proposed fingerprint used in previous SOTA metho
 
 ./SMILES_dataset/test/Isomeric_SMILES:
 ```
+
+## Data Processing
+Execute these scripts to pre-built necessary pickle files for training
+
+`/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/find_all_info_indices.ipynb`
+
+`reproduce_previous_works/Spectre/notebooks/dataset_building/find_all_info_indices.ipynb`
+
+
 ## A brief explanation of the files 
 
 - datasets:

@@ -299,7 +299,7 @@ def main(optuna_params=None):
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
-                         accelerator="cpu",
+                         accelerator="auto",
                          logger=tbl, 
                          callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
                         )

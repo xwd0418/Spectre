@@ -546,7 +546,6 @@ MigrationBackup/
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
 
-# James stuff
 tempdata/
 core.*
 path1/
@@ -564,3 +563,5 @@ debug_rank1.ipynb
 notebooks/dataset_building/FP_on_bits_pickles/
 reproducing_deepsat/
 spectre_frontend
+
+/datasets/*.pkl
