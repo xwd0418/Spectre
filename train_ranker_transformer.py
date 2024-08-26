@@ -91,7 +91,6 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     logger = logging.getLogger('logging')
     kwargs = vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
-    rankingset_dir = '/workspace/ranking_sets_2d1d_stacked'  if args['combine_oneD_only_dataset'] else '/workspace/ranking_sets_cleaned_by_inchi'
     kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
    
     for v in EXCLUDE_FROM_MODEL_ARGS:
@@ -205,6 +204,7 @@ def main(optuna_params=None):
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     parser.add_argument("--use_Jaccard",  type=lambda x:bool(str2bool(x)), default=False, help="using Jaccard similarity instead of cosine similarity")
+    parser.add_argument("--jittering",  type=str, default="None", help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
     
     # count-based FP
     parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
@@ -252,7 +252,7 @@ def main(optuna_params=None):
         args["epochs"] = 2
 
     # Tensorboard setup
-    curr_exp_folder_name = "RemoveIsomericInfoSMILES"
+    curr_exp_folder_name = "Jittering"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"

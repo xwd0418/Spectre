@@ -41,6 +41,8 @@ class FolderDataset(Dataset):
             logger.info(f"[FolderDataset]: only all info datasets")
             path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            print("loaded full info indices\n\n\n")
+            # print("36690.pt" in self.files, self.files[0])
             # assert (not parser_args['combine_oneD_only_dataset'])
         elif self.parser_args['only_C_NMR'] or self.parser_args['only_H_NMR'] or self.parser_args['only_oneD_NMR']:
             self.files = os.listdir(os.path.join(self.dir, "oneD_NMR"))
@@ -54,7 +56,6 @@ class FolderDataset(Dataset):
             self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR/"))
             self.files_1d.sort()
             
-        
         if dist.is_initialized():
             rank = dist.get_rank()
             if rank != 0:
@@ -73,7 +74,6 @@ class FolderDataset(Dataset):
                 return len(h_tensor)>0
             self.files = list(filter(filter_unavailable, self.files))
             
-        # Just testing,,, should delete the following 
         elif self.parser_args['only_oneD_NMR']:
             def filter_unavailable(x):
                 c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
@@ -81,6 +81,8 @@ class FolderDataset(Dataset):
             self.files = list(filter(filter_unavailable, self.files))
 
         logger.info(f"[FolderDataset]: dataset size is {len(self)}")
+        
+        # print("\n\n\n", "36690.pt" in self.files, self.files[0])
         
         
         
@@ -101,25 +103,27 @@ class FolderDataset(Dataset):
             # hsqc is empty tensor
             hsqc = torch.empty(0,3)
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
+            if self.parser_args['jittering'] == "normal" and self.split=="train":
+                c_tensor = c_tensor + torch.randn_like(c_tensor)
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
+                
+            # input dropout
             if self.parser_args['optional_inputs'] and len(c_tensor) > 0 and len(h_tensor) > 0:
                 if not self.parser_args['combine_oneD_only_dataset'] :
                     raise NotImplementedError("optional_inputs is only supported when combine_oneD_only_dataset is True")
                 random_num = random.random()
-                if random_num <= 0.413: # drop C rate 
+                if random_num <= 0.3487: # drop C rate 
                     c_tensor = torch.tensor([]) 
-                elif random_num <= 0.413+0.174: # drop H rate
+                elif random_num <= 0.3487+0.3026: # drop H rate
                     h_tensor = torch.tensor([])
+            
             c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
             c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
-
-            
             inputs = torch.vstack([
                     get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
                     get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
                     get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
                     ])    
-            
-            
             
         else :
             ### BEGINNING 2D dataset case
@@ -137,7 +141,9 @@ class FolderDataset(Dataset):
             # Load HSQC as sequence
             elif "HSQC" in self.input_src:
                 hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
-                
+                if self.parser_args['jittering'] == "normal" and self.split=="train":
+                    hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) 
+                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.25
             
                 if self.parser_args['use_peak_values']:
                     hsqc = normalize_hsqc(hsqc)
@@ -147,6 +153,9 @@ class FolderDataset(Dataset):
             if "oneD_NMR" in self.input_src:
                 if file_exist("oneD_NMR", self.files[i]):
                     c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
+                    if self.parser_args['jittering'] == "normal" and self.split=="train":
+                        c_tensor = c_tensor + torch.randn_like(c_tensor) 
+                        h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
                     # randomly drop 1D and 2D NMRs if needed
                     if self.parser_args['optional_inputs']:
                         # DO NOT drop 2D, cuz we have enough amount of 1D data 
@@ -154,18 +163,16 @@ class FolderDataset(Dataset):
                         #     hsqc =  torch.empty(0,3)
                         if len(c_tensor)>0 and len(h_tensor)>0:
                             # it is fine to drop one of the oneD NMRs
-                            random_num_for_dropping =  random.random()
-                            
-                            if random_num_for_dropping <= 0.363:# drop C rate
+                            random_num_for_dropping =  random.random()                            
+                            if random_num_for_dropping <= 0.3557:# drop C rate
                                 c_tensor = torch.tensor([])
-                            elif random_num_for_dropping <= 0.363+0.274: # drop H rate
+                            elif random_num_for_dropping <= 0.3557+0.2887: # drop H rate
                                 h_tensor = torch.tensor([])
                             # else: keep both
                                 
                     
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                             
-            # Just testing,,, should delete the following 
             if self.parser_args['only_oneD_NMR']:
                 hsqc = torch.empty(0,3)                
             if self.parser_args['only_C_NMR']:
@@ -214,8 +221,6 @@ class FolderDataset(Dataset):
         if self.parser_args['loss_func'] == "CE":
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
-        
-            
             
         combined = (inputs, mfp)
         

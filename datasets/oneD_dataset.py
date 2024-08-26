@@ -99,12 +99,18 @@ class OneDDataset(Dataset):
             i = idx - len(self.files)
             # hsqc is empty tensor   
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
+            if self.parser_args['jittering'] == "normal" and self.split=="train":
+                c_tensor = c_tensor + torch.randn_like(c_tensor) 
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
             # No need to use optional inputs for 1D dataset 
             
         else :
             ### BEGINNING 2D dataset case
             i = idx
             c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
+            if self.parser_args['jittering'] == "normal" and self.split=="train":
+                c_tensor = c_tensor + torch.randn_like(c_tensor) 
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
             # Again, no need to use optional inputs for 1D dataset
             ### ENDING 2D dataset case
             
