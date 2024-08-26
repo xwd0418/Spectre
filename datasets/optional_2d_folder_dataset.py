@@ -45,6 +45,9 @@ class All_Info_Dataset(Dataset):
             h_tensor = torch.tensor([]).view(-1, 1)
         else:
             c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")   # both
+            if self.parser_args['jittering'] == "normal" and self.split=="train":
+                c_tensor = c_tensor + torch.randn_like(c_tensor) 
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
             if self.oneD_type == "H_NMR":
                 c_tensor = torch.tensor([]).view(-1, 1)
             elif self.oneD_type == "C_NMR":
@@ -52,6 +55,9 @@ class All_Info_Dataset(Dataset):
          
         if self.has_HSQC:
             hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").float()
+            if self.parser_args['jittering'] == "normal" and self.split=="train":
+                    hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) 
+                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.25
         else:
             hsqc =  torch.empty(0,3)
         
