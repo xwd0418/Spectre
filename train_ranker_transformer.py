@@ -252,6 +252,7 @@ def main(optuna_params=None):
         args["epochs"] = 2
 
     # Tensorboard setup
+    # curr_exp_folder_name = 'NewRepoNewDataOldCode'
     curr_exp_folder_name = "Jittering"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"

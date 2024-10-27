@@ -105,7 +105,7 @@ class FolderDataset(Dataset):
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
             if self.parser_args['jittering'] == "normal" and self.split=="train":
                 c_tensor = c_tensor + torch.randn_like(c_tensor)
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
                 
             # input dropout
             if self.parser_args['optional_inputs'] and len(c_tensor) > 0 and len(h_tensor) > 0:
@@ -143,7 +143,7 @@ class FolderDataset(Dataset):
                 hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
                 if self.parser_args['jittering'] == "normal" and self.split=="train":
                     hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) 
-                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.25
+                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.1
             
                 if self.parser_args['use_peak_values']:
                     hsqc = normalize_hsqc(hsqc)
@@ -155,7 +155,7 @@ class FolderDataset(Dataset):
                     c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
                     if self.parser_args['jittering'] == "normal" and self.split=="train":
                         c_tensor = c_tensor + torch.randn_like(c_tensor) 
-                        h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.25
+                        h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
                     # randomly drop 1D and 2D NMRs if needed
                     if self.parser_args['optional_inputs']:
                         # DO NOT drop 2D, cuz we have enough amount of 1D data 
