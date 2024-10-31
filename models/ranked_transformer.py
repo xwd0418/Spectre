@@ -21,6 +21,9 @@ import os
 from utils.lr_scheduler import NoamOpt
 from utils.L1_decay import L1
 
+import sys, pathlib
+repo_path = pathlib.Path(__file__).resolve().parents[1]
+
 RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
     # exclude save_params
@@ -144,7 +147,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         
             except ValueError:
                 if pos_weight == "ratio":
-                    self.bce_pos_weight = torch.load('/root/MorganFP_prediction/reproduce_previous_works/Spectre/pos_weight_array_based_on_ratio.pt')
+                    self.bce_pos_weight = torch.load(f'{repo_path}/pos_weight_array_based_on_ratio.pt')
                     self.out_logger.info("[RankedTransformer] bce_pos_weight is loaded ")
                 else:
                     raise ValueError(f"pos_weight {pos_weight} is not valid")

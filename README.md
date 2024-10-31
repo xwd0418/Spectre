@@ -5,9 +5,6 @@
 pip install -r requirements.txt
 ```
 
-## Cloning the repo
-Please unzip the repo as `/root/MorganFP_prediction/reproduce_previous_works/Spectre` to best reproduce the code
-
 
 ## Dataset Structure
 In our repo, we have hard-coded our datasets' name and file paths.
@@ -171,9 +168,9 @@ HYUN_FP refers to Hyunwoo Kim's proposed fingerprint used in previous SOTA metho
 ## Data Processing
 Execute these scripts to pre-built necessary pickle files for training
 
-`/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/find_all_info_indices.ipynb`
+`{repo_path}/Spectre/notebooks/dataset_building/find_all_info_indices.ipynb`
 
-`/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/generate_all_morganFP.ipynb`
+`{repo_path}/Spectre/notebooks/dataset_building/generate_all_morganFP.ipynb`
 
 
 ## A brief explanation of the files 

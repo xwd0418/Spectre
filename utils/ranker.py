@@ -188,7 +188,7 @@ class RankingSet(torch.nn.Module):
         # for i in range(q):
         #     print('biggest of current column: ', torch.topk(query_products[:,i], k=3).values)
         print("ct_greater: \n", ct_greater)
-        exit(0)        
+        # exit(0)        
       return ct_greater
 
   def batched_rank(self, queries, truths, query_idx_in_rankingset , mw, use_actaul_mw_for_retrival, use_jaccard):

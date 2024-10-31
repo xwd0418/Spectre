@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
 from datasets.hsqc_folder_dataset import get_delimeter, pad
 from datasets.dataset_utils import specific_radius_mfp_loader
+import sys, pathlib
+repo_path = pathlib.Path(__file__).resolve().parents[1]
 
 
 class OneDDataset(Dataset):
@@ -52,7 +54,7 @@ class OneDDataset(Dataset):
         
         if parser_args['train_on_all_info_set']  or split in ["val", "test"]:
             logger.info(f"[OneD Dataset]: only all info datasets: {split}")
-            path_to_load_full_info_indices = f"/root/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
             logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
             return 
