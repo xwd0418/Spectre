@@ -234,6 +234,58 @@ class Specific_Radius_MFP_loader():
     
 specific_radius_mfp_loader = Specific_Radius_MFP_loader()
 
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
+def plot_NMR(hsqc, c_tensor, h_tensor):
+    # print(hsqc, c_tensor, h_tensor)
+    # Create a 2x2 grid for subplots
+    fig = plt.figure(figsize=(6, 4.8))  # Overall figure size
+    gs = gridspec.GridSpec(2, 2, height_ratios=[1, 20], width_ratios=[1, 20])
+
+    # Create subplots in different locations and sizes
+    ax1 = fig.add_subplot(gs[1, 1])  # Takes up the first row
+    if hsqc is not None:
+        pos = hsqc[hsqc[:,2]>0]
+        neg = hsqc[hsqc[:,2]<0]
+        ax1.scatter(pos[:,1], pos[:,0], c="red", label="1 or 3 H bond", s=5)
+        ax1.scatter(neg[:,1], neg[:,0], c="blue", label="2 H bond", s=5)
+        # print("scatter!!")
+        # print(pos, neg)
+    ax1.set_title("HSQC")
+    ax1.set_xlabel('Proton Shift (H)')  # X-axis label
+    ax1.set_xlim([0, 7.5])
+    ax1.set_ylim([0, 180])
+    ax1.invert_yaxis()
+    ax1.invert_xaxis()
+    ax1.legend()
+
+
+    ax2 = fig.add_subplot(gs[1, 0])  # Smaller subplot
+    if c_tensor is not None:
+        ax2.scatter( torch.ones(len(c_tensor)), c_tensor, c="black", s=2)
+    ax2.set_ylim([0, 180])
+    ax2.set_title("C-NMR")
+    ax2.set_ylabel('Carbon Shift (C)')
+    ax2.set_xticks([])
+    ax2.invert_yaxis()
+    ax2.invert_xaxis()
+
+    ax3 = fig.add_subplot(gs[0, 1])  # Smaller subplot
+    if h_tensor is not None:
+        ax3.scatter(h_tensor, torch.ones(len(h_tensor)),c="black", s=2)
+    ax3.set_xlim([0, 7.5])
+    ax3.set_title("H-NMR")
+    ax3.set_yticks([])
+    ax3.invert_yaxis()
+    ax3.invert_xaxis()
+
+    # Adjust layout to prevent overlapping
+    plt.tight_layout()
+
+    # Show the plot
+    plt.show()
+
 # def s(dataset, file_index, fp_suffix):
 if __name__ == "__main__":
     specific_radius_mfp_loader.setup(only_2d = False, FP_building_type = "Normal")
