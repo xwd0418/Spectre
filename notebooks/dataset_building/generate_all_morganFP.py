@@ -19,9 +19,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 from rdkit.Chem import AllChem
 from rdkit import Chem
-
-
-
+import sys, pathlib
+repo_path = pathlib.Path(__file__).resolve().parents[2]
 
 # %%
 from rdkit import Chem
@@ -98,7 +97,7 @@ def generate_normal_FP_on_bits(mol, radius=2, length=6144):
 Gonna take you a few minutes 
 '''
 
-os.makedirs(Path('/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/FP_on_bits_pickles'), exist_ok=True)
+os.makedirs(Path(f'{repo_path}/notebooks/dataset_building/FP_on_bits_pickles'), exist_ok=True)
 def generate_FP_indices_of_r0_r15(split, FP_length, generation_method, dataset="2d"):
     num_plain_FPs = 16
     if generation_method == "exact":
@@ -128,7 +127,7 @@ def generate_FP_indices_of_r0_r15(split, FP_length, generation_method, dataset="
 
         FP_on_bits[file_idx] = concated_FP
 
-    save_dir = Path('/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/FP_on_bits_pickles')
+    save_dir = Path(f'{repo_path}/notebooks/dataset_building/FP_on_bits_pickles')
     
     FP_on_bits_path = save_dir / save_name 
     with open(FP_on_bits_path, 'wb') as f:

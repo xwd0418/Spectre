@@ -22,6 +22,9 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
 
+import sys, pathlib
+repo_path = pathlib.Path(__file__).resolve().parents[2]
+
 def generate_FP_with_exact_radius(mol, radius=2, length=6144):
 
     # Dictionary to store information about which substructures contribute to setting which bits
@@ -73,7 +76,7 @@ def generate_FPs_and_concat(smile_str, num_FPs , exact_radius = False):
 if __name__ == "__main__":
 
     # MOST IMPORTANT PART: CONFIGURATIONS
-    previously_computed_indices_to_keep = np.load("/root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/dataset_building/indices_kept_r0_to_r4.npy")
+    previously_computed_indices_to_keep = np.load(f"{repo_path}/notebooks/dataset_building/indices_kept_r0_to_r4.npy")
     new_FP_name =  "R0_to_R4_reduced_FP"
     num_FPs = 5 # from r0 to r?
     dataset_to_add_FP = "OneD_Only_Dataset"

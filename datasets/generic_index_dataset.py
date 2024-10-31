@@ -7,6 +7,8 @@ import pickle
 import os
 import numpy as np
 from pathlib import Path
+import sys, pathlib
+repo_path = pathlib.Path(__file__).resolve().parents[1]
 
 class GenericIndexedDataset(Dataset):
   """
