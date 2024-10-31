@@ -97,15 +97,15 @@ def hello():
 @app.route('/api/generate-retrievals', methods=['POST','OPTIONS'])
 def generate_image():
     print("bakend received")
-    # dummy return 
-    buffered = BytesIO()
-    img = Image.new('RGB', (256, 256), color='red')
-    img.save(buffered, format="PNG")
-    img_bytes = buffered.getvalue()
-    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-    retrievals = [{"smile": "what is my smiles", "name": "what is my name", "image": img_base64}]
-    res = jsonify({'retrievals': retrievals, "NMR_plt": img_base64})
-    return build_actual_response(res)
+    # # dummy return 
+    # buffered = BytesIO()
+    # img = Image.new('RGB', (256, 256), color='red')
+    # img.save(buffered, format="PNG")
+    # img_bytes = buffered.getvalue()
+    # img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+    # retrievals = [{"smile": "what is my smiles", "name": "what is my name", "image": img_base64}]
+    # res = jsonify({'retrievals': retrievals, "NMR_plt": img_base64})
+    # return build_actual_response(res)
     
     # print("request.method ",request.method )
     # if request.method == 'OPTIONS':
@@ -154,37 +154,37 @@ def generate_image():
 
 if __name__ == '__main__':
     from waitress import serve
-    # # step 1: load model and datamodule   (here we assume we use all three NMRs)
-    # model_path = Path(f"/{root_path}/exps/weird_H_and_tautomer_cleaned/flexible_models_best_FP/r0_r2_FP_trial_2/")
-    # hyperpaerameters_path = model_path / "hparams.yaml"
-    # # checkpoint_path = model_path / "checkpoints/epoch=14-step=43515.ckpt"
+    # step 1: load model and datamodule   (here we assume we use all three NMRs)
+    model_path = Path(f"/{root_path}/model_weights/flexible_models_best_FP/r0_r3_FP_trial_2/")
+    hyperpaerameters_path = model_path / "hparams.yaml"
+    checkpoint_path = model_path / "checkpoints/epoch=41-all_inputs.ckpt"
 
-    # with open(hyperpaerameters_path, 'r') as file:
-    #     hparams = yaml.safe_load(file)
+    with open(hyperpaerameters_path, 'r') as file:
+        hparams = yaml.safe_load(file)
         
-    # FP_building_type = hparams['FP_building_type'].split("_")[-1]
-    # only_2d = not hparams['use_oneD_NMR_no_solvent']
-    # print("FP_building_type", FP_building_type)
-    # print("FP_choice: 0~",int(hparams['FP_choice'].split("_")[-1][1:]))
-    # print('setting up specific_radius_mfp_loader...')
-    # specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
-    # print('set up specific_radius_mfp_loader')
-    # specific_radius_mfp_loader.set_max_radius(int(hparams['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
+    FP_building_type = hparams['FP_building_type'].split("_")[-1]
+    only_2d = not hparams['use_oneD_NMR_no_solvent']
+    print("FP_building_type", FP_building_type)
+    print("FP_choice: 0~",int(hparams['FP_choice'].split("_")[-1][1:]))
+    print('setting up specific_radius_mfp_loader...')
+    specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
+    print('set up specific_radius_mfp_loader')
+    specific_radius_mfp_loader.set_max_radius(int(hparams['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
 
-    # del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
-    # hparams['use_peak_values'] = False
-    # checkpoint_path = model_path / "checkpoints/epoch=42-all_inputs.ckpt"
-    # model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
-    # model.to("cpu")
+    del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
+    hparams['use_peak_values'] = False
+    checkpoint_path = model_path / "checkpoints/epoch=42-all_inputs.ckpt"
+    model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
+    model.to("cpu")
 
-    # print("model device: ", model.device)
+    print("model device: ", model.device)
 
-    # # step 2: load rankingset
-    # chemical_names_lookup = pickle.load(open(f'/workspace/SMILES_dataset/test/Chemical/index.pkl', 'rb'))
-    # smiles_and_names = pickle.load(open(f'{root_path}/inference_data/SMILES_chemical_names_remove_stereoChemistry.pkl', 'rb'))
-    # rankingset_path = f'{root_path}/inference_data/max_radius_2_only_2d_False_together_no_stereoChemistry_dataset/FP.pt'
-    # rankingset_data = torch.load(rankingset_path)#.to("cuda")
-    # smiles_to_NMR_path = pickle.load(open(f'{root_path}/inference_data/SMILES_chemical_to_NMR_paths.pkl','rb'))
+    # step 2: load rankingset
+    chemical_names_lookup = pickle.load(open(f'/workspace/SMILES_dataset/test/Chemical/index.pkl', 'rb'))
+    smiles_and_names = pickle.load(open(f'{root_path}/inference_data/SMILES_chemical_names_remove_stereoChemistry.pkl', 'rb'))
+    rankingset_path = f'{root_path}/inference_data/max_radius_2_only_2d_False_together_no_stereoChemistry_dataset/FP.pt'
+    rankingset_data = torch.load(rankingset_path)#.to("cuda")
+    smiles_to_NMR_path = pickle.load(open(f'{root_path}/inference_data/SMILES_chemical_to_NMR_paths.pkl','rb'))
 
     print("starting server")
     # serve(app, host="0.0.0.0", port=6660)
