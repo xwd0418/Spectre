@@ -120,6 +120,7 @@ def unpack_inputs(inputs):
 # unpack_inputs(inputs)
 
 def plot_NMR(hsqc, c_tensor, h_tensor):
+    # print(hsqc, c_tensor, h_tensor)
     # Create a 2x2 grid for subplots
     fig = plt.figure(figsize=(6, 4.8))  # Overall figure size
     gs = gridspec.GridSpec(2, 2, height_ratios=[1, 20], width_ratios=[1, 20])
@@ -129,35 +130,42 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if hsqc is not None:
         pos = hsqc[hsqc[:,2]>0]
         neg = hsqc[hsqc[:,2]<0]
-        ax1.scatter(pos[:,1], pos[:,0], c="blue", label="1 or 3 H bond", s=5)
-        ax1.scatter(neg[:,1], neg[:,0], c="red", label="2 H bond", s=5)
+        ax1.scatter(pos[:,1], pos[:,0], c="blue", label="CH or CH3", s=5)
+        ax1.scatter(neg[:,1], neg[:,0], c="red", label="CH2", s=5)
+        # print("scatter!!")
+        # print(pos, neg)
     ax1.set_title("HSQC")
-    ax1.set_xlabel('Proton Shift (H)')  # X-axis label
+    ax1.set_xlabel('Proton Shift (1H)')  # X-axis label
     ax1.set_xlim([0, 7.5])
     ax1.set_ylim([0, 180])
+    ax1.invert_yaxis()
+    ax1.invert_xaxis()
     ax1.legend()
 
 
     ax2 = fig.add_subplot(gs[1, 0])  # Smaller subplot
     if c_tensor is not None:
-        # print(c_tensor)
         ax2.scatter( torch.ones(len(c_tensor)), c_tensor[:,0], c="black", s=2)
     ax2.set_ylim([0, 180])
-    ax2.set_title("C-NMR")
-    ax2.set_ylabel('Carbon Shift (C)')
+    ax2.set_title("13C-NMR")
+    ax2.set_ylabel('Carbon Shift (13C)')
     ax2.set_xticks([])
+    ax2.invert_yaxis()
+    ax2.invert_xaxis()
 
     ax3 = fig.add_subplot(gs[0, 1])  # Smaller subplot
     if h_tensor is not None:
-        ax3.scatter(h_tensor[:,0], torch.ones(len(h_tensor)), c="black", s=2)
+        ax3.scatter(h_tensor[:,0], torch.ones(len(h_tensor)),c="black", s=2)
     ax3.set_xlim([0, 7.5])
-    ax3.set_title("H-NMR")
+    ax3.set_title("1H-NMR")
     ax3.set_yticks([])
+    ax3.invert_yaxis()
+    ax3.invert_xaxis()
 
     # Adjust layout to prevent overlapping
     plt.tight_layout()
 
-        # Save the plot to a BytesIO object
+    # Save the plot to a BytesIO object
     buf = BytesIO()
     plt.savefig(buf, format='png')
     buf.seek(0)
