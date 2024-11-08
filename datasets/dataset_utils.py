@@ -248,12 +248,12 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if hsqc is not None:
         pos = hsqc[hsqc[:,2]>0]
         neg = hsqc[hsqc[:,2]<0]
-        ax1.scatter(pos[:,1], pos[:,0], c="red", label="1 or 3 H bond", s=5)
-        ax1.scatter(neg[:,1], neg[:,0], c="blue", label="2 H bond", s=5)
+        ax1.scatter(pos[:,1], pos[:,0], c="blue", label="CH or CH3", s=5)
+        ax1.scatter(neg[:,1], neg[:,0], c="red", label="CH2", s=5)
         # print("scatter!!")
         # print(pos, neg)
     ax1.set_title("HSQC")
-    ax1.set_xlabel('Proton Shift (H)')  # X-axis label
+    ax1.set_xlabel('Proton Shift (1H)')  # X-axis label
     ax1.set_xlim([0, 7.5])
     ax1.set_ylim([0, 180])
     ax1.invert_yaxis()
@@ -265,8 +265,8 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if c_tensor is not None:
         ax2.scatter( torch.ones(len(c_tensor)), c_tensor, c="black", s=2)
     ax2.set_ylim([0, 180])
-    ax2.set_title("C-NMR")
-    ax2.set_ylabel('Carbon Shift (C)')
+    ax2.set_title("13C-NMR")
+    ax2.set_ylabel('Carbon Shift (13C)')
     ax2.set_xticks([])
     ax2.invert_yaxis()
     ax2.invert_xaxis()
@@ -275,7 +275,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if h_tensor is not None:
         ax3.scatter(h_tensor, torch.ones(len(h_tensor)),c="black", s=2)
     ax3.set_xlim([0, 7.5])
-    ax3.set_title("H-NMR")
+    ax3.set_title("1H-NMR")
     ax3.set_yticks([])
     ax3.invert_yaxis()
     ax3.invert_xaxis()
