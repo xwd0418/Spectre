@@ -253,7 +253,7 @@ def main(optuna_params=None):
 
     # Tensorboard setup
     # curr_exp_folder_name = 'NewRepoNewDataOldCode'
-    curr_exp_folder_name = "Jittering"
+    curr_exp_folder_name = "datasetV4_no_oneD_snooping"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
