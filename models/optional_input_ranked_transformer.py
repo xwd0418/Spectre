@@ -21,8 +21,8 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         if not self.separate_classifier:
             return super().training_step(batch, batch_idx)
         
-        x, labels, input_type = batch
-        out, _ = self.encode(x)
+        inputs, labels, NMR_type_indicator, input_type = batch
+        out = self.forward(inputs, NMR_type_indicator)
         cls_token = out[:, :1, :].squeeze(1)
         total_loss = 0
         for i, classifier in enumerate(self.classifiers):

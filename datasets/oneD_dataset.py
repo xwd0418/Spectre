@@ -6,13 +6,13 @@ import torch, os, pytorch_lightning as pl
 import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
-from datasets.hsqc_folder_dataset import get_delimeter, pad
+from datasets.hsqc_folder_dataset import pad, FolderDataset
 from datasets.dataset_utils import specific_radius_mfp_loader
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
 
-class OneDDataset(Dataset):
+class OneDDataset(FolderDataset):
     '''
         Creates a folder-based dataset. Assumes that folder has the following structure: 
 
@@ -121,16 +121,6 @@ class OneDDataset(Dataset):
         elif self.parser_args['only_H_NMR']:
             c_tensor = torch.tensor([])
       
-        c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-        c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)     
-            
-        inputs = torch.vstack([
-            get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-            get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-            get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-            ])    
-                
-            
         # loading MW and MFP in different datasets 
         if idx >= len(self.files): # load 1D dataset    
             mol_weight_dict = self.mol_weight_1d
@@ -143,10 +133,14 @@ class OneDDataset(Dataset):
             dataset_dir = self.dir
             current_dataset = "2d"
             
+        mol_weight = None
         if self.parser_args['use_MW']:
             mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
-            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
+            
+        # padding and stacking： 
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+         
             
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
@@ -158,7 +152,7 @@ class OneDDataset(Dataset):
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
      
-        combined = (inputs, mfp)
+        combined = (inputs, mfp, NMR_type_indicator)
         
         if self.parser_args['separate_classifier']:
             # input types are one of the following:
@@ -171,7 +165,7 @@ class OneDDataset(Dataset):
             if len(c_tensor):
                 input_type+=1
             input_type = 7-input_type
-            combined = (inputs, mfp, input_type)
+            combined = (inputs, mfp, NMR_type_indicator, mol_weight)
 
         return combined
    
