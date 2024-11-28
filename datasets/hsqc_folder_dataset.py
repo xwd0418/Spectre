@@ -7,6 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
 from datasets.dataset_utils import specific_radius_mfp_loader
 
+
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
@@ -99,7 +100,8 @@ class FolderDataset(Dataset):
 
     def __getitem__(self, idx):
         
-        if idx >= len(self.files): # load 1D dataset
+        if idx >= len(self.files): 
+        ### load 1D dataset
             current_dataset = "1d"
             i = idx - len(self.files)
             # hsqc is empty tensor
@@ -118,17 +120,9 @@ class FolderDataset(Dataset):
                     c_tensor = torch.tensor([]) 
                 elif random_num <= 0.3487+0.3026: # drop H rate
                     h_tensor = torch.tensor([])
-            
-            c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-            c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
-            inputs = torch.vstack([
-                    get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                    get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                    get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                    ])    
-            
+                    
         else :
-            ### BEGINNING 2D dataset case
+        ### BEGINNING 2D dataset case
             current_dataset = "2d"
             i = idx
             def file_exist(src, filename):
@@ -171,8 +165,7 @@ class FolderDataset(Dataset):
                             elif random_num_for_dropping <= 0.3557+0.2887: # drop H rate
                                 h_tensor = torch.tensor([])
                             # else: keep both
-                                
-                    
+                                          
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                             
             if self.parser_args['only_oneD_NMR']:
@@ -181,16 +174,8 @@ class FolderDataset(Dataset):
                 h_tensor = torch.tensor([])
             if self.parser_args['only_H_NMR']:
                 c_tensor = torch.tensor([])
-            c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-            c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
-            inputs = torch.vstack([
-                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                ])    
+        ### ENDING 2D dataset case
                 
-            ### ENDING 2D dataset case
-            
             
         # loading MW and MFP in different datasets 
         if idx >= len(self.files): # load 1D dataset    
@@ -204,19 +189,17 @@ class FolderDataset(Dataset):
             dataset_files = self.files
             dataset_dir = self.dir
             
+        mol_weight = None
         if self.parser_args['use_MW']:
             mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
-            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
+            
+        # padding and stacking： 
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
             
         # remember build ranking set
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
-            # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
-            # print("current dataset is ", current_dataset)
-            # print("load path is ", f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}") 
-            # print("i is ", i, "split is ", self.split)
-            # assert (mfp==mfp_orig).all(), f"mfp should be the same\n mfp is " #{mfp.nonzero()}\n mfp_orig is {mfp_orig.nonzero()}"
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
 
@@ -224,7 +207,7 @@ class FolderDataset(Dataset):
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
             
-        combined = (inputs, mfp)
+        combined = (inputs, mfp, NMR_type_indicator)
         
         if self.parser_args['separate_classifier'] :
             # input types are one of the following:
@@ -237,9 +220,22 @@ class FolderDataset(Dataset):
             if len(c_tensor):
                 input_type+=1
             input_type = 7-input_type
-            combined = (inputs, mfp, input_type)
+            combined = (inputs, mfp, NMR_type_indicator, mol_weight, torch.tensor(input_type))
 
         return combined
+    
+    def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight):
+        c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
+        c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
+        inputs = [hsqc, c_tensor, h_tensor]
+        NMR_type_indicator = [0]*len(hsqc)+[1]*len(c_tensor)+[2]*len(h_tensor)
+        if mol_weight is not None:
+            inputs.append(mol_weight)
+            NMR_type_indicator.append(3)
+            
+        inputs = torch.vstack(inputs)    
+        NMR_type_indicator = torch.tensor(NMR_type_indicator).long()
+        return inputs, NMR_type_indicator
     
     def get_weight_of_samples_based_on_input_type(self):
 
@@ -306,35 +302,6 @@ class FolderDataset(Dataset):
         return type_of_each_sample
                 
         
-        
-   
-
-
-def get_delimeter(delimeter_name):
-    match delimeter_name:
-        case "HSQC_start":
-            return torch.tensor([-1,-1,-1]).float()
-        case "HSQC_end":
-            return torch.tensor([-2,-2,-2]).float()
-        case "C_NMR_start":
-            return torch.tensor([-3,-3,-3]).float()
-        case "C_NMR_end":
-            return torch.tensor([-4,-4,-4]).float()
-        case "H_NMR_start":
-            return torch.tensor([-5,-5,-5]).float()
-        case "H_NMR_end":
-            return torch.tensor([-6,-6,-6]).float()
-        case "solvent_start":
-            return torch.tensor([-7,-7,-7]).float()
-        case "solvent_end":
-            return torch.tensor([-8,-8,-8]).float()
-        case "ms_start":
-            return torch.tensor([-12,-12,-12]).float()
-        case "ms_end":
-            return torch.tensor([-13,-13,-13]).float()
-        case _:
-            raise Exception(f"unknown {delimeter_name}")
-                    
 def get_solvent(solvent_name):
     match solvent_name:
         case "H2O": return torch.tensor([-9,-9,-9]).float()
@@ -346,28 +313,20 @@ def get_solvent(solvent_name):
 # used as collate_fn in the dataloader
 def pad(batch):
     items = tuple(zip(*batch))
-    if len(items) == 2: #inputs, mfp,
-        fp = items[-1]
-        inputs = items[0]
-        inputs_2 = pad_sequence([v for v in inputs], batch_first=True) 
-        # print(fp)h
-        if type(fp[0][0]) is str:
-            # print("i am tuple")
-            # print(fp)
-            combined = (inputs_2, fp) # actually, here "mfp" is (smiles, name, path), used during prediction stage
-        else:
-            combined = (inputs_2, torch.stack(fp))
-    elif len(items) == 3: #inputs, mfp, input_type(optional input)
-        input_type = items[-1]
-        fp = items[-2]
-        inputs = items[0]
-        inputs_2 = pad_sequence([v for v in inputs], batch_first=True) 
-        combined = (inputs_2, torch.stack(fp), torch.tensor(input_type))
-    else:
-        print("batch size is ",len(batch))
-        print("len item is ",len(items))
-        raise NotImplementedError("not implemented yet")
-    return combined
+    inputs = items[0]
+    inputs = pad_sequence([v for v in inputs], batch_first=True) 
+    
+    fp = items[1]
+    if type(fp[0][0]) is not str:
+        fp = torch.stack(fp)
+    if len(items) == 2:
+        return (inputs, fp)
+    
+    NMR_type_indicator = pad_sequence([v for v in items[2]], batch_first=True)
+    # mol_weight = torch.stack(items[3])
+    # combined = (inputs, fp, NMR_type_indicator,mol_weight,  *items[4:])
+    return (inputs, fp, NMR_type_indicator)
+    # return combined
     
 
 def normalize_hsqc(hsqc, style="minmax"):

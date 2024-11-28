@@ -1,7 +1,7 @@
 
 from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 from torch.utils.data import DataLoader, Dataset
-from datasets.hsqc_folder_dataset import FolderDataset, FolderDataModule, pad, get_delimeter
+from datasets.hsqc_folder_dataset import FolderDataset, FolderDataModule, pad
 import torch, os, pytorch_lightning as pl, glob
 import torch.nn.functional as F
 import pickle
@@ -13,7 +13,7 @@ repo_path = pathlib.Path(__file__).resolve().parents[1]
 '''
 OneD Dataset, only for evaluting optional input
 '''
-class All_Info_Dataset(Dataset):
+class All_Info_Dataset(FolderDataset):
     def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False, show_smiles=False):
         self.dir = os.path.join(dir, split)
         self.fp_suffix = FP_choice
@@ -66,20 +66,15 @@ class All_Info_Dataset(Dataset):
         if len(hsqc)==len(c_tensor)==len(h_tensor)==0:
             exit(f"Error: {self.files[i]} has no data")
             return None
-        c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-        c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
-        inputs = torch.vstack([
-                get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                ])  
         
+        mol_weight = None
         if self.parser_args['use_MW']:
             mol_weight = self.mol_weight[int(self.files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
-            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")]) 
         
-        
+        # padding and stacking： 
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+         
         if self.show_smiles: # prediction stage
             file_index = int(self.files[i].split(".")[0])
             smiles = self.index_to_smiles[file_index]
@@ -88,11 +83,6 @@ class All_Info_Dataset(Dataset):
         
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             mfp = specific_radius_mfp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
-            # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
-            # print("current dataset is ", current_dataset)
-            # print("load path is ", f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}") 
-            # print("i is ", i, "split is ", self.split)
-            # assert (mfp==mfp_orig).all(), f"mfp should be the same\n mfp is " #{mfp.nonzero()}\n mfp_orig is {mfp_orig.nonzero()}"
         else:   
             mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
 
@@ -100,11 +90,8 @@ class All_Info_Dataset(Dataset):
         if self.parser_args['loss_func'] == "CE":
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
-            
-        # print(mfp.nonzero())
-        # exit(0)
-        # print("should print inputs: \n", inputs)
-        return (inputs, mfp)
+
+        return (inputs, mfp, NMR_type_indicator)
 
 
 

@@ -107,7 +107,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.dim_model = dim_model
         
         self.use_Jaccard = use_Jaccard
-        print("Using jaccard: ", use_Jaccard)
         
         # don't set ranking set if you just want to treat it as a module
         self.FP_choice=FP_choice
@@ -173,7 +172,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.training_step_outputs = []
         self.test_step_outputs = []
 
-        
+        self.NMR_type_embedding = nn.Embedding(4, dim_model)
+        # HSQC, C NMR, H NMR, MW
+        # MW isn't NMR, but, whatever......
             
         self.fc = nn.Linear(dim_model, out_dim)
         # (1, 1, dim_model)
@@ -243,7 +244,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                  for k, v in vals.items() if k.startswith(model_name)]
         return dict(items)
 
-    def encode(self, hsqc, mask=None):
+    def encode(self, hsqc, NMR_type_indicator, mask=None):
         """
         Returns
         -------
@@ -262,19 +263,22 @@ class HsqcRankedTransformer(pl.LightningModule):
             mask = torch.cat(mask, dim=1)
             mask = mask.to(self.device)
 
-        # print(hsqc[0])
-        points = self.enc(hsqc) # something like positional encoding 
-        # pickle.dump(points.cpu(), open("out_1.pkl", "wb"))
-        
+        points = self.enc(hsqc) # something like positional encoding , but encoding cooridinates
+        NMR_type_embedding = self.NMR_type_embedding(NMR_type_indicator)
+        # print("points shape is ", points.shape, " NMR_type_embedding shape is ", NMR_type_embedding.shape)
+        points += NMR_type_embedding
+
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
         # print(latent.device, points.device)
+        
         points = torch.cat([latent, points], dim=1)
+        
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out, mask
-
-    def forward(self, hsqc, return_representations=False):
+    
+    def forward(self, hsqc, NMR_type_indicator, return_representations=False):
         """The forward pass.
         Parameters
         ----------
@@ -285,7 +289,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             should be zero-padded, such that all of the hsqc in the batch
             are the same length.
         """
-        out, _ = self.encode(hsqc)  # (b_s, seq_len, dim_model)
+        out, _ = self.encode(hsqc, NMR_type_indicator)  # (b_s, seq_len, dim_model)
         out_cls = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token : (b_s, dim_model) -> (b_s, out_dim)
         
         if return_representations:
@@ -293,8 +297,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         return out_cls
 
     def training_step(self, batch, batch_idx):
-        x, labels = batch
-        out = self.forward(x)
+        
+        inputs, labels, NMR_type_indicator = batch
+        out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
 
@@ -304,9 +309,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-     
-        x, labels = batch
-        out = self.forward(x)
+        inputs, labels, NMR_type_indicator = batch
+        out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
             preds = out.argmax(dim=1)
@@ -326,8 +330,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         return metrics
     
     def test_step(self, batch, batch_idx):
-        x, labels = batch
-        out = self.forward(x)
+        inputs, labels, NMR_type_indicator = batch
+        out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
             preds = out.argmax(dim=1)
