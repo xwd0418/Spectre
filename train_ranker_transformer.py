@@ -92,6 +92,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     kwargs = vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
     kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
+    # kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"   
    
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
@@ -253,7 +254,7 @@ def main(optuna_params=None):
 
     # Tensorboard setup
     # curr_exp_folder_name = 'NewRepoNewDataOldCode'
-    curr_exp_folder_name = "skip_adding_pe"
+    curr_exp_folder_name = "puuting_h_in_the_middle"
     out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"

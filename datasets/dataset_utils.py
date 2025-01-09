@@ -200,10 +200,14 @@ class Specific_Radius_MFP_loader():
         mfp = mfp[self.indices_kept]
         return torch.tensor(mfp).float()
     
-    def build_rankingset(self, split):         
+    def build_rankingset(self, split, HYUN_FP = False):         
         path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
         file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
-        files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
+        if HYUN_FP:
+            dataset_path = f"/workspace/SMILES_dataset/{split}/HYUN_FP"
+            files  = [torch.load(F"{dataset_path}/{file_idx}").float() for file_idx in sorted(file_idx_for_ranking_set)]
+        else:
+            files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
              
         out = torch.vstack(files)
         return out
