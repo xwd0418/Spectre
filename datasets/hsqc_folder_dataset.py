@@ -116,9 +116,9 @@ class FolderDataset(Dataset):
                 if not self.parser_args['combine_oneD_only_dataset'] :
                     raise NotImplementedError("optional_inputs is only supported when combine_oneD_only_dataset is True")
                 random_num = random.random()
-                if random_num <= 0.3487: # drop C rate 
+                if random_num <= 0.3984: # drop C rate 
                     c_tensor = torch.tensor([]) 
-                elif random_num <= 0.3487+0.3026: # drop H rate
+                elif random_num <= 0.3984+0.2032: # drop H rate
                     h_tensor = torch.tensor([])
                     
         else :
@@ -160,9 +160,9 @@ class FolderDataset(Dataset):
                         if len(c_tensor)>0 and len(h_tensor)>0:
                             # it is fine to drop one of the oneD NMRs
                             random_num_for_dropping =  random.random()                            
-                            if random_num_for_dropping <= 0.3557:# drop C rate
+                            if random_num_for_dropping <= 0.3530:# drop C rate
                                 c_tensor = torch.tensor([])
-                            elif random_num_for_dropping <= 0.3557+0.2887: # drop H rate
+                            elif random_num_for_dropping <= 0.3530+0.2939: # drop H rate
                                 h_tensor = torch.tensor([])
                             # else: keep both
                                           
@@ -193,6 +193,11 @@ class FolderDataset(Dataset):
         if self.parser_args['use_MW']:
             mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
+            
+            if self.parser_args['optional_inputs']:
+                if random.random() <= 0.5:
+                    mol_weight = torch.tensor([])
+                
             
         # padding and stacking： 
         inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
@@ -226,14 +231,14 @@ class FolderDataset(Dataset):
     
     def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight):
         c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-        c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)
+        c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (1, 1), "constant", 0)
         inputs = [hsqc, c_tensor, h_tensor]
         NMR_type_indicator = [0]*len(hsqc)+[1]*len(c_tensor)+[2]*len(h_tensor)
         if mol_weight is not None:
             inputs.append(mol_weight)
             NMR_type_indicator.append(3)
             
-        inputs = torch.vstack(inputs)    
+        inputs = torch.vstack(inputs)               
         NMR_type_indicator = torch.tensor(NMR_type_indicator).long()
         return inputs, NMR_type_indicator
     
