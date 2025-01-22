@@ -112,11 +112,11 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.FP_choice=FP_choice
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
         
-        if FP_choice=="HYUN_FP":
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val", HYUN_FP=True),
+        if FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP"):
+            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val", predefined_FP = FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
+
         elif FP_choice.startswith("pick_entropy") : # build rankingset by specific_radius_mfp_loader
-          
             self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val"),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             
@@ -139,16 +139,18 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         ### Loss function 
+        print(pos_weight)
         if pos_weight==None:
             self.bce_pos_weight = None
             self.out_logger.info("[RankedTransformer] bce_pos_weight = None")
         else:
             try:
                 pos_weight_value = float(pos_weight)
-                self.bce_pos_weight= torch.full((self.FP_length,), pos_weight_value)
+                # self.bce_pos_weight= torch.full((self.FP_length,), pos_weight_value)
+                self.bce_pos_weight= torch.tensor([pos_weight_value])
                 self.out_logger.info(f"[RankedTransformer] bce_pos_weight is {pos_weight_value}")
         
-            except ValueError:
+            except :
                 if pos_weight == "ratio":
                     self.bce_pos_weight = torch.load(f'{repo_path}/pos_weight_array_based_on_ratio.pt')
                     self.out_logger.info("[RankedTransformer] bce_pos_weight is loaded ")
@@ -161,7 +163,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                 self.loss = nn.MSELoss()
                 self.compute_metric_func = compute_metrics.cm_count_based_mse
             elif loss_func == "CE":
-                self.loss = nn.CrossEntropyLoss()
+                self.loss = bce_pos_weightnn.CrossEntropyLoss()
                 self.compute_metric_func = compute_metrics.cm_count_based_ce
             else:
                 raise Exception("loss_func should be either MSE or CE when using count-based FP")
@@ -432,8 +434,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         super().log(name, value, *args, **kwargs)
         
     def change_ranker_for_testing(self, test_ranking_set_path=None ):
-        if self.FP_choice=="HYUN_FP":
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("test", HYUN_FP=True),
+        if self.FP_choice=="HYUN_FP" or self.FP_choice.startswith("DB_specific_FP"):
+            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("test", predefined_FP = self.FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             return
         elif self.FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader

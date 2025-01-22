@@ -24,6 +24,8 @@ from argparse import ArgumentParser
 from functools import reduce
 from datasets.dataset_utils import specific_radius_mfp_loader
 
+import pathlib
+DATASET_root_path = pathlib.Path("/workspace/")
 
 def exp_string(expname, args):
     """
@@ -89,10 +91,10 @@ def apply_args(parser, model_type):
 
 def model_mux(parser, model_type, weights_path, freeze, args):
     logger = logging.getLogger('logging')
-    kwargs = vars(parser.parse_args())
+    kwargs = args.copy() #vars(parser.parse_args())
     ranking_set_type = kwargs["FP_choice"] 
-    kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
-    # kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"   
+    kwargs["ranking_set_path"] = DATASET_root_path / f"ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
+    # kwargs["ranking_set_path"] =  DATASET_root_path / f"ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"   
    
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
@@ -228,6 +230,8 @@ def main(optuna_params=None):
     parser.add_argument("--out_dim", type=int, default="6144", help="the size of output fingerprint to be predicted")
     
     args = vars(parser.parse_known_args()[0])
+    apply_args(parser, args["modelname"])
+    args = vars(parser.parse_known_args()[0])
     # if args['only_C_NMR'] or args['only_H_NMR']:
     #     assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
     # if args['only_oneD_NMR']:
@@ -241,21 +245,27 @@ def main(optuna_params=None):
             specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
             specific_radius_mfp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
     
+    if args['FP_choice'].startswith("DB_specific_FP"):
+        radius = int(args['FP_choice'][-1])
+        specific_radius_mfp_loader.setup_db_specific_FP_generate(radius)
+        args['out_dim'] = specific_radius_mfp_loader.db_specific_fp_size
     seed_everything(seed=args["random_seed"])   
     
     # general args
-    apply_args(parser, args["modelname"])
+    # apply_args(parser, args["modelname"])
 
     # Model args
-    args_with_model = vars(parser.parse_known_args()[0])
-    li_args = list(args_with_model.items())
+    # args_with_model = vars(parser.parse_known_args()[0])
+    li_args = list(args.items())
     if args['foldername'] == "debug":
         args["epochs"] = 2
+        
+    
 
     # Tensorboard setup
     # curr_exp_folder_name = 'NewRepoNewDataOldCode'
     curr_exp_folder_name = "puuting_h_in_the_middle"
-    out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
+    out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
