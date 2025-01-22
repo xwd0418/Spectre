@@ -83,6 +83,9 @@ class All_Info_Dataset(FolderDataset):
         
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             mfp = specific_radius_mfp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
+        elif self.fp_suffix.startswith("DB_specific_FP"):
+            radius = int(self.fp_suffix[-1])
+            mfp = specific_radius_mfp_loader.build_db_specific_fp( int(self.files[i].split(".")[0]), '2d', self.split, radius)
         else:   
             mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
 

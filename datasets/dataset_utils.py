@@ -5,6 +5,7 @@ from rdkit.Chem import rdMolDescriptors
 from rdkit import Chem
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
+DATASET_root_path = pathlib.Path("/workspace/")
 
 def pad(sequence):
   """
@@ -178,6 +179,17 @@ class Specific_Radius_MFP_loader():
         # self.indices_kept = list(self.indices_kept)
         assert len(self.indices_kept) == self.out_dim, f"should keep only {self.out_dim} highest entropy bits"
         
+    def setup_db_specific_FP_generate(self, radius):
+        gen_FP_save_path = DATASET_root_path / f"all_train_set_fragments_radius_to_smiles_to_index.pkl" # used for generating FP
+        with open(gen_FP_save_path, "rb") as f: 
+            radius_to_smiles_to_index = pickle.load(f)
+        self.db_specific_fp_size = sum([len(frag_smiles) for r,frag_smiles in radius_to_smiles_to_index.items() if r <= radius])
+
+    def setup_db_specific_FP_interpret(self):
+        interpret_FP_save_path = DATASET_root_path / f"all_train_set_fragments_index_to_smiles.pkl" # used for interpreting FP
+        with open(interpret_FP_save_path, "rb") as f: 
+            self.index_to_smiles = pickle.load(f)
+        
     def build_mfp(self, file_idx, dataset_src, split):
         if dataset_src == '1d':
             if split == 'train':
@@ -200,13 +212,32 @@ class Specific_Radius_MFP_loader():
         mfp = mfp[self.indices_kept]
         return torch.tensor(mfp).float()
     
-    def build_rankingset(self, split, HYUN_FP = False):         
+    def build_db_specific_fp(self, file_idx, dataset_src, split, radius):
+        if dataset_src == "2d":
+            dataset_dir = "SMILES_dataset"
+        elif dataset_src == "1d":
+            dataset_dir = "OneD_Only_Dataset"
+        else:
+            raise ValueError("dataset should be either 1d or 2d")
+        dataset_path = DATASET_root_path / f"{dataset_dir}/{split}/DB_specific_FP"
+        fragment_dict = torch.load(F"{dataset_path}/{file_idx}.pt")
+        mfp = torch.zeros(self.db_specific_fp_size)
+        for r, indices in fragment_dict.items():            
+            if  len(indices) >0 and r <= radius:
+                mfp[indices] = 1
+        return mfp.float()
+    
+    def build_rankingset(self, split, predefined_FP = None):         
         path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
         file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
-        if HYUN_FP:
-            dataset_path = f"/workspace/SMILES_dataset/{split}/HYUN_FP"
+        if predefined_FP == "HYUN_FP":
+            dataset_path = DATASET_root_path / f"SMILES_dataset/{split}/{predefined_FP}"
             files  = [torch.load(F"{dataset_path}/{file_idx}").float() for file_idx in sorted(file_idx_for_ranking_set)]
-        else:
+        elif type(predefined_FP) is str and predefined_FP.startswith("DB_specific_FP"):
+            radius = int(predefined_FP[-1])
+            files  = [self.build_db_specific_fp(int(file_idx.split(".")[0]), "2d", split, radius) for file_idx in sorted(file_idx_for_ranking_set)]
+            
+        else: # entropy-based FP
             files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
              
         out = torch.vstack(files)

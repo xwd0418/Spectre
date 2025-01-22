@@ -1,0 +1,3 @@
+# python /root/MorganFP_prediction/reproduce_previous_works/Spectre/notebooks/SMILES_fragmenting/build_dataset_specific_FP/build_dataset_specific_FP_based_on_circular_substructure.py
+cd /workspace && zip -r Spectre_2d1d_DB_specific_FP.zip SMILES_dataset OneD_Only_Dataset  all_train_set_fragments_*.pkl
+cp Spectre_2d1d_DB_specific_FP.zip /root/MorganFP_prediction/entropy_based_datasets 

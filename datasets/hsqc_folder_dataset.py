@@ -203,8 +203,12 @@ class FolderDataset(Dataset):
         inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
             
         # remember build ranking set
+        
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
             mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
+        elif self.fp_suffix.startswith("DB_specific_FP"):
+            radius = int(self.fp_suffix[-1])
+            mfp = specific_radius_mfp_loader.build_db_specific_fp( int(dataset_files[i].split(".")[0]), current_dataset, self.split, radius)
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
 
@@ -234,7 +238,7 @@ class FolderDataset(Dataset):
         c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (1, 1), "constant", 0)
         inputs = [hsqc, c_tensor, h_tensor]
         NMR_type_indicator = [0]*len(hsqc)+[1]*len(c_tensor)+[2]*len(h_tensor)
-        if mol_weight is not None:
+        if mol_weight is not None and len(mol_weight) > 0:
             inputs.append(mol_weight)
             NMR_type_indicator.append(3)
             
