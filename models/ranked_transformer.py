@@ -6,7 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
 import torch.distributed as dist
-from datasets.dataset_utils import specific_radius_mfp_loader
+
+
 
 from utils import ranker, constants
 from models import compute_metrics
@@ -69,6 +70,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         **kwargs,
     ):
         super().__init__()
+        
+        from datasets.dataset_utils import fp_loader_configer
+        self.fp_loader = fp_loader_configer.fp_loader
+        
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
         if dist.is_initialized():
@@ -113,11 +118,11 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
         
         if FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP"):
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val", predefined_FP = FP_choice),
+            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val", predefined_FP = FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
 
-        elif FP_choice.startswith("pick_entropy") : # build rankingset by specific_radius_mfp_loader
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val"),
+        elif FP_choice.startswith("pick_entropy") : # build rankingset by self.fp_loader
+            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val"),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             
         elif ranking_set_path:
@@ -435,11 +440,11 @@ class HsqcRankedTransformer(pl.LightningModule):
         
     def change_ranker_for_testing(self, test_ranking_set_path=None ):
         if self.FP_choice=="HYUN_FP" or self.FP_choice.startswith("DB_specific_FP"):
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("test", predefined_FP = self.FP_choice),
+            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test", predefined_FP = self.FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             return
-        elif self.FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("test"),
+        elif self.FP_choice.startswith("pick_entropy"): # build rankingset by self.fp_loader
+            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test"),
                                              batch_size=self.bs, CE_num_class=self.num_class)
             return
         if test_ranking_set_path is None:
@@ -448,7 +453,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
     def change_ranker_for_inference(self, test_ranking_set_path=None ):
-        self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_inference_ranking_set_with_everything(),
+        self.ranker = ranker.RankingSet(store=self.fp_loader.build_inference_ranking_set_with_everything(),
                                           batch_size=self.bs, CE_num_class=self.num_class)
 
 

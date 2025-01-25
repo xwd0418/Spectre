@@ -5,7 +5,7 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
-from datasets.dataset_utils import specific_radius_mfp_loader
+
 
 
 import sys, pathlib
@@ -27,6 +27,9 @@ class FolderDataset(Dataset):
         
     '''
     def __init__(self, dir, split="train", input_src=["HSQC"], FP_choice="", parser_args=None):
+        from datasets.dataset_utils import fp_loader_configer
+        self.fp_loader = fp_loader_configer.fp_loader
+
         self.dir = os.path.join(dir, split)
         self.split = split
         self.fp_suffix = FP_choice
@@ -34,7 +37,7 @@ class FolderDataset(Dataset):
         self.parser_args = parser_args
         logger = logging.getLogger("lightning")
 
-        assert(os.path.exists(self.dir))
+        assert os.path.exists(self.dir), f"{self.dir} does not exist"
         assert(split in ["train", "val", "test"])
         for src in input_src:
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
@@ -204,11 +207,8 @@ class FolderDataset(Dataset):
             
         # remember build ranking set
         
-        if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-            mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
-        elif self.fp_suffix.startswith("DB_specific_FP"):
-            radius = int(self.fp_suffix[-1])
-            mfp = specific_radius_mfp_loader.build_db_specific_fp( int(dataset_files[i].split(".")[0]), current_dataset, self.split, radius)
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"): # should be in the format of "pick_entropy_r9"
+            mfp = self.fp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
 

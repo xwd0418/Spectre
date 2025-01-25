@@ -22,10 +22,14 @@ from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get
 import argparse
 from argparse import ArgumentParser
 from functools import reduce
-from datasets.dataset_utils import specific_radius_mfp_loader
+from datasets.dataset_utils import  fp_loader_configer
 
 import pathlib
 DATASET_root_path = pathlib.Path("/workspace/")
+
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, message="You are using `torch.load` with `weights_only=False`")
+
 
 def exp_string(expname, args):
     """
@@ -191,6 +195,7 @@ def main(optuna_params=None):
     parser.add_argument("--freeze", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--validate", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--test", type=lambda x:bool(str2bool(x)), default=False)
+    parser.add_argument("--debug", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
     # different versions of input/output
@@ -239,16 +244,8 @@ def main(optuna_params=None):
     if args['weighted_sample_based_on_input_type']:
         assert args['combine_oneD_only_dataset'] and args['optional_inputs'], "Only available for combined dataset"
     
-    if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-            only_2d = not args['use_oneD_NMR_no_solvent']
-            FP_building_type = args['FP_building_type'].split("_")[-1]
-            specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
-            specific_radius_mfp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
     
-    if args['FP_choice'].startswith("DB_specific_FP"):
-        radius = int(args['FP_choice'][-1])
-        specific_radius_mfp_loader.setup_db_specific_FP_generate(radius)
-        args['out_dim'] = specific_radius_mfp_loader.db_specific_fp_size
+    
     seed_everything(seed=args["random_seed"])   
     
     # general args
@@ -257,14 +254,14 @@ def main(optuna_params=None):
     # Model args
     # args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args.items())
-    if args['foldername'] == "debug":
+    if args['foldername'] == "debug" or args['debug'] is True:
         args["epochs"] = 2
         
     
 
     # Tensorboard setup
     # curr_exp_folder_name = 'NewRepoNewDataOldCode'
-    curr_exp_folder_name = "puuting_h_in_the_middle"
+    curr_exp_folder_name = "db_specific_FP_with_entropy"
     out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
@@ -284,12 +281,39 @@ def main(optuna_params=None):
     
     my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
     my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
-    # my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    try:
+        my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    except:
+        my_logger.info(f'[Main] using GPU: unknown type')
+    
+    # FP loader setup
+    if args['FP_choice'].startswith("DB_specific_FP"):
+        fp_loader_configer.select_version("DB_Specific")
+        fp_loader = fp_loader_configer.fp_loader
+        
+        try:
+            radius = int(args['FP_choice'].split("_")[-1])
+        except ValueError:
+            my_logger.info("[Main] Cannot find radius in FP_choice, using default radius 10")
+            radius = 10
+        fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
+    else:
+        fp_loader_configer.select_version("MFP_Specific_Radius")
+        fp_loader = fp_loader_configer.fp_loader
+            
+    if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
+        only_2d = not args['use_oneD_NMR_no_solvent']
+        FP_building_type = args['FP_building_type'].split("_")[-1]
+
+        fp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
+        fp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
+        
     
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
     from pytorch_lightning.utilities.model_summary import summarize
     my_logger.info(f"[Main] Model Summary: {summarize(model)}")
+    
     
     data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args)
     tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
