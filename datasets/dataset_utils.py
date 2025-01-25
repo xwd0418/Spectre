@@ -112,11 +112,14 @@ def tokenise_and_mask_encoder(smiles, tokeniser):
 # utils about entropy and MFP
 def compute_entropy(data, total_dataset_size, use_natural_log=False):
     # data: an array of counts of each bit, by default in the size of self.out_dim*(max_radius+1)
-    probability = data/(total_dataset_size)
+    # print(type(data), data.dtype)
+    # print(type(total_dataset_size))
+    probability = data/total_dataset_size
     if use_natural_log:
         entropy = (probability * np.log(np.clip(probability,1e-7 ,1)) )
     else:
         entropy = (probability * np.log2(np.clip(probability,1e-7 ,1)) )
+    print("finish entropy list")
     return entropy
 
 def keep_smallest_entropy(data, total_dataset_size, size,  use_natural_log=False):
@@ -143,7 +146,25 @@ def generate_normal_FP_on_bits(mol, radius=2, length=6144):
     on_bits = np.array(fp.GetOnBits())
     return on_bits
 
-class Specific_Radius_MFP_loader():
+# define abstract class for FP loader
+class FP_loader():
+    def __init__(self, ) -> None:
+        pass
+    
+    def setup(self, ):
+        pass
+
+    
+    def build_mfp(self, ):
+        pass
+    
+    def build_rankingset(self, ):
+        pass
+    
+    def build_mfp_for_new_SMILES(self, ):
+        pass
+
+class Specific_Radius_MFP_loader(FP_loader):
     def __init__(self, ) -> None:
         self.path_pickles = f'{repo_path}/notebooks/dataset_building/FP_on_bits_pickles/'
         
@@ -179,16 +200,6 @@ class Specific_Radius_MFP_loader():
         # self.indices_kept = list(self.indices_kept)
         assert len(self.indices_kept) == self.out_dim, f"should keep only {self.out_dim} highest entropy bits"
         
-    def setup_db_specific_FP_generate(self, radius):
-        gen_FP_save_path = DATASET_root_path / f"all_train_set_fragments_radius_to_smiles_to_index.pkl" # used for generating FP
-        with open(gen_FP_save_path, "rb") as f: 
-            radius_to_smiles_to_index = pickle.load(f)
-        self.db_specific_fp_size = sum([len(frag_smiles) for r,frag_smiles in radius_to_smiles_to_index.items() if r <= radius])
-
-    def setup_db_specific_FP_interpret(self):
-        interpret_FP_save_path = DATASET_root_path / f"all_train_set_fragments_index_to_smiles.pkl" # used for interpreting FP
-        with open(interpret_FP_save_path, "rb") as f: 
-            self.index_to_smiles = pickle.load(f)
         
     def build_mfp(self, file_idx, dataset_src, split):
         if dataset_src == '1d':
@@ -212,30 +223,15 @@ class Specific_Radius_MFP_loader():
         mfp = mfp[self.indices_kept]
         return torch.tensor(mfp).float()
     
-    def build_db_specific_fp(self, file_idx, dataset_src, split, radius):
-        if dataset_src == "2d":
-            dataset_dir = "SMILES_dataset"
-        elif dataset_src == "1d":
-            dataset_dir = "OneD_Only_Dataset"
-        else:
-            raise ValueError("dataset should be either 1d or 2d")
-        dataset_path = DATASET_root_path / f"{dataset_dir}/{split}/DB_specific_FP"
-        fragment_dict = torch.load(F"{dataset_path}/{file_idx}.pt")
-        mfp = torch.zeros(self.db_specific_fp_size)
-        for r, indices in fragment_dict.items():            
-            if  len(indices) >0 and r <= radius:
-                mfp[indices] = 1
-        return mfp.float()
-    
     def build_rankingset(self, split, predefined_FP = None):         
         path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
         file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
         if predefined_FP == "HYUN_FP":
             dataset_path = DATASET_root_path / f"SMILES_dataset/{split}/{predefined_FP}"
             files  = [torch.load(F"{dataset_path}/{file_idx}").float() for file_idx in sorted(file_idx_for_ranking_set)]
-        elif type(predefined_FP) is str and predefined_FP.startswith("DB_specific_FP"):
-            radius = int(predefined_FP[-1])
-            files  = [self.build_db_specific_fp(int(file_idx.split(".")[0]), "2d", split, radius) for file_idx in sorted(file_idx_for_ranking_set)]
+        # elif type(predefined_FP) is str and predefined_FP.startswith("DB_specific_FP"):
+        #     radius = int(predefined_FP[-1])
+        #     files  = [self.build_db_specific_fp(int(file_idx.split(".")[0]), "2d", split, radius) for file_idx in sorted(file_idx_for_ranking_set)]
             
         else: # entropy-based FP
             files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
@@ -253,6 +249,7 @@ class Specific_Radius_MFP_loader():
                          
         # out = torch.vstack(train_files_2d + val_files_2d + test_files_2d + train_files_1d + val_files_1d + test_files_1d)
         # return torch.vstack(train_files_2d)
+        
     def build_mfp_for_new_SMILES(self, smiles):
         num_plain_FPs = 16 # radius from 0 to 15
         
@@ -267,7 +264,93 @@ class Specific_Radius_MFP_loader():
         mfp = mfp[self.indices_kept]
         return torch.tensor(mfp).float()
     
-specific_radius_mfp_loader = Specific_Radius_MFP_loader()
+
+class DB_Specific_FP_loader(FP_loader):
+    def __init__(self, ) -> None:
+        RADIUS_UPPER_LIMIT = 10
+        save_path = DATASET_root_path / f"count_fragments_radius_under_{RADIUS_UPPER_LIMIT}.pkl"
+        with open(save_path, "rb") as f:
+            self.frags_count = pickle.load(f)
+        save_path = DATASET_root_path / f"radius_mapping_radius_under_{RADIUS_UPPER_LIMIT}.pkl"
+        with open(save_path, "rb") as f:
+            self.radius_mapping = pickle.load(f)
+        
+    def setup(self, out_dim=6144, max_radius=10):
+        self.max_radius = max_radius
+        frags_to_use_counts_and_smiles = [ [v,k] for k, v in self.frags_count.items() if self.radius_mapping[k] <= max_radius]
+        counts, frag_smiles = zip(*frags_to_use_counts_and_smiles)
+        counts = np.array(counts)
+        frag_smiles = np.array(frag_smiles)
+        if out_dim == float("inf"):
+            out_dim = len(frags_to_use_counts_and_smiles)
+        self.out_dim = out_dim
+         
+        # create a N*2 array of  [entropy, smiles]
+        entropy_each_frag = compute_entropy(counts, total_dataset_size = len(frags_to_use_counts_and_smiles))
+                                              
+        
+        frags_to_keep = frag_smiles[np.lexsort((frag_smiles, entropy_each_frag))[:out_dim]]   
+        self.frag_to_index_map = {smiles: i for i, smiles in enumerate(frags_to_keep)}
+        print("DB_Specific_FP_loader is setup")
+        
+    def build_mfp(self, file_idx, dataset_src, split):
+        if dataset_src == "2d":
+            dataset_dir = "SMILES_dataset"
+        elif dataset_src == "1d":
+            dataset_dir = "OneD_Only_Dataset"
+        else:
+            raise ValueError("dataset should be either 1d or 2d")
+        dataset_path = DATASET_root_path / f"{dataset_dir}/{split}/fragments_of_different_radii"
+        file_path = dataset_path / f"{file_idx}.pt"
+        fragments = torch.load(file_path) 
+        mfp = np.zeros(self.out_dim)
+        for frag in fragments:
+            if frag in self.frag_to_index_map:
+                mfp[self.frag_to_index_map[frag]] = 1
+        
+        return torch.tensor(mfp).float()
+    
+    
+    def build_rankingset(self, split, predefined_FP = None):         
+        # assuming rankingset on allinfo-set
+        path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
+
+        files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
+        out = torch.vstack(files)
+        return out
+
+    def build_mfp_for_new_SMILES(self, smiles):
+        from reproduce_previous_works.Spectre.notebooks.SMILES_fragmenting.build_dataset_specific_FP.find_most_frequent_frags import count_circular_substructures
+        frags_with_count, _ = count_circular_substructures(smiles)
+        mfp = np.zeros(self.out_dim)
+        for frag in frags_with_count:
+            if frag in self.frag_to_index_map:
+                mfp[self.frag_to_index_map[frag]] = 1
+        
+        return torch.tensor(mfp).float()
+        
+        # mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
+        # mfp = mfp[self.indices_kept]
+        # return torch.tensor(mfp).float()
+
+class FP_Loader_Configer():
+    def __init__(self):
+        # print("FP_Loader_Configer is initialized\n\n\n\n")
+        self.fp_loader = None
+    
+    def select_version(self, version):
+        if version == "MFP_Specific_Radius":
+            self.fp_loader = Specific_Radius_MFP_loader()
+        elif version == "DB_Specific":
+            self.fp_loader = DB_Specific_FP_loader()
+            print("DB_Specific_FP_loader is selected")
+
+        else:
+            raise ValueError("version should be either Specific_Radius or DB_Specific")
+
+fp_loader_configer = FP_Loader_Configer()
+# fp_loader = None
 
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec

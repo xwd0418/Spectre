@@ -7,7 +7,8 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
 from datasets.hsqc_folder_dataset import pad, FolderDataset
-from datasets.dataset_utils import specific_radius_mfp_loader
+
+
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
@@ -28,6 +29,9 @@ class OneDDataset(FolderDataset):
         
     '''
     def __init__(self, dir, split="train", FP_choice="", parser_args=None):
+        from datasets.dataset_utils import fp_loader_configer
+        self.fp_loader = fp_loader_configer.fp_loader
+        
         self.dir = os.path.join(dir, split)
         self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
         self.split = split
@@ -143,7 +147,7 @@ class OneDDataset(FolderDataset):
          
             
         if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-            mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
+            mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
             # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
             # print("current dataset is ", current_dataset)
             # print("load path is ", f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}") 

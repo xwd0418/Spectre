@@ -5,7 +5,7 @@ from datasets.hsqc_folder_dataset import FolderDataset, FolderDataModule, pad
 import torch, os, pytorch_lightning as pl, glob
 import torch.nn.functional as F
 import pickle
-from datasets.dataset_utils import specific_radius_mfp_loader
+
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
@@ -15,6 +15,9 @@ OneD Dataset, only for evaluting optional input
 '''
 class All_Info_Dataset(FolderDataset):
     def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False, show_smiles=False):
+        from datasets.dataset_utils import fp_loader_configer
+        self.fp_loader = fp_loader_configer.fp_loader
+        
         self.dir = os.path.join(dir, split)
         self.fp_suffix = FP_choice
         self.split = split
@@ -81,11 +84,8 @@ class All_Info_Dataset(FolderDataset):
             chemical_name = self.index_to_chemical_names[file_index]
             return inputs, (smiles, chemical_name, NMR_path)
         
-        if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-            mfp = specific_radius_mfp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
-        elif self.fp_suffix.startswith("DB_specific_FP"):
-            radius = int(self.fp_suffix[-1])
-            mfp = specific_radius_mfp_loader.build_db_specific_fp( int(self.files[i].split(".")[0]), '2d', self.split, radius)
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"): # should be in the format of "pick_entropy_r9"
+            mfp = self.fp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
         else:   
             mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")
 
