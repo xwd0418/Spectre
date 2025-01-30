@@ -117,14 +117,11 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.FP_choice=FP_choice
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
         
-        if FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP"):
+        if FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("pick_entropy") :
             self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val", predefined_FP = FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
 
-        elif FP_choice.startswith("pick_entropy") : # build rankingset by self.fp_loader
-            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val"),
-                                             batch_size=self.bs, CE_num_class=self.num_class)
-            
+
         elif ranking_set_path:
             # assert ("all_info_molecules" in ranking_set_path), "ranking_set_path should be all-info only. haven't implemented yet"
             self.ranking_set_path = ranking_set_path
@@ -168,7 +165,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                 self.loss = nn.MSELoss()
                 self.compute_metric_func = compute_metrics.cm_count_based_mse
             elif loss_func == "CE":
-                self.loss = bce_pos_weightnn.CrossEntropyLoss()
+                self.loss = nn.CrossEntropyLoss()
                 self.compute_metric_func = compute_metrics.cm_count_based_ce
             else:
                 raise Exception("loss_func should be either MSE or CE when using count-based FP")

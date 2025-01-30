@@ -1,3 +1,6 @@
+"""Used for training with all data of HSQC | HSQC+H | HSQC+C | all info | optional inputs"""
+
+
 import logging
 import pickle, random
 import torch, os, pytorch_lightning as pl, glob
@@ -41,8 +44,11 @@ class FolderDataset(Dataset):
         assert(split in ["train", "val", "test"])
         for src in input_src:
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
+            
         if parser_args['use_MW']:
             self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
+            
+            
         if parser_args['train_on_all_info_set'] or split in ["val", "test"]:
             logger.info(f"[FolderDataset]: only all info datasets")
             path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
@@ -50,8 +56,6 @@ class FolderDataset(Dataset):
             print("loaded full info indices\n\n\n")
             # print("36690.pt" in self.files, self.files[0])
             # assert (not parser_args['combine_oneD_only_dataset'])
-        elif self.parser_args['only_C_NMR'] or self.parser_args['only_H_NMR'] or self.parser_args['only_oneD_NMR']:
-            self.files = os.listdir(os.path.join(self.dir, "oneD_NMR"))
         else:    
             self.files = os.listdir(os.path.join(self.dir, "HSQC")) 
         self.files.sort() # sorted because we need to find correct weight mappings 
@@ -71,17 +75,23 @@ class FolderDataset(Dataset):
         
         if self.parser_args['only_C_NMR']:
             def filter_unavailable(x):
+                if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
+                    return False 
                 c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
                 return len(c_tensor)>0
             self.files = list(filter(filter_unavailable, self.files))
         elif self.parser_args['only_H_NMR']:
             def filter_unavailable(x):
+                if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
+                    return False 
                 c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
                 return len(h_tensor)>0
             self.files = list(filter(filter_unavailable, self.files))
             
         elif self.parser_args['only_oneD_NMR']:
             def filter_unavailable(x):
+                if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
+                    return False 
                 c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
                 return len(h_tensor)>0 and len(c_tensor)>0
             self.files = list(filter(filter_unavailable, self.files))
@@ -93,7 +103,8 @@ class FolderDataset(Dataset):
         
         
     def __len__(self):
-        # return 500
+        if self.parser_args['debug'] or self.parser_args['foldername'] == "debug":
+            return 50000
         length = len(self.files)
         if self.parser_args['combine_oneD_only_dataset']:
             length += len(self.files_1d)
@@ -181,7 +192,7 @@ class FolderDataset(Dataset):
                 
             
         # loading MW and MFP in different datasets 
-        if idx >= len(self.files): # load 1D dataset    
+        if idx >= len(self.files) : # load 1D dataset    
             if self.parser_args['use_MW']:
                 mol_weight_dict = self.mol_weight_1d
             dataset_files = self.files_1d
@@ -208,7 +219,9 @@ class FolderDataset(Dataset):
         # remember build ranking set
         
         if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"): # should be in the format of "pick_entropy_r9"
-            mfp = self.fp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
+            # print(f"current i is {i}")
+            # print("self.files len is ", len(self.files))
+            mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
 
