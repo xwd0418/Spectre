@@ -39,6 +39,8 @@ class All_Info_Dataset(FolderDataset):
             
         
     def __len__(self):
+        # if self.parser_args['debug'] or self.parser_args['foldername'] == 'debug':
+        #     return 500
         # return 200
         return len(self.files)
     
@@ -82,7 +84,7 @@ class All_Info_Dataset(FolderDataset):
             file_index = int(self.files[i].split(".")[0])
             smiles = self.index_to_smiles[file_index]
             chemical_name = self.index_to_chemical_names[file_index]
-            return inputs, (smiles, chemical_name, NMR_path)
+            return inputs, (smiles, chemical_name, NMR_type_indicator, NMR_path)
         
         if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"): # should be in the format of "pick_entropy_r9"
             mfp = self.fp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)

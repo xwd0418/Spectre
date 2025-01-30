@@ -47,7 +47,7 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         self.validation_step_outputs[current_batch_name].append(metrics)
         return metrics
     
-    def test_step(self, batch, batch_idx, dataloader_idx):
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
         if self.loader_idx != None  and self.loader_idx != dataloader_idx:
             # print(f"skipping loader {dataloader_idx} because self.loader_idx is {self.loader_idx}")
             return
@@ -77,7 +77,12 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
                 di[f"val_mean_{feat}/{dataset_name}"] = curr_dataset_curr_feature
                 total_features[feat].append(curr_dataset_curr_feature)
             for k, v in di.items():
-                self.log(k, v, on_epoch=True, prog_bar="rank_1" in k)
+                self.log(k, v, on_epoch=True, prog_bar="rank_1/" in k)
+                
+        # from pytorch_lightning.callbacks import ModelCheckpoint
+        # for callback in self.trainer.callbacks:
+        #     if isinstance(callback, ModelCheckpoint):
+        #         print(f"Checkpoint tracking {callback.monitor} -> Best model path: {callback.best_model_path}")
                 
         # # log the avg metric for all datasets
         # for k, v in total_features.items():

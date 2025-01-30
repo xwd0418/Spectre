@@ -1,4 +1,4 @@
-"""Deprecated. Using this file may introduce some bug...."""
+"""Used for training with all data of H | C | H and C"""
 
 import logging
 import pickle
@@ -38,7 +38,7 @@ class OneDDataset(FolderDataset):
         self.fp_suffix = FP_choice
         self.parser_args = parser_args
 
-        print(self.dir)
+        print(self.dir_1d)
         assert(os.path.exists(self.dir))
         assert(split in ["train", "val", "test"])
         
@@ -91,7 +91,7 @@ class OneDDataset(FolderDataset):
     def __len__(self):
         # return 100
         length = len(self.files)
-        if self.parser_args['train_on_all_info_set']:
+        if self.parser_args['train_on_all_info_set']  or self.split in ["val", "test"] :
            return length 
         length += len(self.files_1d)
         return length
@@ -146,7 +146,7 @@ class OneDDataset(FolderDataset):
         inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
          
             
-        if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"):
             mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
             # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
             # print("current dataset is ", current_dataset)

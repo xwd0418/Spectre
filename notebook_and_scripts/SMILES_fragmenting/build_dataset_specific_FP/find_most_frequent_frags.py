@@ -28,6 +28,7 @@ def count_circular_substructures(smiles):
     # Compute Morgan fingerprint with radius 
     fp = gen.GetFingerprint(mol, additionalOutput=ao)
     info = ao.GetBitInfoMap()
+    
 
     # Extract circular subgraphs
     circular_substructures_counts = defaultdict(int) # radius to smiles
@@ -130,5 +131,6 @@ def generate_frags():
                     
    
 if __name__ == "__main__":
-    get_all_train_set_fragments()
-    generate_frags()
+    # get_all_train_set_fragments()
+    # generate_frags()
+    (count_circular_substructures('COC(=O)c1c(O)cc(OC)c(CC=C(C)CCC=C(C)C)c1O'))

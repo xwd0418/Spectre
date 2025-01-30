@@ -64,11 +64,12 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
     if args['optional_inputs']:
         return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
     # OneD datamodule is somewhat buggy, so we will not use hsqc_folder_dataset.py 
-    # if args['only_oneD_NMR']:
-    #     # oned_dir = "/workspace/OneD_Only_Dataset"
-    #     return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
-    # if model_type == "double_transformer": # wangdong: not using it
-    #     return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
+    if args['only_oneD_NMR']:
+        # oned_dir = "/workspace/OneD_Only_Dataset"
+        # here the choice is still SMILES_dataset, but infact, OneDDataset use both datasets
+        return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
+    if model_type == "double_transformer": # wangdong: not using it
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
         return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
     elif model_type == "CNN":
@@ -100,6 +101,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
     kwargs["ranking_set_path"] = DATASET_root_path / f"ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
     # kwargs["ranking_set_path"] =  DATASET_root_path / f"ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"   
    
+    kwargs["ranking_set_path"] = str(kwargs["ranking_set_path"])
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
@@ -186,7 +188,7 @@ def main(optuna_params=None):
     parser.add_argument("--bs", type=int, default=64)
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--ds", type=str, default="")
-    parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=6)
     # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_rank_1")
     parser.add_argument("--metricmode", type=str, default="max")
@@ -255,13 +257,15 @@ def main(optuna_params=None):
     # args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args.items())
     if args['foldername'] == "debug" or args['debug'] is True:
-        args["epochs"] = 2
+        args['debug'] = True
+        args["epochs"] = 3
         
     
 
     # Tensorboard setup
     # curr_exp_folder_name = 'NewRepoNewDataOldCode'
-    curr_exp_folder_name = "db_specific_FP_with_entropy"
+    # curr_exp_folder_name = "db_specific_FP_with_entropy"
+    curr_exp_folder_name = "fix_combining_dataset_load_mfp_bug"
     out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
@@ -326,7 +330,7 @@ def main(optuna_params=None):
         # metric = "val_mean_rank_1/all_nmr_combination_avg" # essientially the same as mean_rank_1, just naming purposes
         for metric in  ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]:
             checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f"val_mean_rank_1/{metric}", mode=metricmode,
-                                                           filename= "{epoch}-"+metric)) 
+                                                           filename= "{epoch}-"+metric, save_top_k = 1) )
     else:
         checkpoint_callbacks =[cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)]
         
@@ -343,16 +347,21 @@ def main(optuna_params=None):
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module)
     elif args['test']:
+        trainer = pl.Trainer( accelerator="auto" )
         my_logger.info("[Main] Just performing test step")
-        raise Exception("should use test_on_all_info_subset.ipynb")
+        test_result = trainer.test(model, data_module, ckpt_path=args['checkpoint_path'])
+        print(test_result)
+        # raise Exception("should use test_on_all_info_subset.ipynb")
         
     else:
+        
         try:
             my_logger.info("[Main] Begin Training!")
             trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
 
             model.change_ranker_for_testing()
             checkpoint_callback = checkpoint_callbacks[0]
+            # my_logger.info(f"[Main] my process rank: {os.getpid()}")
             if not args['optional_inputs']:
                 my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
                 test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
@@ -360,16 +369,21 @@ def main(optuna_params=None):
                 # save test result as pickle
                 with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
                     pickle.dump(test_result, f)
+                all_test_results = [test_result]
             else:
                 # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
                 data_module.setup("test")
                 all_7_dataloaders = data_module.test_dataloader()
                 all_test_results = [{}]
-                for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
+                model_paths = [checkpoint_callback.best_model_path for checkpoint_callback in checkpoint_callbacks]
+                model_monitors = [checkpoint_callback.monitor for checkpoint_callback in checkpoint_callbacks]
+                # for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
+                for loader_idx, (best_model_path, monitor, curr_dataloader) in enumerate(zip(model_paths, model_monitors, all_7_dataloaders)):
                     model.only_test_this_loader(loader_idx=loader_idx)
-                    my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
-                    test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
-                    test_result[0][f'best_epoch_{checkpoint_callback.monitor.split("/")[-1]}'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
+                    my_logger.info(f"[Main] Testing path {best_model_path}!")
+                    my_logger.info(f"[Main]  monitor {monitor}!")
+                    test_result = trainer.test(model, data_module, ckpt_path=best_model_path)
+                    test_result[0][f'best_epoch_{monitor.split("/")[-1]}'] = best_model_path.split("/")[-1].split("-")[0]
                     all_test_results[0].update(test_result[0])
                 # save test result as pickle
                 with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
@@ -380,11 +394,12 @@ def main(optuna_params=None):
             raise(e)
         finally: #Finally move all content from out_path to out_path_final
             my_logger.info("[Main] Done!")
-            my_logger.info("[Main] test result: \n")
+            # my_logger.info("[Main] test result: \n")
             # my_logger.info(f"{test_result}")
-            for key, value in test_result[0].items():
+            for key, value in all_test_results[0].items():
                 my_logger.info(f"{key}: {value}")
-            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
+            os.system(f"cp -r {out_path}/* {out_path_final}/ ")
+            my_logger.info(f"[Main] Copied all content from {out_path} to {out_path_final}")
             logging.shutdown()
 
     # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model

@@ -166,7 +166,7 @@ class FP_loader():
 
 class Specific_Radius_MFP_loader(FP_loader):
     def __init__(self, ) -> None:
-        self.path_pickles = f'{repo_path}/notebooks/dataset_building/FP_on_bits_pickles/'
+        self.path_pickles = f'{repo_path}/notebook_and_scripts/dataset_building/FP_on_bits_pickles/'
         
     def setup(self, only_2d = False, FP_building_type = "Normal", out_dim=6144):
         assert (FP_building_type in ["Normal", "Exact"]), "Only Normal/Exact FP is supported"
@@ -286,12 +286,12 @@ class DB_Specific_FP_loader(FP_loader):
         self.out_dim = out_dim
          
         # create a N*2 array of  [entropy, smiles]
-        entropy_each_frag = compute_entropy(counts, total_dataset_size = len(frags_to_use_counts_and_smiles))
+        entropy_each_frag = compute_entropy(counts, total_dataset_size = len(self.frags_count))
                                               
-        
         frags_to_keep = frag_smiles[np.lexsort((frag_smiles, entropy_each_frag))[:out_dim]]   
         self.frag_to_index_map = {smiles: i for i, smiles in enumerate(frags_to_keep)}
         print("DB_Specific_FP_loader is setup")
+        return entropy_each_frag, counts, len(self.frags_count)
         
     def build_mfp(self, file_idx, dataset_src, split):
         if dataset_src == "2d":
@@ -321,9 +321,13 @@ class DB_Specific_FP_loader(FP_loader):
         return out
 
     def build_mfp_for_new_SMILES(self, smiles):
-        from reproduce_previous_works.Spectre.notebooks.SMILES_fragmenting.build_dataset_specific_FP.find_most_frequent_frags import count_circular_substructures
-        frags_with_count, _ = count_circular_substructures(smiles)
+        from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_most_frequent_frags import count_circular_substructures
         mfp = np.zeros(self.out_dim)
+        
+        try:
+            frags_with_count, _ = count_circular_substructures(smiles)
+        except:
+            return torch.tensor(mfp).float() # return all zeros if the SMILES is invalid, so cosine similarity will be 0
         for frag in frags_with_count:
             if frag in self.frag_to_index_map:
                 mfp[self.frag_to_index_map[frag]] = 1
@@ -333,6 +337,9 @@ class DB_Specific_FP_loader(FP_loader):
         # mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
         # mfp = mfp[self.indices_kept]
         # return torch.tensor(mfp).float()
+        
+    def construct_index_to_frag_mapping(self):
+        self.index_to_frag_mapping =  {v:k for k, v in self.frag_to_index_map.items()}
 
 class FP_Loader_Configer():
     def __init__(self):
