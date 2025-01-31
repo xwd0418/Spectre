@@ -112,7 +112,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         # don't set ranking set if you just want to treat it as a module
         self.FP_choice=FP_choice
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
-        if FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
+        if kwargs.get('skip_ranker', False):
+            self.ranker = None
+        elif FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
           
             self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val"),
                                              batch_size=self.bs, CE_num_class=self.num_class)

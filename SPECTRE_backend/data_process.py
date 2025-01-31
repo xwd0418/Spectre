@@ -7,18 +7,18 @@ import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import torch
 
-def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names , k=30):
+def retrieve_by_rankingset(data, prediction_query, smiles_and_names):
     query = F.normalize(prediction_query, dim=1, p=2.0).squeeze()
 
     results = []
     query_products = (data @ query)
-    values, indices = torch.topk(query_products,k=k)
+    values, indices = torch.topk(query_products,k=1000)
+    # instead of topk, we will sort the values and get all
+    # values, indices = torch.sort(query_products, descending=True)
     
     for value, idx in zip(values, indices):
         results.append((value, idx, data[idx].nonzero()))
-                
                         
-    results.sort(key=lambda x: x[0],reverse=True)
     ret = [(value, smiles_and_names[i], fp) for value, i, fp in results]
     # print(torch.tensor(idx))
     # retrieved_FP = [all_fp[i] for i in idx]
@@ -87,11 +87,10 @@ def convert_to_tensor_1d_nmr(tensor_1d):
         if tensor_1d == "":
             tensor_1d = None
         else:
-            c_vals = np.fromstring(tensor_1d, sep=", ")
+            c_vals = np.fromstring(tensor_1d, sep=",")
             tensor_1d = np.zeros((c_vals.shape[0], 3))
             tensor_1d[:,0] = c_vals
             tensor_1d = torch.tensor(tensor_1d).float()
-        tensor_1d = F.pad(tensor_1d.view(-1, 1), (0, 2), "constant", 0)
         return tensor_1d
     except Exception as e:
         raise e
@@ -136,8 +135,8 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
         # print(pos, neg)
     ax1.set_title("HSQC")
     ax1.set_xlabel('Proton Shift (1H)')  # X-axis label
-    ax1.set_xlim([0, 7.5])
-    ax1.set_ylim([0, 180])
+    ax1.set_xlim([0, 12])
+    ax1.set_ylim([0, 220])
     ax1.invert_yaxis()
     ax1.invert_xaxis()
     ax1.legend()
@@ -146,7 +145,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     ax2 = fig.add_subplot(gs[1, 0])  # Smaller subplot
     if c_tensor is not None:
         ax2.scatter( torch.ones(len(c_tensor)), c_tensor[:,0], c="black", s=2)
-    ax2.set_ylim([0, 180])
+    ax2.set_ylim([0, 220])
     ax2.set_title("13C-NMR")
     ax2.set_ylabel('Carbon Shift (13C)')
     ax2.set_xticks([])
@@ -156,7 +155,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     ax3 = fig.add_subplot(gs[0, 1])  # Smaller subplot
     if h_tensor is not None:
         ax3.scatter(h_tensor[:,0], torch.ones(len(h_tensor)),c="black", s=2)
-    ax3.set_xlim([0, 7.5])
+    ax3.set_xlim([0, 12])
     ax3.set_title("1H-NMR")
     ax3.set_yticks([])
     ax3.invert_yaxis()

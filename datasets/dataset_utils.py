@@ -160,11 +160,11 @@ class Specific_Radius_MFP_loader():
         for FP_on_bits in self.train_2d.values():
             self.count += convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
   
-        # also val and test
-        self.val_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_val.pkl', 'rb'))
-        self.test_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_test.pkl', 'rb'))
-        self.val_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_val.pkl', 'rb'))
-        self.test_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_test.pkl', 'rb'))
+        # # also val and test
+        # self.val_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_val.pkl', 'rb'))
+        # self.test_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_test.pkl', 'rb'))
+        # self.val_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_val.pkl', 'rb'))
+        # self.test_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_test.pkl', 'rb'))
        
     
     def set_max_radius(self, max_radius, only_2d = False):
@@ -200,7 +200,8 @@ class Specific_Radius_MFP_loader():
         mfp = mfp[self.indices_kept]
         return torch.tensor(mfp).float()
     
-    def build_rankingset(self, split):         
+    def build_rankingset(self, split):   
+        return       
         path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
         file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
         files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
@@ -208,16 +209,7 @@ class Specific_Radius_MFP_loader():
         out = torch.vstack(files)
         return out
     
-    # def build_inference_ranking_set_with_everything(self):
-        # train_files_2d = [self.build_mfp(file_idx, "2d", "train") for file_idx in range(len(self.train_2d))]
-        # val_files_2d = [self.build_mfp(file_idx, "2d", "val") for file_idx in range(len(self.val_2d))]
-        # test_files_2d = [self.build_mfp(file_idx, "2d", "test") for file_idx in range(len(self.test_2d))]
-        # train_files_1d = [self.build_mfp(file_idx, "1d", "train") for file_idx in range(len(self.train_1d))]
-        # val_files_1d = [self.build_mfp(file_idx, "1d", "val") for file_idx in range(len(self.val_1d))]
-        # test_files_1d = [self.build_mfp(file_idx, "1d", "test") for file_idx in range(len(self.test_1d))]
-                         
-        # out = torch.vstack(train_files_2d + val_files_2d + test_files_2d + train_files_1d + val_files_1d + test_files_1d)
-        # return torch.vstack(train_files_2d)
+  
     def build_mfp_for_new_SMILES(self, smiles):
         num_plain_FPs = 16 # radius from 0 to 15
         
