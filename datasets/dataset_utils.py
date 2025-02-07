@@ -425,22 +425,6 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     # Show the plot
     plt.show()
 
-# def s(dataset, file_index, fp_suffix):
-if __name__ == "__main__":
-    specific_radius_mfp_loader.setup(only_2d = False, FP_building_type = "Normal")
-    specific_radius_mfp_loader.set_max_radius(2, only_2d = False)
-    
-    for file_idx in range(len(specific_radius_mfp_loader.train_2d)):
-        mfp = specific_radius_mfp_loader.build_mfp(file_idx, "2d", "train")
-        print(mfp)
-        break
-    # train_files_2d = [self.build_mfp(file_idx, "2d", "train") )]
-        # val_files_2d = [self.build_mfp(file_idx, "2d", "val") for file_idx in range(len(self.val_2d))]
-        # test_files_2d = [self.build_mfp(file_idx, "2d", "test") for file_idx in range(len(self.test_2d))]
-        # train_files_1d = [self.build_mfp(file_idx, "1d", "train") for file_idx in range(len(self.train_1d))]
-        # val_files_1d = [self.build_mfp(file_idx, "1d", "val") for file_idx in range(len(self.val_1d))]
-        # test_files_1d = [self.build_mfp(file_idx, "1d", "test") for file_idx in range(len(self.test_1d))]
-        
-    print("Done")
+
                 
     
