@@ -6,6 +6,8 @@ from rdkit import Chem
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 DATASET_root_path = pathlib.Path("/workspace/")
+from utils.matmul_precision_wrapper import set_float32_highest_precision
+
 
 def pad(sequence):
   """
@@ -124,7 +126,7 @@ def compute_entropy(data, total_dataset_size, use_natural_log=False):
 
 def keep_smallest_entropy(data, total_dataset_size, size,  use_natural_log=False):
     entropy = compute_entropy(data, total_dataset_size, use_natural_log)
-    indices_of_min_6144 = np.argsort(entropy)[:size]
+    indices_of_min_6144 = np.argsort(entropy, kind="stable")[:size]
     # print(entropy, indices_of_min_6144)
     total_entropy = entropy[indices_of_min_6144].sum()
     return total_entropy, indices_of_min_6144
@@ -167,7 +169,8 @@ class FP_loader():
         pass
     def build_mfp_for_new_SMILES(self, ):
         pass
-
+    
+# @set_float32_highest_precision
 class Specific_Radius_MFP_loader(FP_loader):
     def __init__(self, ) -> None:
         self.only_2d = None
@@ -278,7 +281,7 @@ class Specific_Radius_MFP_loader(FP_loader):
         mfp = mfp[self.indices_kept]
         return torch.tensor(mfp).float()
     
-
+# @set_float32_highest_precision
 class DB_Specific_FP_loader(FP_loader):
     def __init__(self, ) -> None:
         RADIUS_UPPER_LIMIT = 10
