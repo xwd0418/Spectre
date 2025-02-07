@@ -60,6 +60,7 @@ class OneDDataset(FolderDataset):
             logger.info(f"[OneD Dataset]: only all info datasets: {split}")
             path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            self.files.sort()
             logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
             return 
         if self.parser_args['only_C_NMR']:

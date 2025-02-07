@@ -29,6 +29,7 @@ DATASET_root_path = pathlib.Path("/workspace/")
 
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning, message="You are using `torch.load` with `weights_only=False`")
+warnings.filterwarnings("ignore", category=UserWarning, message="The PyTorch API of nested tensors is in prototype stage and will change in the near future.")
 
 
 def exp_string(expname, args):
@@ -201,7 +202,6 @@ def main(optuna_params=None):
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
     # different versions of input/output
-    # parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
     parser.add_argument("--FP_choice", type=str, default="R2-6144FP", help="use which fingerprint as ground truth, default: r2-6144fp") 
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
@@ -222,6 +222,7 @@ def main(optuna_params=None):
     
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
+    parser.add_argument("--optional_MW",  type=lambda x:bool(str2bool(x)), default=False, help="also make molecular weight as optional input")
     parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
     parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
     parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
@@ -234,7 +235,7 @@ def main(optuna_params=None):
     
     # entropy based FP
     parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact")
-    parser.add_argument("--out_dim", type=int, default="6144", help="the size of output fingerprint to be predicted")
+    parser.add_argument("--out_dim", type=lambda x: int(x) if x.isdigit() else x, default="6144", help="the size of output fingerprint to be predicted. If set to inf, then use all fragements/bits")
     
     args = vars(parser.parse_known_args()[0])
     apply_args(parser, args["modelname"])
@@ -254,7 +255,6 @@ def main(optuna_params=None):
     # apply_args(parser, args["modelname"])
 
     # Model args
-    # args_with_model = vars(parser.parse_known_args()[0])
     li_args = list(args.items())
     if args['foldername'] == "debug" or args['debug'] is True:
         args['debug'] = True
@@ -263,7 +263,6 @@ def main(optuna_params=None):
     
 
     # Tensorboard setup
-    # curr_exp_folder_name = 'NewRepoNewDataOldCode'
     # curr_exp_folder_name = "db_specific_FP_with_entropy"
     curr_exp_folder_name = "fix_combining_dataset_load_mfp_bug"
     out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
@@ -301,6 +300,8 @@ def main(optuna_params=None):
             my_logger.info("[Main] Cannot find radius in FP_choice, using default radius 10")
             radius = 10
         fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
+        if fp_loader.out_dim != args['out_dim']:
+            args['out_dim'] = fp_loader.out_dim
     else:
         fp_loader_configer.select_version("MFP_Specific_Radius")
         fp_loader = fp_loader_configer.fp_loader
@@ -342,12 +343,14 @@ def main(optuna_params=None):
                          accelerator="auto",
                          logger=tbl, 
                          callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
+                         strategy="fsdp",
                         )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module)
     elif args['test']:
         trainer = pl.Trainer( accelerator="auto" )
+        model.change_ranker_for_testing()
         my_logger.info("[Main] Just performing test step")
         test_result = trainer.test(model, data_module, ckpt_path=args['checkpoint_path'])
         print(test_result)
@@ -369,7 +372,7 @@ def main(optuna_params=None):
                 # save test result as pickle
                 with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
                     pickle.dump(test_result, f)
-                all_test_results = [test_result]
+                all_test_results = test_result
             else:
                 # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
                 data_module.setup("test")
