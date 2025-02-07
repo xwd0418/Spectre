@@ -90,7 +90,7 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         # === All Parameters ===
-        out_dim = kwargs['out_dim']
+        out_dim = kwargs['out_dim']         
         self.FP_length = out_dim # 6144 
         self.separate_classifier = kwargs['separate_classifier']
         if FP_choice == "R0_to_R4_30720_FP":
@@ -183,8 +183,10 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.NMR_type_embedding = nn.Embedding(4, dim_model)
         # HSQC, C NMR, H NMR, MW
         # MW isn't NMR, but, whatever......
-            
+        self.out_logger.info("[RankedTransformer] nn.linear layer to be initialized")
+        print("out_dim is ", out_dim)
         self.fc = nn.Linear(dim_model, out_dim)
+        self.out_logger.info("[RankedTransformer] nn.linear layer is initialized")
         # (1, 1, dim_model)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
 
@@ -202,6 +204,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         )
         # === END Parameters ===
 
+        self.out_logger.info("[RankedTransformer] weights are initialized")
+        
         if L1_decay:
             self.out_logger.info("[RankedTransformer] L1_decay is applied")
             self.transformer_encoder = L1(self.transformer_encoder, L1_decay)
@@ -404,7 +408,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             di[f"test/mean_{feat}"] = np.mean([v[feat]
                                              for v in self.test_step_outputs])
         for k, v in di.items():
-            self.log(k, v, on_epoch=True, sync_dist=False)
+            self.log(k, v, on_epoch=True)
             # self.log(k, v, on_epoch=True)
         self.test_step_outputs.clear()
 

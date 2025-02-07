@@ -104,7 +104,7 @@ class FolderDataset(Dataset):
         
     def __len__(self):
         if self.parser_args['debug'] or self.parser_args['foldername'] == "debug":
-            return 50000
+            return 3000
         length = len(self.files)
         if self.parser_args['combine_oneD_only_dataset']:
             length += len(self.files_1d)
@@ -208,7 +208,7 @@ class FolderDataset(Dataset):
             mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
             
-            if self.parser_args['optional_inputs']:
+            if self.parser_args['optional_inputs'] and self.parser_args["optional_MW"]:
                 if random.random() <= 0.5:
                     mol_weight = torch.tensor([])
                 

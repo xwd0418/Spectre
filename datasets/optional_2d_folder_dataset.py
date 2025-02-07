@@ -10,9 +10,7 @@ import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
 
-'''
-OneD Dataset, only for evaluting optional input
-'''
+
 class All_Info_Dataset(FolderDataset):
     def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False, show_smiles=False):
         from datasets.dataset_utils import fp_loader_configer

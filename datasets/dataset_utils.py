@@ -138,56 +138,70 @@ def convert_bits_positions_to_array(FP_on_bits, length):
     out[FP_on_bits] = 1
     return out
 
+from rdkit.Chem import rdFingerprintGenerator
 def generate_normal_FP_on_bits(mol, radius=2, length=6144):
-    # Dictionary to store information about which substructures contribute to setting which bits
-    bitInfo = {}
-    # Generate the fingerprint with bitInfo to track the substructures contributing to each bit
-    fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=radius, nBits=length, bitInfo=bitInfo)
-    on_bits = np.array(fp.GetOnBits())
+    gen = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=length)
+    ao = rdFingerprintGenerator.AdditionalOutput()
+    ao.AllocateBitInfoMap()
+    fp = gen.GetFingerprint(mol, additionalOutput=ao)
+    bitInfo = ao.GetBitInfoMap()
+    on_bits = np.array(list(bitInfo.keys()))
+    
+    # print("old way")
+    # # Dictionary to store information about which substructures contribute to setting which bits
+    # bitInfo = {}
+    # # Generate the fingerprint with bitInfo to track the substructures contributing to each bit
+    # fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=radius, nBits=length, bitInfo=bitInfo)
+    # on_bits = np.array(fp.GetOnBits())
     return on_bits
 
 # define abstract class for FP loader
 class FP_loader():
     def __init__(self, ) -> None:
         pass
-    
     def setup(self, ):
         pass
-
-    
     def build_mfp(self, ):
         pass
-    
     def build_rankingset(self, ):
         pass
-    
     def build_mfp_for_new_SMILES(self, ):
         pass
 
 class Specific_Radius_MFP_loader(FP_loader):
     def __init__(self, ) -> None:
+        self.only_2d = None
+        self.out_dim = None
+        self.max_radius = None
         self.path_pickles = f'{repo_path}/notebook_and_scripts/dataset_building/FP_on_bits_pickles/'
         
     def setup(self, only_2d = False, FP_building_type = "Normal", out_dim=6144):
+        from  time import time
+        time1 = time()
         assert (FP_building_type in ["Normal", "Exact"]), "Only Normal/Exact FP is supported"
         self.out_dim = out_dim
+        self.only_2d = only_2d
         self.single_FP_size = 6144 if FP_building_type == "Normal" else 1024
         self.train_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_train.pkl', 'rb'))
         self.train_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_train.pkl', 'rb'))
-        
+        time2 = time()
+        print(f"loading time: {time2-time1}")
         self.count = np.zeros(self.single_FP_size*16)
         if not only_2d:
             for FP_on_bits in self.train_1d.values():
                 self.count += convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
+            # self.count += np.sum([convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16) for FP_on_bits in self.train_1d.values()], axis=0)
         for FP_on_bits in self.train_2d.values():
             self.count += convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
-  
+        # self.count += np.sum([convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16) for FP_on_bits in self.train_2d.values()], axis=0)
+        time3 = time()
+        print(f"counting time: {time3-time2}")
         # also val and test
         self.val_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_val.pkl', 'rb'))
         self.test_1d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_1d_test.pkl', 'rb'))
         self.val_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_val.pkl', 'rb'))
         self.test_2d = pickle.load(open(self.path_pickles + f'{FP_building_type}_FP_on_bits_r0_r15_len_{self.single_FP_size}_2d_test.pkl', 'rb'))
-       
+        
     
     def set_max_radius(self, max_radius, only_2d = False):
         self.max_radius = max_radius
@@ -281,7 +295,7 @@ class DB_Specific_FP_loader(FP_loader):
         counts, frag_smiles = zip(*frags_to_use_counts_and_smiles)
         counts = np.array(counts)
         frag_smiles = np.array(frag_smiles)
-        if out_dim == float("inf"):
+        if out_dim == 'inf' or out_dim == float("inf"):
             out_dim = len(frags_to_use_counts_and_smiles)
         self.out_dim = out_dim
          
@@ -379,8 +393,8 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
         # print(pos, neg)
     ax1.set_title("HSQC")
     ax1.set_xlabel('Proton Shift (1H)')  # X-axis label
-    ax1.set_xlim([0, 7.5])
-    ax1.set_ylim([0, 180])
+    ax1.set_xlim([0, 12])
+    ax1.set_ylim([0, 220])
     ax1.invert_yaxis()
     ax1.invert_xaxis()
     ax1.legend()
@@ -389,7 +403,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     ax2 = fig.add_subplot(gs[1, 0])  # Smaller subplot
     if c_tensor is not None:
         ax2.scatter( torch.ones(len(c_tensor)), c_tensor, c="black", s=2)
-    ax2.set_ylim([0, 180])
+    ax2.set_ylim([0, 220])
     ax2.set_title("13C-NMR")
     ax2.set_ylabel('Carbon Shift (13C)')
     ax2.set_xticks([])
@@ -399,7 +413,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     ax3 = fig.add_subplot(gs[0, 1])  # Smaller subplot
     if h_tensor is not None:
         ax3.scatter(h_tensor, torch.ones(len(h_tensor)),c="black", s=2)
-    ax3.set_xlim([0, 7.5])
+    ax3.set_xlim([0, 12])
     ax3.set_title("1H-NMR")
     ax3.set_yticks([])
     ax3.invert_yaxis()
