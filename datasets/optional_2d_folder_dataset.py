@@ -146,58 +146,58 @@ class OptionalInputDataModule(FolderDataModule):
             )
             should_shuffle = False
         return DataLoader(self.train, shuffle=should_shuffle, batch_size=self.batch_size, collate_fn=self.collate_fn, sampler=sampler,
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         
     def val_dataloader(self):
         loader_all_inputs = DataLoader(self.val_all_inputs, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)  
+                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)  
         loader_only_hsqc = DataLoader(self.val_only_hsqc, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_1d = DataLoader(self.val_only_1d, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_H_NMR = DataLoader(self.val_only_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_HSQC_H_NMR = DataLoader(self.val_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_C_NMR = DataLoader(self.val_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_HSQC_C_NMR = DataLoader(self.val_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
     
     def test_dataloader(self):
         loader_all_inputs = DataLoader(self.test_all_inputs, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                      num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_hsqc = DataLoader(self.test_only_hsqc, batch_size=self.batch_size, collate_fn=self.collate_fn,  
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_1d = DataLoader(self.test_only_1d, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_H_NMR = DataLoader(self.test_only_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_HSQC_H_NMR = DataLoader(self.test_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_C_NMR = DataLoader(self.test_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_HSQC_C_NMR = DataLoader(self.test_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
       
     def predict_dataloader(self, shuffle = False):
         loader_all_inputs = DataLoader(self.predict_stage_all_inputs, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_hsqc = DataLoader(self.predict_stage_only_hsqc, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_1d = DataLoader(self.predict_stage_only_1d, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
 
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_H_NMR = DataLoader(self.predict_stage_only_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_HSQC_H_NMR = DataLoader(self.predict_stage_HSQC_H_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_only_C_NMR = DataLoader(self.predict_stage_only_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         loader_HSQC_C_NMR = DataLoader(self.predict_stage_HSQC_C_NMR, batch_size=self.batch_size, collate_fn=self.collate_fn, shuffle = shuffle,
-                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                                        num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.parser_args['num_workers']>1)
         return [loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR]
 
 

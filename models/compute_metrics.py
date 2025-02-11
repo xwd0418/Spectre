@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torchmetrics.classification import BinaryRecall, BinaryPrecision, BinaryF1Score, BinaryAccuracy
+from utils.ranker import RankingSet
 
 do_cos = nn.CosineSimilarity(dim=1)
 def do_jaccard(pred, label):
@@ -16,7 +17,7 @@ do_precision = BinaryPrecision()
 do_accuracy = BinaryAccuracy()
 
 
-def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, 
+def cm(model_output, fp_label, ranker: RankingSet, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, 
        query_idx_in_rankingset=None, mw=None,use_actaul_mw_for_retrival=None, use_Jaccard = False):
 
     global do_f1, do_recall, do_precision, do_accuracy

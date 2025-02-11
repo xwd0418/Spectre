@@ -175,6 +175,10 @@ class RankingSet(torch.nn.Module):
       ct_greater = torch.sum(
           (query_products >= thresh) | torch.isclose(query_products, thresh) , dim=0, keepdim=True, dtype=torch.int
       )
+      if (torch.sum((query_products >= thresh), dim=0) < torch.sum(torch.isclose(query_products, thresh), dim=0)).any():
+          
+        print(f"larger or equal to thresh: {torch.sum((query_products >= thresh), dim=0)}, is close to thresh: {torch.sum(torch.isclose(query_products, thresh), dim=0)}")
+        print(torch.sum((query_products >= thresh), dim=0) < torch.sum(torch.isclose(query_products, thresh), dim=0))
       ct_greater -= 1 # subtract the label(the sample itself) from the ranking set
  
       if self.debug:

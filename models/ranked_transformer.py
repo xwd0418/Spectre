@@ -141,7 +141,6 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         ### Loss function 
-        print(pos_weight)
         if pos_weight==None:
             self.bce_pos_weight = None
             self.out_logger.info("[RankedTransformer] bce_pos_weight = None")
@@ -184,7 +183,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         # HSQC, C NMR, H NMR, MW
         # MW isn't NMR, but, whatever......
         self.out_logger.info("[RankedTransformer] nn.linear layer to be initialized")
-        print("out_dim is ", out_dim)
+        # print("out_dim is ", out_dim, " dim_model is ", dim_model)
+        # exit(0)
         self.fc = nn.Linear(dim_model, out_dim)
         self.out_logger.info("[RankedTransformer] nn.linear layer is initialized")
         # (1, 1, dim_model)
