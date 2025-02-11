@@ -1,2 +1,2 @@
 
-only_C_NMR: rank_1: 0.9444, rank_5: 0.9849, mean_rank: 4.4434, cos: 0.8845, f1: 0.8939, 
+only_1d   : rank_1: 0.9566, rank_5: 0.9891, mean_rank: 0.7900, cos: 0.9062, f1: 0.9135, 

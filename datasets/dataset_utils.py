@@ -268,18 +268,21 @@ class Specific_Radius_MFP_loader(FP_loader):
         # return torch.vstack(train_files_2d)
         
     def build_mfp_for_new_SMILES(self, smiles):
-        num_plain_FPs = 16 # radius from 0 to 15
-        
-        mol = Chem.MolFromSmiles(smiles)
-        mol_H = Chem.AddHs(mol) # add implicit Hs to the molecule
-        all_plain_fps_on_bits = []
-        for radius in range(num_plain_FPs):
-            all_plain_fps_on_bits.append(generate_normal_FP_on_bits(mol_H, radius=radius, length=self.single_FP_size) + radius*self.single_FP_size)
-        FP_on_bits = np.concatenate(all_plain_fps_on_bits)
-        
-        mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
-        mfp = mfp[self.indices_kept]
-        return torch.tensor(mfp).float()
+        try:
+            num_plain_FPs = 16 # radius from 0 to 15
+            
+            mol = Chem.MolFromSmiles(smiles)
+            mol_H = Chem.AddHs(mol) # add implicit Hs to the molecule
+            all_plain_fps_on_bits = []
+            for radius in range(num_plain_FPs):
+                all_plain_fps_on_bits.append(generate_normal_FP_on_bits(mol_H, radius=radius, length=self.single_FP_size) + radius*self.single_FP_size)
+            FP_on_bits = np.concatenate(all_plain_fps_on_bits)
+            
+            mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
+            mfp = mfp[self.indices_kept]
+            return torch.tensor(mfp).float()
+        except:
+            return torch.zeros(self.out_dim).float()
     
 # @set_float32_highest_precision
 class DB_Specific_FP_loader(FP_loader):

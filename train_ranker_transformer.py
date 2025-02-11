@@ -191,7 +191,7 @@ def main(optuna_params=None):
     parser.add_argument("--ds", type=str, default="")
     parser.add_argument("--num_workers", type=int, default=6)
     # for early stopping/model saving
-    parser.add_argument("--metric", type=str, default="val/mean_rank_1")
+    parser.add_argument("--metric", type=str, default="val/mean_cos")
     parser.add_argument("--metricmode", type=str, default="max")
 
     parser.add_argument("--load_all_weights", type=str, default="")
@@ -264,10 +264,10 @@ def main(optuna_params=None):
 
     # Tensorboard setup
     # curr_exp_folder_name = "db_specific_FP_with_entropy"
-    curr_exp_folder_name = "fix_combining_dataset_load_mfp_bug"
+    curr_exp_folder_name = "stable_argsort"
     out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
-    # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
-    out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    # out_path =            f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    out_path_final =      f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
     os.makedirs(out_path, exist_ok=True)
     exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
@@ -328,14 +328,13 @@ def main(optuna_params=None):
     if args['optional_inputs']:
         checkpoint_callbacks = []
         my_logger.info("[Main] Using Optional Input")
-        # metric = "val_mean_rank_1/all_nmr_combination_avg" # essientially the same as mean_rank_1, just naming purposes
         for metric in  ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]:
-            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f"val_mean_rank_1/{metric}", mode=metricmode,
+            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f'{args["metric"]}/{metric}', mode=metricmode,
                                                            filename= "{epoch}-"+metric, save_top_k = 1) )
     else:
         checkpoint_callbacks =[cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)]
         
-    early_stop_metric = 'val_mean_rank_1/all_inputs' if args['optional_inputs'] else args["metric"]
+    early_stop_metric = f'{args["metric"]}/all_inputs' if args['optional_inputs'] else args["metric"]
     early_stopping = EarlyStopping(monitor=early_stop_metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
