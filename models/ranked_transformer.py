@@ -178,6 +178,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.validation_step_outputs = []
         self.training_step_outputs = []
         self.test_step_outputs = []
+        from collections import defaultdict
+        self.test_np_classes_rank1 = defaultdict(list)
 
         self.NMR_type_embedding = nn.Embedding(4, dim_model)
         # HSQC, C NMR, H NMR, MW
@@ -331,7 +333,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         # print((labels) )
         # print("\n\n\n")
         loss = self.loss(out, labels)
-        metrics = self.compute_metric_func(
+        metrics, rank_1_hits = self.compute_metric_func(
             preds, labels, self.ranker, loss, self.loss, thresh=0.0, 
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx,
@@ -342,7 +344,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         return metrics
     
     def test_step(self, batch, batch_idx):
-        inputs, labels, NMR_type_indicator = batch
+        inputs, labels, NMR_type_indicator, np_classes = batch
         out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
@@ -350,15 +352,20 @@ class HsqcRankedTransformer(pl.LightningModule):
         else:
             preds = out
         loss = self.loss(out, labels)
-        metrics = self.compute_metric_func(
+        metrics, rank_1_hits = self.compute_metric_func(
             preds, labels, self.ranker, loss, self.loss, thresh=0.0,
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx,
             use_Jaccard = self.use_Jaccard
             )
+        
         if type(self.test_step_outputs)==list:
             self.test_step_outputs.append(metrics)
-        return metrics
+            for curr_classes, curr_rank_1_hits in zip(np_classes, rank_1_hits.tolist()):
+                # print(curr_rank_1_hits)
+                for np_class in curr_classes:
+                    self.test_np_classes_rank1[np_class].append(curr_rank_1_hits)
+        return metrics, np_classes, rank_1_hits
 
     def predict_step(self, batch, batch_idx, return_representations=False):
         x, smiles_chemical_name = batch
@@ -410,6 +417,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         for k, v in di.items():
             self.log(k, v, on_epoch=True)
             # self.log(k, v, on_epoch=True)
+            
+        for np_class, rank1_hits in self.test_np_classes_rank1.items():
+            self.log(f"test/rank_1_of_NP_class/{np_class}", np.mean(rank1_hits), on_epoch=True)
         self.test_step_outputs.clear()
 
     def configure_optimizers(self):

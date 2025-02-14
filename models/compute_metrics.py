@@ -88,8 +88,9 @@ def cm(model_output, fp_label, ranker: RankingSet, loss, loss_fn, thresh: float 
         f"recall": rec,
         f"accuracy": acc,
         f"mean_rank": mean_rank,
+        
         **ranks
-    }
+    }, rank_res.squeeze() < 1 # return an array of batch_size with True if it hits rank-1
 
 
 
@@ -127,7 +128,7 @@ def cm_count_based_mse(model_output, fp_label, ranker, loss, loss_fn, thresh: fl
         f"cos": cos,
         f"mean_rank": mean_rank,
         **ranks
-    }
+    }, None
 
 
 def cm_count_based_ce(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
@@ -165,4 +166,4 @@ def cm_count_based_ce(model_output, fp_label, ranker, loss, loss_fn, thresh: flo
         f"cos": cos,
         f"mean_rank": mean_rank,
         **ranks
-    }
+    }, None

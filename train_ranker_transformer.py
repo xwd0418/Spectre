@@ -342,7 +342,7 @@ def main(optuna_params=None):
                          accelerator="auto",
                          logger=tbl, 
                          callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
-                         strategy="fsdp",
+                         strategy="fsdp" if torch.cuda.device_count() > 1 else "auto",
                         )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
@@ -358,9 +358,12 @@ def main(optuna_params=None):
     else:
         
         try:
+            
+            # training
             my_logger.info("[Main] Begin Training!")
             trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
 
+            # testing
             model.change_ranker_for_testing()
             checkpoint_callback = checkpoint_callbacks[0]
             # my_logger.info(f"[Main] my process rank: {os.getpid()}")
