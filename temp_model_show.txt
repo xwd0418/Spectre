@@ -1,2 +1,2 @@
 
-only_1d   : rank_1: 0.9566, rank_5: 0.9891, mean_rank: 0.7900, cos: 0.9062, f1: 0.9135, 
+all_inputs: rank_1: 0.9473, rank_5: 0.9937, mean_rank: 1.3887, cos: 0.9030, f1: 0.9077, 

@@ -46,8 +46,11 @@ class FolderDataset(Dataset):
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
             
         if parser_args['use_MW']:
-            self.mol_weight_2d = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
-            
+            with open(os.path.join(self.dir, "MW/index.pkl"), "rb") as f:
+                self.mol_weight_2d = pickle.load(f)
+        if split in ["test"]:
+            with open(os.path.join(self.dir, "Superclass/index.pkl"), "rb") as f:
+                self.NP_classes = pickle.load(f)
             
         if parser_args['train_on_all_info_set'] or split in ["val", "test"]:
             logger.info(f"[FolderDataset]: only all info datasets")
@@ -65,6 +68,7 @@ class FolderDataset(Dataset):
             self.mol_weight_1d = pickle.load(open(os.path.join(self.dir_1d, "MW/index.pkl"), 'rb'))
             self.files_1d = os.listdir(os.path.join(self.dir_1d, "oneD_NMR/"))
             self.files_1d.sort()
+            self.NP_classes_1d = None
             
         if dist.is_initialized():
             rank = dist.get_rank()
@@ -103,7 +107,7 @@ class FolderDataset(Dataset):
         
         
     def __len__(self):
-        if self.parser_args['debug'] or self.parser_args['foldername'] == "debug":
+        if self.parser_args['debug'] or self.parser_args.get('foldername') == "debug":
             return 3000
         length = len(self.files)
         if self.parser_args['combine_oneD_only_dataset']:
@@ -197,11 +201,13 @@ class FolderDataset(Dataset):
                 mol_weight_dict = self.mol_weight_1d
             dataset_files = self.files_1d
             dataset_dir = self.dir_1d
+            np_class_mapping = self.NP_classes_1d
         else:
             if self.parser_args['use_MW']:
                 mol_weight_dict = self.mol_weight_2d
             dataset_files = self.files
             dataset_dir = self.dir
+            np_class_mapping = self.NP_classes
             
         mol_weight = None
         if self.parser_args['use_MW']:
@@ -244,6 +250,8 @@ class FolderDataset(Dataset):
             input_type = 7-input_type
             combined = (inputs, mfp, NMR_type_indicator, mol_weight, torch.tensor(input_type))
 
+        if self.split in ["test"]:
+            combined = (inputs, mfp, NMR_type_indicator, np_class_mapping[int(dataset_files[i].split(".")[0])])
         return combined
     
     def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight):
@@ -341,13 +349,17 @@ def pad(batch):
     fp = items[1]
     if type(fp[0][0]) is not str:
         fp = torch.stack(fp)
-    if len(items) == 2:
+    if len(items) == 2:  # during predcition, it will be input NMR with a tuple of molecule information
         return (inputs, fp)
     
     NMR_type_indicator = pad_sequence([v for v in items[2]], batch_first=True)
     # mol_weight = torch.stack(items[3])
     # combined = (inputs, fp, NMR_type_indicator,mol_weight,  *items[4:])
-    return (inputs, fp, NMR_type_indicator)
+    if len(items) == 3: # normal training
+        return (inputs, fp, NMR_type_indicator)
+    if len(items) == 4: # testing with NP classes
+        return (inputs, fp, NMR_type_indicator, items[3])
+    raise Exception("not implemented yet")
     # return combined
     
 

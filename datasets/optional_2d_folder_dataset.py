@@ -34,7 +34,9 @@ class All_Info_Dataset(FolderDataset):
         if parser_args['use_MW']:
             self.mol_weight = pickle.load(open(os.path.join(self.dir, "MW/index.pkl"), 'rb'))
 
-            
+        if split in ["test"]:
+            with open(os.path.join(self.dir, "Superclass/index.pkl"), "rb") as f:
+                self.NP_classes = pickle.load(f)
         
     def __len__(self):
         # if self.parser_args['debug'] or self.parser_args['foldername'] == 'debug':
@@ -78,8 +80,8 @@ class All_Info_Dataset(FolderDataset):
         # padding and stacking： 
         inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
          
+        file_index = int(self.files[i].split(".")[0])
         if self.show_smiles: # prediction stage
-            file_index = int(self.files[i].split(".")[0])
             smiles = self.index_to_smiles[file_index]
             chemical_name = self.index_to_chemical_names[file_index]
             return inputs, (smiles, chemical_name, NMR_type_indicator, NMR_path)
@@ -94,6 +96,9 @@ class All_Info_Dataset(FolderDataset):
             num_class = self.parser_args['num_class']
             mfp = torch.where(mfp >= num_class, num_class-1, mfp).long()
 
+        if self.split in ["test"]:
+            return (inputs, mfp, NMR_type_indicator, self.NP_classes[file_index])
+    
         return (inputs, mfp, NMR_type_indicator)
 
 
