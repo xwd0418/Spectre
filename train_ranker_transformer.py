@@ -1,3 +1,7 @@
+import pathlib
+DATASET_root_path = pathlib.Path("/workspace/")
+curr_exp_folder_name = "stop_on_cosine"
+
 import logging, os, sys, torch
 import random, pickle
 import numpy as np
@@ -18,14 +22,13 @@ from datasets.hsqc_folder_dataset import FolderDataModule
 from datasets.oneD_dataset import OneDDataModule
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
+from utils.NP_classwise_accu_plot import plot_result_dict_by_sorted_names
 
 import argparse
 from argparse import ArgumentParser
 from functools import reduce
 from datasets.dataset_utils import  fp_loader_configer
 
-import pathlib
-DATASET_root_path = pathlib.Path("/workspace/")
 
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning, message="You are using `torch.load` with `weights_only=False`")
@@ -163,10 +166,8 @@ def seed_everything(seed):
     np.random.seed(seed)
     random.seed(seed)
     # torch.use_deterministic_algorithms(True)
-    
-def main(optuna_params=None):
-    torch.set_float32_matmul_precision('medium')
 
+def add_parser_arguments( parser):
     def str2bool(v):    
         # specifically used for arg-paser with boolean values
         if isinstance(v, bool):
@@ -177,9 +178,7 @@ def main(optuna_params=None):
             return False
         else:
             raise argparse.ArgumentTypeError('Boolean value expected.')    
-
-    # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
-    parser = ArgumentParser(add_help=True)
+        
     parser.add_argument("modelname", type=str)
     parser.add_argument("--name_type", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=100)
@@ -187,7 +186,9 @@ def main(optuna_params=None):
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
     parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--patience", type=int, default=15)
+    parser.add_argument("--accumulate_grad_batches_num", type=int, default=1)
+        
+    parser.add_argument("--patience", type=int, default=8)
     parser.add_argument("--ds", type=str, default="")
     parser.add_argument("--num_workers", type=int, default=6)
     # for early stopping/model saving
@@ -236,6 +237,18 @@ def main(optuna_params=None):
     # entropy based FP
     parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact")
     parser.add_argument("--out_dim", type=lambda x: int(x) if x.isdigit() else x, default="6144", help="the size of output fingerprint to be predicted. If set to inf, then use all fragements/bits")
+
+    # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
+    # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
+        
+    
+def main(optuna_params=None):
+    torch.set_float32_matmul_precision('medium')
+
+
+    # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
+    parser = ArgumentParser(add_help=True)
+    add_parser_arguments(parser)
     
     args = vars(parser.parse_known_args()[0])
     apply_args(parser, args["modelname"])
@@ -246,8 +259,6 @@ def main(optuna_params=None):
     #     assert args['combine_oneD_only_dataset'], "oneD_NMR live in both datasets"
     if args['weighted_sample_based_on_input_type']:
         assert args['combine_oneD_only_dataset'] and args['optional_inputs'], "Only available for combined dataset"
-    
-    
     
     seed_everything(seed=args["random_seed"])   
     
@@ -263,8 +274,7 @@ def main(optuna_params=None):
     
 
     # Tensorboard setup
-    # curr_exp_folder_name = "db_specific_FP_with_entropy"
-    curr_exp_folder_name = "stable_argsort"
+    
     out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
     # out_path =            f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     out_path_final =      f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
@@ -312,7 +322,8 @@ def main(optuna_params=None):
 
         fp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
         fp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
-        
+    
+  
     
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
@@ -329,12 +340,12 @@ def main(optuna_params=None):
         checkpoint_callbacks = []
         my_logger.info("[Main] Using Optional Input")
         for metric in  ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]:
-            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f'{args["metric"]}/{metric}', mode=metricmode,
+            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f'{args["metric"].replace("/", "_")}/{metric}', mode=metricmode,
                                                            filename= "{epoch}-"+metric, save_top_k = 1) )
     else:
         checkpoint_callbacks =[cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)]
         
-    early_stop_metric = f'{args["metric"]}/all_inputs' if args['optional_inputs'] else args["metric"]
+    early_stop_metric = f'{args["metric"].replace("/", "_")}/all_inputs' if args['optional_inputs'] else args["metric"]
     early_stopping = EarlyStopping(monitor=early_stop_metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
@@ -343,12 +354,13 @@ def main(optuna_params=None):
                          logger=tbl, 
                          callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
                          strategy="fsdp" if torch.cuda.device_count() > 1 else "auto",
+                         accumulate_grad_batches=args["accumulate_grad_batches_num"],
                         )
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
-        trainer.validate(model, data_module)
+        trainer.validate(model, data_module, )
     elif args['test']:
-        trainer = pl.Trainer( accelerator="auto" )
+        trainer = pl.Trainer( accelerator="auto", accumulate_grad_batches=args["accumulate_grad_batches_num"])
         model.change_ranker_for_testing()
         my_logger.info("[Main] Just performing test step")
         test_result = trainer.test(model, data_module, ckpt_path=args['checkpoint_path'])
@@ -368,13 +380,15 @@ def main(optuna_params=None):
             checkpoint_callback = checkpoint_callbacks[0]
             # my_logger.info(f"[Main] my process rank: {os.getpid()}")
             if not args['optional_inputs']:
+                my_logger.info(f"[Main] Validation metric {checkpoint_callback.monitor}, best score: {checkpoint_callback.best_model_score.item()}")
                 my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
                 test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
                 test_result[0]['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
-                # save test result as pickle
-                with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
-                    pickle.dump(test_result, f)
+                NP_classwise_accu = {k.split("/")[-1]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
+                img_path = pathlib.Path(checkpoint_callback.best_model_path).parents[1] / f"NP_class_accu.png"
+                plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
                 all_test_results = test_result
+                
             else:
                 # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
                 data_module.setup("test")
@@ -385,14 +399,22 @@ def main(optuna_params=None):
                 # for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
                 for loader_idx, (best_model_path, monitor, curr_dataloader) in enumerate(zip(model_paths, model_monitors, all_7_dataloaders)):
                     model.only_test_this_loader(loader_idx=loader_idx)
+                    my_logger.info(f"[Main] Validation metric {checkpoint_callback.monitor}, best score: {checkpoint_callback.best_model_score.item()}")
                     my_logger.info(f"[Main] Testing path {best_model_path}!")
-                    my_logger.info(f"[Main]  monitor {monitor}!")
+                    # my_logger.info(f"[Main]  monitor {monitor}!")
                     test_result = trainer.test(model, data_module, ckpt_path=best_model_path)
                     test_result[0][f'best_epoch_{monitor.split("/")[-1]}'] = best_model_path.split("/")[-1].split("-")[0]
                     all_test_results[0].update(test_result[0])
-                # save test result as pickle
-                with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
-                    pickle.dump(all_test_results, f)
+                    
+                    NP_classwise_accu = {k.split("/")[-2]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
+                    NMR_type = pathlib.Path(best_model_path).parts[-1].split(".")[0]
+                    img_path = pathlib.Path(best_model_path).parents[1] / f"NP_class_accu_{NMR_type}.png"
+                    plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
+                    
+            with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
+                pickle.dump(all_test_results, f)
+                
+            
             
         except Exception as e:
             my_logger.error(f"[Main] Error: {e}")
@@ -406,10 +428,6 @@ def main(optuna_params=None):
             os.system(f"cp -r {out_path}/* {out_path_final}/ ")
             my_logger.info(f"[Main] Copied all content from {out_path} to {out_path_final}")
             logging.shutdown()
-
-    # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
-    # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
-        
 
 
 if __name__ == '__main__':

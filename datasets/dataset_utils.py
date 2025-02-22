@@ -176,8 +176,8 @@ class Specific_Radius_MFP_loader(FP_loader):
         self.only_2d = None
         self.out_dim = None
         self.max_radius = None
-        self.path_pickles = f'{repo_path}/notebook_and_scripts/dataset_building/FP_on_bits_pickles/'
-        
+        # self.path_pickles = f'{repo_path}/notebook_and_scripts/dataset_building/FP_on_bits_pickles/'
+        self.path_pickles = "/workspace/FP_on_bits_pickles/"
     def setup(self, only_2d = False, FP_building_type = "Normal", out_dim=6144):
         from  time import time
         time1 = time()
@@ -368,10 +368,11 @@ class FP_Loader_Configer():
     
     def select_version(self, version):
         if version == "MFP_Specific_Radius":
+            print("choosing Specific_Radius_MFP_loader")
             self.fp_loader = Specific_Radius_MFP_loader()
         elif version == "DB_Specific":
+            print("choosing DB_Specific_FP_loader")
             self.fp_loader = DB_Specific_FP_loader()
-            print("DB_Specific_FP_loader is selected")
 
         else:
             raise ValueError("version should be either Specific_Radius or DB_Specific")

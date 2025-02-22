@@ -7,30 +7,86 @@ import sys, pathlib, json, yaml
 from pathlib import Path
 
 ### model selection ###
+
+# stable sort
+# def find_checkpoint_path(model_type):
+#     match model_type:
+#         case "C-NMR":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_c_trial_1/checkpoints/epoch=28-step=46864.ckpt")
+#         case "H-NMR":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_h_trial_1/checkpoints/epoch=23-step=35016.ckpt")
+#         case "HSQC":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_hsqc_trial_1/checkpoints/epoch=21-step=37708.ckpt")
+#         case "only_1d":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_1d_trial_1/checkpoints/epoch=26-step=39393.ckpt")
+#         case "All-NMR":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-all_inputs.ckpt")
+#         case "HSQC_C-NMR":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-HSQC_C_NMR.ckpt")
+#         case "HSQC_H-NMR":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=46-HSQC_H_NMR.ckpt")
+#         case "only_1d_DTD":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=27-only_1d.ckpt")
+#         case "only_C-NMR_DTD":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=45-only_C_NMR.ckpt")
+#         case _:
+#             raise ValueError(f"model_type: {model_type} not recognized")
+        
+#     return checkpoint_path
+
+# # stop on cosine
+# def find_checkpoint_path(model_type):
+#     match model_type:
+#         # case "C-NMR":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_c_trial_1/checkpoints/epoch=28-step=46864.ckpt")
+#         # case "H-NMR":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_h_trial_1/checkpoints/epoch=23-step=35016.ckpt")
+#         # case "HSQC":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_hsqc_trial_1/checkpoints/epoch=21-step=37708.ckpt")
+#         # case "only_1d":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_1d_trial_1/checkpoints/epoch=26-step=39393.ckpt")
+#         case "All-NMR":
+#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/flexible_models_larger_no_jittering/r0_r2_FP_trial_1/checkpoints/epoch=28-all_inputs.ckpt")
+#         # case "HSQC_C-NMR":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-HSQC_C_NMR.ckpt")
+#         # case "HSQC_H-NMR":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=46-HSQC_H_NMR.ckpt")
+#         # case "only_1d_DTD":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=27-only_1d.ckpt")
+#         # case "only_C-NMR_DTD":
+#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=45-only_C_NMR.ckpt")
+#         case _:
+#             raise ValueError(f"model_type: {model_type} not recognized")
+        
+#     return checkpoint_path
+
+# larger model, jittering 
 def find_checkpoint_path(model_type):
     match model_type:
         case "C-NMR":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_c_trial_1/checkpoints/epoch=28-step=46864.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_c_trial_1/checkpoints/epoch=97-step=79184.ckpt")
         case "H-NMR":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_h_trial_1/checkpoints/epoch=23-step=35016.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_h_trial_1/checkpoints/epoch=86-step=63510.ckpt")
         case "HSQC":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_hsqc_trial_1/checkpoints/epoch=21-step=37708.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_hsqc_trial_1/checkpoints/epoch=66-step=57419.ckpt")
         case "only_1d":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_1d_trial_1/checkpoints/epoch=26-step=39393.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_1d_trial_1/checkpoints/epoch=66-step=48910.ckpt")
         case "All-NMR":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-all_inputs.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/larger_flexible_models_3072dim/r0_r4_FP_trial_1/checkpoints/epoch=86-all_inputs.ckpt")
         case "HSQC_C-NMR":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-HSQC_C_NMR.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/larger_flexible_models_3072dim/r0_r4_FP_trial_1/checkpoints/epoch=91-HSQC_C_NMR.ckpt")
         case "HSQC_H-NMR":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=46-HSQC_H_NMR.ckpt")
-        case "only_1d_DTD":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=27-only_1d.ckpt")
-        case "only_C-NMR_DTD":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=45-only_C_NMR.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/larger_flexible_models_3072dim/r0_r4_FP_trial_1/checkpoints/epoch=87-HSQC_H_NMR.ckpt")
+       
+        # case "only_1d_DTD":
+        #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=27-only_1d.ckpt")
+        # case "only_C-NMR_DTD":
+        #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=45-only_C_NMR.ckpt")
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
         
     return checkpoint_path
+
 
 # get model and dataloader
 from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
@@ -38,7 +94,7 @@ from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from datasets.dataset_utils import fp_loader_configer
 specific_radius_mfp_loader = fp_loader_configer.fp_loader
 
-def choose_model(model_type):
+def choose_model(model_type, include_test_loader=True):
     
     checkpoint_path = find_checkpoint_path(model_type)
     
@@ -68,6 +124,8 @@ def choose_model(model_type):
     hparams['num_workers'] = 0
     model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
     
+    if not include_test_loader:
+        return hparams, model
     datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=1, parser_args=hparams)
     datamodule.setup("predict")
     loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
@@ -96,6 +154,7 @@ def choose_model(model_type):
                           
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
+    model.eval()
     return hparams, model, test_loader
 
 
@@ -178,24 +237,29 @@ def retrieve_top_k_by_dir(dir, prediction_query, smiles_and_names , k=30):
   
     return ret
 
-def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names , k=30):
+def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30, filter_by_MW=None):
+    # data means the rankingset data
+    # Expect filter by MW to be [lower_bnound, upper_bound]
     query = F.normalize(prediction_query, dim=1, p=2.0).squeeze()
 
     results = []
     query_products = (data @ query)
-    values, indices = torch.topk(query_products,k=k)
+    if filter_by_MW is None:
+        values, indices = torch.topk(query_products,k=k)
+        for value, idx in zip(values, indices):
+            results.append((value, smiles_and_names[idx], data[idx]))
+    else:
+        values, indices = torch.topk(query_products,k=1000)
+        for value, idx in zip(values, indices):
+            if filter_by_MW[0] <= smiles_and_names[idx][2] <= filter_by_MW[1] :
+                results.append((value, smiles_and_names[idx], data[idx]))
+                if len(results) == k:
+                    break
+        
     
-    for value, idx in zip(values, indices):
-        results.append((value, idx, data[idx]))
-                
+    
+    return results        
                         
-    results.sort(key=lambda x: x[0],reverse=True)
-    ret = [(value, smiles_and_names[i], fp) for value, i, fp in results]
-    # print(torch.tensor(idx))
-    # retrieved_FP = [all_fp[i] for i in idx]
-    # print(results[0])
-  
-    return ret
 
 def compute_cos_sim(fp1, fp2):
     return (fp1 @ fp2) / (torch.norm(fp1) * torch.norm(fp2)).item()
@@ -240,8 +304,7 @@ def show_retrieved_mol_with_highlighted_frags(retrieved_mol_smiles, predicted_FP
     return img
                     
     
-######  for unknow compound ###### 
-    
+######  for unknow compound ######    
 def build_input(compound_dir, mode = None, include_hsqc = True, include_c_nmr = True, include_h_nmr = True, include_MW = True):
     """
     build input tensor for unkonw compound
@@ -307,11 +370,19 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                    k=5, mode = None, ground_truth_FP=None,
                    fp_type = "MFP_Specific_Radius",
                    index_to_frag_mapping=None, fp_gen=None, ao=None, # for DB_Specific_Radius only
-                   verbose=True):
+                   filter_by_MW=None,
+                   verbose=True,
+                   ):
+    """
+    Run inference on a given input tensor and visualize the top-k retrieved molecules.
+    Hence, shape of inputs is (n, 3) where n is the number of NMR peaks (and other infos)
+    """
+    
     if verbose:
         print("_________________________________________________________")
 
     returning_smiles = []
+    returning_names = []
     inputs = inputs.unsqueeze(0).to(model.device)
     NMR_type_indicator = NMR_type_indicator.to(model.device)
     rankingset_data = rankingset_data.to(model.device)
@@ -322,7 +393,12 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
     if ground_truth_FP is not None:
         print("Prediction's cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, pred_FP.to("cpu").float()))
         print("\n\n")
-    topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k)
+    if filter_by_MW == "from_input":
+        mw_from_input = inputs[0][-1][0].item()
+        filter_by_MW = [mw_from_input*0.8, mw_from_input*1.2]
+    if filter_by_MW is not None and type(filter_by_MW) != list:
+        raise ValueError("filter_by_MW must be a list of two elements, or 'from_input' or None!")
+    topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k, filter_by_MW=filter_by_MW)
        
     i=0
     for value, (smile, name, _, _), retrieved_FP in topk:
@@ -337,18 +413,20 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                 raise ValueError("fp_type must be either MFP_Specific_Radius or DB_Specific_Radius")
         
             print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
-            # print("retrived FP", retrieved_FP.squeeze().tolist())
+            if ground_truth_FP is not None:
+                print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()).item())
 
             print(f"SMILES: {smile}") 
             print(f"Name {name}")
             img.show()
         i+=1
         returning_smiles.append(smile)
-    return returning_smiles
+        returning_names.append(name)
+    return returning_smiles, returning_names
         
 ### save visualization as PNG 
 
-def visualize_smiles(smiles_list, file_path):
+def visualize_smiles(smiles_list, name_list, file_path):
     """
     Generate a PNG file visualizing a list of SMILES strings.
     
@@ -364,7 +442,8 @@ def visualize_smiles(smiles_list, file_path):
     
     # Generate and save the image
     if molecules:
-        img = Draw.MolsToGridImage(molecules, molsPerRow=4, subImgSize=(500, 500), returnPNG=False)
+        legends = [name for name in name_list]
+        img = Draw.MolsToGridImage(molecules, molsPerRow=4, subImgSize=(500, 500), legends=legends, returnPNG=False)
         img.save(file_path)
     else:
         raise ValueError("No valid molecules were generated from the input SMILES.")
@@ -417,12 +496,33 @@ def save_molecule_inference(smiles, name, index_rkst, model, model_name, inputs,
             img.save(curr_mol_path / "molecule_ground_truth.png")
     
     # run inference 
-    returning_smiles = inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
+    returning_smiles, returning_names = inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
                                       k=k, mode=mode, ground_truth_FP=ground_truth_FP,
                                       fp_type=fp_type, index_to_frag_mapping=index_to_frag_mapping, 
-                                      fp_gen=fp_gen, ao=ao, verbose=False)
-    visualize_smiles(returning_smiles, curr_result_path / "visualization.png")
+                                      fp_gen=fp_gen, ao=ao, verbose=False, filter_by_MW="from_input")
+    visualize_smiles(returning_smiles, returning_names, curr_result_path / "visualization.png")
     
     return returning_smiles
 
 
+# generate temp_hsqc.txt for deepsat website
+def convert_hsqc_tensort_to_txt(split, index):
+    hsqc_path = f"/workspace/SMILES_dataset/{split}/HSQC/{index}.pt"
+    hsqc = torch.load(hsqc_path)
+    # write to txt
+    with open(f"tmp_hsqc_{index}.txt", "w") as f:
+        f.write("13C,1H,Intensity\n")
+        f.write("\n".join([str(i)[1:-1] for i in hsqc.tolist()]))
+        
+    with open(f"tmp_hsqc_{index}_separate.txt", "w") as f:
+        f.write("13C\n")
+        f.write(str(hsqc[:,0].tolist()))
+        f.write("\n")
+        f.write("1H\n")
+        f.write(str(hsqc[:,1].tolist()))
+        f.write("\n")
+        f.write("Intensity\n")
+        f.write(str(hsqc[:,2].tolist()))
+        
+# convert_hsqc_tensort_to_txt("/workspace/SMILES_dataset/test/HSQC/10018.pt")
+    

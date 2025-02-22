@@ -50,7 +50,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         coord_enc="sce",
         wavelength_bounds=None,
         gce_resolution=1,
-        dropout=0,
+        dropout=0.1,
         # other business logic stuff
         save_params=True,
         ranking_set_path="",
@@ -234,7 +234,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser.add_argument(f"--{model_name}ff_dim", type=int, default=512)
         parser.add_argument(f"--{model_name}wavelength_bounds",
                             type=float, default=None, nargs='+', action='append')
-        parser.add_argument(f"--{model_name}dropout", type=float, default=0.0)
+        parser.add_argument(f"--{model_name}dropout", type=float, default=0.1)
         parser.add_argument(f"--{model_name}pos_weight", type=str, default=None, 
                             help = "if none, then not to be used; if ratio,\
                                 then used the save tensor which is the ratio of num_0/num_1, \

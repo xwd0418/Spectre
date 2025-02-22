@@ -56,6 +56,10 @@ class OneDDataset(FolderDataset):
                 logger.setLevel(logging.WARNING)
         logger.info(f"[OneD Dataset]: dir={dir}, split={split},FP={FP_choice}")
         
+        if split in ["test"]:
+            with open(os.path.join(self.dir, "Superclass/index.pkl"), "rb") as f:
+                self.NP_classes = pickle.load(f)
+        
         if parser_args['train_on_all_info_set']  or split in ["val", "test"]:
             logger.info(f"[OneD Dataset]: only all info datasets: {split}")
             path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
@@ -89,8 +93,8 @@ class OneDDataset(FolderDataset):
         self.files_1d = list(filter(filter_unavailable_1d, self.files_1d))
         logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
         
+                
     def __len__(self):
-        # return 100
         length = len(self.files)
         if self.parser_args['train_on_all_info_set']  or self.split in ["val", "test"] :
            return length 
@@ -107,8 +111,8 @@ class OneDDataset(FolderDataset):
             # hsqc is empty tensor   
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
             if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) 
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
+                c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
             # No need to use optional inputs for 1D dataset 
             
         else :
@@ -116,8 +120,8 @@ class OneDDataset(FolderDataset):
             i = idx
             c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
             if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) 
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
+                c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
             # Again, no need to use optional inputs for 1D dataset
             ### ENDING 2D dataset case
             
@@ -156,7 +160,7 @@ class OneDDataset(FolderDataset):
             # assert (mfp==mfp_orig).all(), f"mfp should be the same\n mfp is " #{mfp.nonzero()}\n mfp_orig is {mfp_orig.nonzero()}"
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
-     
+                
         combined = (inputs, mfp, NMR_type_indicator)
         
         if self.parser_args['separate_classifier']:
@@ -171,7 +175,11 @@ class OneDDataset(FolderDataset):
                 input_type+=1
             input_type = 7-input_type
             combined = (inputs, mfp, NMR_type_indicator, mol_weight)
-
+            
+         
+        if self.split in ["test"]:
+            combined = (inputs, mfp, NMR_type_indicator, self.NP_classes[int(dataset_files[i].split(".")[0])])
+        
         return combined
    
 

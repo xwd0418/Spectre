@@ -126,8 +126,8 @@ class FolderDataset(Dataset):
             hsqc = torch.empty(0,3)
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
             if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor)
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
+                c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
                 
             # input dropout
             if self.parser_args['optional_inputs'] and len(c_tensor) > 0 and len(h_tensor) > 0:
@@ -156,8 +156,8 @@ class FolderDataset(Dataset):
             elif "HSQC" in self.input_src:
                 hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
                 if self.parser_args['jittering'] == "normal" and self.split=="train":
-                    hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) 
-                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.1
+                    hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) * 0.1
+                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.01
             
                 if self.parser_args['use_peak_values']:
                     hsqc = normalize_hsqc(hsqc)
@@ -168,8 +168,8 @@ class FolderDataset(Dataset):
                 if file_exist("oneD_NMR", self.files[i]):
                     c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
                     if self.parser_args['jittering'] == "normal" and self.split=="train":
-                        c_tensor = c_tensor + torch.randn_like(c_tensor) 
-                        h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
+                        c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
+                        h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
                     # randomly drop 1D and 2D NMRs if needed
                     if self.parser_args['optional_inputs']:
                         # DO NOT drop 2D, cuz we have enough amount of 1D data 
@@ -201,13 +201,15 @@ class FolderDataset(Dataset):
                 mol_weight_dict = self.mol_weight_1d
             dataset_files = self.files_1d
             dataset_dir = self.dir_1d
-            np_class_mapping = self.NP_classes_1d
+            if self.split in ["test"]:
+                np_class_mapping = self.NP_classes_1d
         else:
             if self.parser_args['use_MW']:
                 mol_weight_dict = self.mol_weight_2d
             dataset_files = self.files
             dataset_dir = self.dir
-            np_class_mapping = self.NP_classes
+            if self.split in ["test"]:
+                np_class_mapping = self.NP_classes
             
         mol_weight = None
         if self.parser_args['use_MW']:
