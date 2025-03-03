@@ -416,7 +416,7 @@ def normalize_hsqc(hsqc, style="minmax"):
     
 
 class FolderDataModule(pl.LightningDataModule):
-    def __init__(self, dir, FP_choice, input_src, batch_size: int = 32, parser_args=None):
+    def __init__(self, dir, FP_choice, input_src, batch_size: int = 32,  parser_args=None, persistent_workers = True):
         super().__init__()
         self.batch_size = batch_size
         self.dir = dir
@@ -424,6 +424,7 @@ class FolderDataModule(pl.LightningDataModule):
         self.input_src = input_src
         self.collate_fn = pad
         self.parser_args = parser_args
+        self.should_persist_workers = persistent_workers
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
@@ -437,12 +438,12 @@ class FolderDataModule(pl.LightningDataModule):
     def train_dataloader(self):
             
         return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.should_persist_workers)
 
     def val_dataloader(self):
         return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.should_persist_workers)
 
     def test_dataloader(self):
         return DataLoader(self.test, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=True)
+                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.should_persist_workers)

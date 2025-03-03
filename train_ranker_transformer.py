@@ -317,7 +317,7 @@ def main(optuna_params=None):
         fp_loader = fp_loader_configer.fp_loader
             
     if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-        only_2d = not args['use_oneD_NMR_no_solvent']
+        only_2d = False
         FP_building_type = args['FP_building_type'].split("_")[-1]
 
         fp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
