@@ -565,3 +565,7 @@ reproducing_deepsat/
 spectre_frontend
 
 /datasets/*.pkl
+
+inference/hsqc*.txt
+inference/HSQC_for_deepsat/
+compare_with_deepsat

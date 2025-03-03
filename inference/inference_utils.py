@@ -68,7 +68,7 @@ def find_checkpoint_path(model_type):
         case "H-NMR":
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_h_trial_1/checkpoints/epoch=86-step=63510.ckpt")
         case "HSQC":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_hsqc_trial_1/checkpoints/epoch=66-step=57419.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_hsqc_trial_1/checkpoints/epoch=62-step=53991.ckpt")
         case "only_1d":
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_1d_trial_1/checkpoints/epoch=66-step=48910.ckpt")
         case "All-NMR":
@@ -91,10 +91,12 @@ def find_checkpoint_path(model_type):
 # get model and dataloader
 from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
+from datasets.hsqc_folder_dataset import FolderDataModule
+
 from datasets.dataset_utils import fp_loader_configer
 specific_radius_mfp_loader = fp_loader_configer.fp_loader
 
-def choose_model(model_type, include_test_loader=True):
+def choose_model(model_type, include_test_loader=True, shuffle_loader=False):
     
     checkpoint_path = find_checkpoint_path(model_type)
     
@@ -108,7 +110,7 @@ def choose_model(model_type, include_test_loader=True):
         hparams = yaml.safe_load(file)
         
     FP_building_type = hparams['FP_building_type'].split("_")[-1]
-    only_2d = not hparams['use_oneD_NMR_no_solvent']
+    only_2d = False
     # only_2d = True
     print(FP_building_type)
     max_radius = int(hparams['FP_choice'].split("_")[-1][1:])
@@ -126,10 +128,23 @@ def choose_model(model_type, include_test_loader=True):
     
     if not include_test_loader:
         return hparams, model
+    
+    if model_type == "HSQC":
+        # datamodule = FolderDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC"], batch_size=hparams['bs'], parser_args=hparams, persistent_workers=False)
+
+        # # datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=hparams['bs'], parser_args=hparams)
+        # # datamodule.setup("test")
+        # # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = datamodule.test_dataloader()
+        
+        # datamodule.setup("test")
+        # test_loader = datamodule.test_dataloader()
+        input_src=["HSQC"]
+    else:
+        input_src=["HSQC", "oneD_NMR"]
     datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=1, parser_args=hparams)
     datamodule.setup("predict")
     loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
-        datamodule.predict_dataloader()
+        datamodule.predict_dataloader(shuffle=shuffle_loader)
         
     match model_type:
         case "C-NMR":
@@ -151,7 +166,7 @@ def choose_model(model_type, include_test_loader=True):
         case "only_C-NMR_DTD":
             test_loader = loader_only_C_NMR
             
-                          
+                        
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
     model.eval()
@@ -506,23 +521,23 @@ def save_molecule_inference(smiles, name, index_rkst, model, model_name, inputs,
 
 
 # generate temp_hsqc.txt for deepsat website
-def convert_hsqc_tensort_to_txt(split, index):
-    hsqc_path = f"/workspace/SMILES_dataset/{split}/HSQC/{index}.pt"
+def convert_hsqc_tensort_to_txt(path, name_info):
+    hsqc_path = path.replace("oneD_NMR", "HSQC")
     hsqc = torch.load(hsqc_path)
     # write to txt
-    with open(f"tmp_hsqc_{index}.txt", "w") as f:
+    with open(f"HSQC_for_deepsat/hsqc_{name_info}.txt", "w") as f:
         f.write("13C,1H,Intensity\n")
         f.write("\n".join([str(i)[1:-1] for i in hsqc.tolist()]))
         
-    with open(f"tmp_hsqc_{index}_separate.txt", "w") as f:
-        f.write("13C\n")
-        f.write(str(hsqc[:,0].tolist()))
-        f.write("\n")
-        f.write("1H\n")
-        f.write(str(hsqc[:,1].tolist()))
-        f.write("\n")
-        f.write("Intensity\n")
-        f.write(str(hsqc[:,2].tolist()))
+    # with open(f"tmp_hsqc_{index}_separate.txt", "w") as f:
+    #     f.write("13C\n")
+    #     f.write(str(hsqc[:,0].tolist()))
+    #     f.write("\n")
+    #     f.write("1H\n")
+    #     f.write(str(hsqc[:,1].tolist()))
+    #     f.write("\n")
+    #     f.write("Intensity\n")
+    #     f.write(str(hsqc[:,2].tolist()))
         
 # convert_hsqc_tensort_to_txt("/workspace/SMILES_dataset/test/HSQC/10018.pt")
     

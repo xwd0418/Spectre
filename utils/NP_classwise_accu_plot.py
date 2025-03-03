@@ -19,7 +19,7 @@ def plot_result_dict_by_sorted_names(result, save_path=None):
         plt.savefig(save_path)
         plt.close()
         # You also needa save pkl here!
-        pkl_path = save_path.replace('.png', '.pkl')
+        pkl_path = str(save_path).replace('.png', '.pkl')
         with open(pkl_path, 'wb') as f:
             pickle.dump(result, f)
     else:
@@ -95,4 +95,6 @@ def compare_results_from_pkl_files(*name_and_pkls, save_path=None, filter_by=Non
     # compare_results(result1, result2, save_path=save_path)
     compare_results(*name_and_accu_results, save_path=save_path, filter_by=filter_by)
     
-    
+## Coimpare results with Error bars
+
+

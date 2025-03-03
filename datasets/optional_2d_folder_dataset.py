@@ -84,6 +84,8 @@ class All_Info_Dataset(FolderDataset):
         if self.show_smiles: # prediction stage
             smiles = self.index_to_smiles[file_index]
             chemical_name = self.index_to_chemical_names[file_index]
+            if self.split in ["test"]:
+                return inputs, (smiles, chemical_name, NMR_type_indicator, NMR_path, self.NP_classes[file_index])
             return inputs, (smiles, chemical_name, NMR_type_indicator, NMR_path)
         
         if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"): # should be in the format of "pick_entropy_r9"
