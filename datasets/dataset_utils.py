@@ -128,7 +128,7 @@ def keep_smallest_entropy(data, total_dataset_size, size,  use_natural_log=False
     entropy = compute_entropy(data, total_dataset_size, use_natural_log)
     indices_of_min_6144 = np.argsort(entropy, kind="stable")[:size]
     # print(entropy, indices_of_min_6144)
-    total_entropy = entropy[indices_of_min_6144].sum()
+    total_entropy = entropy[indices_of_min_6144]
     return total_entropy, indices_of_min_6144
 
 ''' 
