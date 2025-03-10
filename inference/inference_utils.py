@@ -252,11 +252,14 @@ def retrieve_top_k_by_dir(dir, prediction_query, smiles_and_names , k=30):
   
     return ret
 
-def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30, filter_by_MW=None):
+def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30, filter_by_MW=None, weight_pred = None):
     # data means the rankingset data
     # Expect filter by MW to be [lower_bnound, upper_bound]
     query = F.normalize(prediction_query, dim=1, p=2.0).squeeze()
-
+    # print("query shape: ", query.shape, query.dtype)
+    if weight_pred is not None:
+        query = query * weight_pred
+        # print("query shape after weight: ", query.shape, query.dtype)
     results = []
     query_products = (data @ query)
     if filter_by_MW is None:
@@ -387,6 +390,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                    index_to_frag_mapping=None, fp_gen=None, ao=None, # for DB_Specific_Radius only
                    filter_by_MW=None,
                    verbose=True,
+                   weight_pred = None
                    ):
     """
     Run inference on a given input tensor and visualize the top-k retrieved molecules.
@@ -413,7 +417,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
         filter_by_MW = [mw_from_input*0.8, mw_from_input*1.2]
     if filter_by_MW is not None and type(filter_by_MW) != list:
         raise ValueError("filter_by_MW must be a list of two elements, or 'from_input' or None!")
-    topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k, filter_by_MW=filter_by_MW)
+    topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k, filter_by_MW=filter_by_MW, weight_pred = weight_pred)
        
     i=0
     for value, (smile, name, _, _), retrieved_FP in topk:
