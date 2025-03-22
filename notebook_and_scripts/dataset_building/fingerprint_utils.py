@@ -6,6 +6,8 @@ from rdkit.Chem import rdMolDescriptors
 def FP_generator(SMILES,radi): # radi is radius for morgan fingerprint
     binary = np.zeros((2048*(radi+1)), int)
     mol = Chem.MolFromSmiles(SMILES)
+    if mol is None:
+        return binary
     mol_H = Chem.AddHs(mol)
     mol_bi_H = {}
     for r in range(radi+1):
