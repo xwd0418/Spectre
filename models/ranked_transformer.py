@@ -227,15 +227,15 @@ class HsqcRankedTransformer(pl.LightningModule):
         parser = parent_parser.add_argument_group(model_name)
         parser.add_argument(f"--{model_name}lr", type=float, default=1e-5)
         parser.add_argument(f"--{model_name}noam_factor", type=float, default=1.0)
-        parser.add_argument(f"--{model_name}dim_model", type=int, default=384)
+        parser.add_argument(f"--{model_name}dim_model", type=int, default=784)
         parser.add_argument(f"--{model_name}dim_coords", metavar='N',
-                            type=int, default=[180,180,24],
+                            type=int, default=[365, 365, 54 ],
                             nargs="+", action="store")
         parser.add_argument(f"--{model_name}heads", type=int, default=8)
-        parser.add_argument(f"--{model_name}layers", type=int, default=8)
-        parser.add_argument(f"--{model_name}ff_dim", type=int, default=512)
+        parser.add_argument(f"--{model_name}layers", type=int, default=16)
+        parser.add_argument(f"--{model_name}ff_dim", type=int, default=1536)
         parser.add_argument(f"--{model_name}wavelength_bounds",
-                            type=float, default=None, nargs='+', action='append')
+                            type=float, default=[[0.01, 400.0], [0.01, 20.0]], nargs='+', action='append')
         parser.add_argument(f"--{model_name}dropout", type=float, default=0.1)
         parser.add_argument(f"--{model_name}pos_weight", type=str, default=None, 
                             help = "if none, then not to be used; if ratio,\
@@ -243,8 +243,8 @@ class HsqcRankedTransformer(pl.LightningModule):
                                 if float num ,then use this as the ratio")
         parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
         parser.add_argument(f"--{model_name}L1_decay", type=float, default=0.0)
-        parser.add_argument(f"--{model_name}warm_up_steps", type=int, default=4000)
-        parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
+        parser.add_argument(f"--{model_name}warm_up_steps", type=int, default=8000)
+        parser.add_argument(f"--{model_name}scheduler", type=str, default="attention")
         parser.add_argument(f"--{model_name}coord_enc", type=str, default="sce")
         parser.add_argument(
             f"--{model_name}gce_resolution", type=float, default=1)
