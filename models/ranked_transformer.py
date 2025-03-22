@@ -93,6 +93,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         out_dim = kwargs['out_dim']         
         self.FP_length = out_dim # 6144 
         self.separate_classifier = kwargs['separate_classifier']
+        self.test_on_deepsat_retrieval_set = kwargs['test_on_deepsat_retrieval_set']
         if FP_choice == "R0_to_R4_30720_FP":
             out_dim = self.FP_length * 5
         elif FP_choice == "R0_to_R6_exact_R_concat_FP":
@@ -116,6 +117,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         # don't set ranking set if you just want to treat it as a module
         self.FP_choice=FP_choice
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
+        self.rank_by_test_set = kwargs['rank_by_test_set']
         
         if FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("pick_entropy") :
             self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val", predefined_FP = FP_choice),
@@ -281,14 +283,13 @@ class HsqcRankedTransformer(pl.LightningModule):
         NMR_type_embedding = self.NMR_type_embedding(NMR_type_indicator)
         # print("points shape is ", points.shape, " NMR_type_embedding shape is ", NMR_type_embedding.shape)
         points += NMR_type_embedding
-
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
         # print(latent.device, points.device)
         
         points = torch.cat([latent, points], dim=1)
-        
+      
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out, mask
     
@@ -305,7 +306,6 @@ class HsqcRankedTransformer(pl.LightningModule):
         """
         out, _ = self.encode(hsqc, NMR_type_indicator)  # (b_s, seq_len, dim_model)
         out_cls = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token : (b_s, dim_model) -> (b_s, out_dim)
-        
         if return_representations:
             return out.detach().cpu().numpy()
         return out_cls
@@ -450,6 +450,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         super().log(name, value, *args, **kwargs)
         
     def change_ranker_for_testing(self, test_ranking_set_path=None ):
+        if not self.rank_by_test_set:
+            return self.change_ranker_for_inference(test_ranking_set_path)
         if self.FP_choice=="HYUN_FP" or self.FP_choice.startswith("DB_specific_FP"):
             self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test", predefined_FP = self.FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
@@ -464,8 +466,11 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
     def change_ranker_for_inference(self, test_ranking_set_path=None ):
-        self.ranker = ranker.RankingSet(store=self.fp_loader.build_inference_ranking_set_with_everything(),
-                                          batch_size=self.bs, CE_num_class=self.num_class)
+        use_hyun_fp = self.FP_choice=="HYUN_FP"
+        self.ranker = ranker.RankingSet(store=self.fp_loader.build_inference_ranking_set_with_everything(
+                                                                use_hyun_fp=use_hyun_fp,
+                                                                test_on_deepsat_retrieval_set=self.test_on_deepsat_retrieval_set),
+                                          batch_size=self.bs, CE_num_class=self.num_class, need_to_normalize=False, )
 
 
 

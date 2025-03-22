@@ -9,7 +9,7 @@ import logging
 
 @set_float32_highest_precision
 class RankingSet(torch.nn.Module):
-  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0, CE_num_class = None, use_actaul_mw_for_retrival=None):
+  def __init__(self, store=None, file_path=None, retrieve_path=None, idf_weights=None, debug=False, batch_size = 0, CE_num_class = None, use_actaul_mw_for_retrival=None, need_to_normalize=True):
     '''
       Creates a ranking set. Assumes the file specified at file_path is a pickle file of 
       a numpy array of fingerprints. Fingerprints should be (n, 6144) dimension, and on load,
@@ -24,6 +24,11 @@ class RankingSet(torch.nn.Module):
       debug: enable/disable verbosity for debug statements
     '''
     
+    def normalize_if_needed(data, dim=1, p=2.0):
+        if need_to_normalize:
+            return F.normalize(data, dim=1, p=2.0)
+        else:
+            return data
     super().__init__()
     self.logger = logging.getLogger("lightning")
     self.logger.setLevel(logging.DEBUG)
@@ -39,13 +44,13 @@ class RankingSet(torch.nn.Module):
         self.register_buffer("MWs",torch.load(file_path.replace("rankingset", "MW")).float(), persistent=False)
         
       if store is not None:
-        self.register_buffer("data", F.normalize(store, dim=1, p=2.0), persistent=False)
+        self.register_buffer("data", normalize_if_needed(store, dim=1, p=2.0), persistent=False)
       else:
         with open(file_path, "rb") as f:
             rankingset_data = torch.load(f).type(torch.FloatTensor)
             if CE_num_class is not None:
                 rankingset_data =  torch.where(rankingset_data >= CE_num_class, CE_num_class-1, rankingset_data).float()
-            self.register_buffer("data", F.normalize(rankingset_data, dim=1, p=2.0), persistent=False)
+            self.register_buffer("data", normalize_if_needed(rankingset_data, dim=1, p=2.0), persistent=False)
 
       if retrieve_path:
         with open(retrieve_path, "rb") as f:
@@ -53,7 +58,7 @@ class RankingSet(torch.nn.Module):
 
       if idf_weights is not None:
         self.register_buffer("idf", idf_weights, persistent=False)
-        self.register_buffer("idf_data", F.normalize(
+        self.register_buffer("idf_data", normalize_if_needed(
             self.data * self.idf, dim=1, p=2.0), persistent=False)
 
     self.logger.info(

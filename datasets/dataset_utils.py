@@ -256,16 +256,17 @@ class Specific_Radius_MFP_loader(FP_loader):
         out = torch.vstack(files)
         return out
     
-    # def build_inference_ranking_set_with_everything(self):
-        # train_files_2d = [self.build_mfp(file_idx, "2d", "train") for file_idx in range(len(self.train_2d))]
-        # val_files_2d = [self.build_mfp(file_idx, "2d", "val") for file_idx in range(len(self.val_2d))]
-        # test_files_2d = [self.build_mfp(file_idx, "2d", "test") for file_idx in range(len(self.test_2d))]
-        # train_files_1d = [self.build_mfp(file_idx, "1d", "train") for file_idx in range(len(self.train_1d))]
-        # val_files_1d = [self.build_mfp(file_idx, "1d", "val") for file_idx in range(len(self.val_1d))]
-        # test_files_1d = [self.build_mfp(file_idx, "1d", "test") for file_idx in range(len(self.test_1d))]
-                         
-        # out = torch.vstack(train_files_2d + val_files_2d + test_files_2d + train_files_1d + val_files_1d + test_files_1d)
-        # return torch.vstack(train_files_2d)
+    def build_inference_ranking_set_with_everything(self, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
+        if use_hyun_fp:
+            rankingset_path = "/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/hyun_fp_stacked_together_sparse/FP_normalized.pt"
+        else:
+            rankingset_path = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/max_radius_{self.max_radius}_stacked_together_sparse/FP_normalized.pt"
+        if test_on_deepsat_retrieval_set:
+          
+            rankingset_path = rankingset_path.replace("FP_normalized", "FP_normalized_deepsat_retrieval_set")
+        print(f"loading {rankingset_path}")
+        return torch.load(rankingset_path)#.to("cuda")
+        
         
     def build_mfp_for_new_SMILES(self, smiles):
         try:

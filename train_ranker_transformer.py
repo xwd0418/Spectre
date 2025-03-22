@@ -1,6 +1,6 @@
 import pathlib
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "stop_on_cosine"
+curr_exp_folder_name = "rank_on_entire_set"
 
 import logging, os, sys, torch
 import random, pickle
@@ -63,7 +63,7 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
         (for graph visualization)
     """
     choice = data_src
-    kwargs = vars(parser.parse_args())
+    kwargs = args # vars(parser.parse_args())
 
     if args['optional_inputs']:
         return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
@@ -199,6 +199,8 @@ def add_parser_arguments( parser):
     parser.add_argument("--freeze", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--validate", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--test", type=lambda x:bool(str2bool(x)), default=False)
+    parser.add_argument("--test_on_deepsat_retrieval_set", type=lambda x:bool(str2bool(x)), default=False)
+    
     parser.add_argument("--debug", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
@@ -216,7 +218,7 @@ def add_parser_arguments( parser):
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     parser.add_argument("--use_Jaccard",  type=lambda x:bool(str2bool(x)), default=False, help="using Jaccard similarity instead of cosine similarity")
     parser.add_argument("--jittering",  type=str, default="None", help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
-    
+    parser.add_argument("--rank_by_test_set",  type=lambda x:bool(str2bool(x)), default=False, help="rank by test set instead of entire set. only used during grid search")
     # count-based FP
     parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
     parser.add_argument("--loss_func",  type=str, default="MSE", help="either MSE or CE")
@@ -242,9 +244,8 @@ def add_parser_arguments( parser):
     # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
         
     
-def main(optuna_params=None):
+if __name__ == '__main__':
     torch.set_float32_matmul_precision('medium')
-
 
     # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
     parser = ArgumentParser(add_help=True)
@@ -270,7 +271,56 @@ def main(optuna_params=None):
     if args['foldername'] == "debug" or args['debug'] is True:
         args['debug'] = True
         args["epochs"] = 3
-        
+    if args['test']:
+        import yaml
+        checkpoint_path = pathlib.Path(args['checkpoint_path'])
+        model_path = checkpoint_path.parents[1]
+
+        def comment_out_problematic_yaml_lines(yaml_file_path, patterns_to_comment=None):
+            """
+            Comment out lines matching specific patterns in a YAML file.
+            
+            Args:
+                yaml_file_path (str): Path to the YAML file
+                patterns_to_comment (list): List of patterns to look for and comment out
+                
+            Returns:
+                str: Path to the new YAML file
+            """
+            clear_stage = False
+            if patterns_to_comment is None:
+                patterns_to_comment = ["!!python/object/apply:pathlib.PosixPath"]
+            
+            with open(yaml_file_path, 'r') as f:
+                lines = f.readlines()
+            
+            new_lines = []
+            for line in lines:
+                if not clear_stage:
+                    if any(pattern in line for pattern in patterns_to_comment):
+                        new_lines.append(f"# {line}")  # Comment out the line
+                        clear_stage = True
+                    else:
+                        new_lines.append(line)
+                else:
+                    if line.startswith("- "):
+                        new_lines.append(f"# {line}")
+                    else:
+                        new_lines.append(line)
+                        clear_stage = False
+            
+            # new_file_path = str(yaml_file_path).replace('.yaml', '_fixed.yaml')
+            with open(str(yaml_file_path), 'w') as f:
+                f.writelines(new_lines)
+
+    
+        hyperpaerameters_path = model_path / "hparams.yaml"
+
+        comment_out_problematic_yaml_lines(hyperpaerameters_path)
+        with open(hyperpaerameters_path, 'r') as file:
+            hparams = yaml.safe_load(file)
+        args.update(hparams)
+        args['test'] = True
     
 
     # Tensorboard setup
@@ -322,8 +372,7 @@ def main(optuna_params=None):
 
         fp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
         fp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
-    
-  
+       
     
     # Model and Data setup
     model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
@@ -360,12 +409,30 @@ def main(optuna_params=None):
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module, )
     elif args['test']:
+        
         trainer = pl.Trainer( accelerator="auto", accumulate_grad_batches=args["accumulate_grad_batches_num"])
+        del hparams['checkpoint_path']
+        hparams['test_on_deepsat_retrieval_set'] = args['test_on_deepsat_retrieval_set']
+        # model = HsqcRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)     
+        args = hparams
+
         model.change_ranker_for_testing()
-        my_logger.info("[Main] Just performing test step")
-        test_result = trainer.test(model, data_module, ckpt_path=args['checkpoint_path'])
-        print(test_result)
-        # raise Exception("should use test_on_all_info_subset.ipynb")
+
+        test_result = trainer.test(model, data_module, ckpt_path=checkpoint_path)
+
+        if checkpoint_path.parts[-1].split("-")[-1].startswith("step="):
+            pkl_name = "test_result.pkl"
+        else:
+            pkl_name = checkpoint_path.parts[-1].split("-")[-1].replace(".ckpt", ".pkl")
+
+        if args['test_on_deepsat_retrieval_set']:
+            test_result_save_parent_dir = out_path_final + "_retrieve_on_deepsat_set/" + "/".join(str(checkpoint_path).split("/")[-4:-2])
+        else:
+            test_result_save_parent_dir = out_path_final + "/" + "/".join(str(checkpoint_path).split("/")[-4:-2])
+        os.makedirs(test_result_save_parent_dir, exist_ok=True)
+            
+        with open(test_result_save_parent_dir + "/" + pkl_name, "wb") as f:
+            pickle.dump(test_result, f)
         
     else:
         
@@ -430,6 +497,5 @@ def main(optuna_params=None):
             logging.shutdown()
 
 
-if __name__ == '__main__':
+
     
-    main()
