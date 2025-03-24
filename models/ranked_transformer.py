@@ -233,7 +233,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                             nargs="+", action="store")
         parser.add_argument(f"--{model_name}heads", type=int, default=8)
         parser.add_argument(f"--{model_name}layers", type=int, default=16)
-        parser.add_argument(f"--{model_name}ff_dim", type=int, default=1536)
+        parser.add_argument(f"--{model_name}ff_dim", type=int, default=3072)
         parser.add_argument(f"--{model_name}wavelength_bounds",
                             type=float, default=[[0.01, 400.0], [0.01, 20.0]], nargs='+', action='append')
         parser.add_argument(f"--{model_name}dropout", type=float, default=0.1)

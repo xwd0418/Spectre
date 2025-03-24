@@ -1,4 +1,6 @@
 import pathlib
+import yaml
+
 DATASET_root_path = pathlib.Path("/workspace/")
 curr_exp_folder_name = "rank_on_entire_set"
 
@@ -185,8 +187,8 @@ def add_parser_arguments( parser):
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
-    parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--accumulate_grad_batches_num", type=int, default=1)
+    parser.add_argument("--bs", type=int, default=32)
+    parser.add_argument("--accumulate_grad_batches_num", type=int, default=4)
         
     parser.add_argument("--patience", type=int, default=8)
     parser.add_argument("--ds", type=str, default="")
@@ -271,8 +273,10 @@ if __name__ == '__main__':
     if args['foldername'] == "debug" or args['debug'] is True:
         args['debug'] = True
         args["epochs"] = 3
+        
+        
+
     if args['test']:
-        import yaml
         checkpoint_path = pathlib.Path(args['checkpoint_path'])
         model_path = checkpoint_path.parents[1]
 
