@@ -102,6 +102,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             assert(FP_choice == "R2-6144-count-based-FP")
             out_dim = self.FP_length * kwargs['num_class']
         self.out_dim = out_dim
+        
         self.bs = kwargs['bs']
         self.num_class = kwargs['num_class'] if loss_func == "CE" else None
         self.lr = lr
@@ -119,17 +120,18 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
         self.rank_by_test_set = kwargs['rank_by_test_set']
         
-        if FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("pick_entropy") :
+        
+        if FP_choice.startswith("DB_specific_FP") :
+            self.radius = int(FP_choice.split("_")[-1])
+        # elif FP_choice.startswith("pick_entropy"):
+        #     raise NotImplementedError("pick_entropy getting radius is not implemented")
+        
+        if not self.rank_by_test_set:
+            self.change_ranker_for_inference()
+        else:
+            assert FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("pick_entropy"), "rank_by_test_set is True, but received unexpected FP_choice"
             self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val", predefined_FP = FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
-
-
-        elif ranking_set_path:
-            # assert ("all_info_molecules" in ranking_set_path), "ranking_set_path should be all-info only. haven't implemented yet"
-            self.ranking_set_path = ranking_set_path
-            # print(ranking_set_path)
-            assert os.path.exists(ranking_set_path), f"{ranking_set_path} does not exist"
-            self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs, CE_num_class=self.num_class)
 
         if save_params:
             print("HsqcRankedTransformer saving args")
@@ -449,25 +451,18 @@ class HsqcRankedTransformer(pl.LightningModule):
             print(kwargs,"\n\n")
         super().log(name, value, *args, **kwargs)
         
-    def change_ranker_for_testing(self, test_ranking_set_path=None ):
-        if not self.rank_by_test_set:
-            return self.change_ranker_for_inference(test_ranking_set_path)
-        if self.FP_choice=="HYUN_FP" or self.FP_choice.startswith("DB_specific_FP"):
+    def change_ranker_for_testing(self):
+        if self.rank_by_test_set:
             self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test", predefined_FP = self.FP_choice),
-                                             batch_size=self.bs, CE_num_class=self.num_class)
-            return
-        elif self.FP_choice.startswith("pick_entropy"): # build rankingset by self.fp_loader
-            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test"),
-                                             batch_size=self.bs, CE_num_class=self.num_class)
-            return
-        if test_ranking_set_path is None:
-            test_ranking_set_path = self.ranking_set_path.replace("val", "test")
-        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs,  CE_num_class=self.num_class)
+                                            batch_size=self.bs, CE_num_class=self.num_class)
+            
+        # else: # keep the same ranker
 
-
-    def change_ranker_for_inference(self, test_ranking_set_path=None ):
+    def change_ranker_for_inference(self,):
         use_hyun_fp = self.FP_choice=="HYUN_FP"
         self.ranker = ranker.RankingSet(store=self.fp_loader.build_inference_ranking_set_with_everything(
+                                                                fp_dim = self.FP_length, 
+                                                                max_radius = self.radius,
                                                                 use_hyun_fp=use_hyun_fp,
                                                                 test_on_deepsat_retrieval_set=self.test_on_deepsat_retrieval_set),
                                           batch_size=self.bs, CE_num_class=self.num_class, need_to_normalize=False, )
