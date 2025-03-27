@@ -341,6 +341,17 @@ class DB_Specific_FP_loader(FP_loader):
         out = torch.vstack(files)
         return out
 
+    def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
+        if use_hyun_fp:
+            rankingset_path = "/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/hyun_fp_stacked_together_sparse/FP_normalized.pt" # FP and FP_normalized are the same
+        else:
+            rankingset_path = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/db_specific_FP_rankingset_max_radius_{max_radius}_fp_dim_{fp_dim}_stacked_together/FP.pt"
+        if test_on_deepsat_retrieval_set:
+            rankingset_path = rankingset_path.replace("FP_normalized", "FP_normalized_deepsat_retrieval_set")
+        print(f"loading {rankingset_path}")
+        return torch.load(rankingset_path)#.to("cuda")
+    
+    
     def build_mfp_for_new_SMILES(self, smiles):
         from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_most_frequent_frags import count_circular_substructures
         mfp = np.zeros(self.out_dim)

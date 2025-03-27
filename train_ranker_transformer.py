@@ -2,7 +2,7 @@ import pathlib
 import yaml
 
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "rank_on_entire_set"
+curr_exp_folder_name = "rank_on_entire_set_retest"
 
 import logging, os, sys, torch
 import random, pickle
@@ -183,7 +183,7 @@ def add_parser_arguments( parser):
         
     parser.add_argument("modelname", type=str)
     parser.add_argument("--name_type", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
