@@ -123,8 +123,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         
         if FP_choice.startswith("DB_specific_FP") :
             self.radius = int(FP_choice.split("_")[-1])
-        # elif FP_choice.startswith("pick_entropy"):
-        #     raise NotImplementedError("pick_entropy getting radius is not implemented")
+        elif FP_choice.startswith("pick_entropy"):
+            self.radius = int(FP_choice.split("_")[-1][1:])
         
         if not self.rank_by_test_set:
             self.change_ranker_for_inference()

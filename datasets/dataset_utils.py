@@ -256,7 +256,7 @@ class Specific_Radius_MFP_loader(FP_loader):
         out = torch.vstack(files)
         return out
     
-    def build_inference_ranking_set_with_everything(self, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
+    def build_inference_ranking_set_with_everything(self, use_hyun_fp = False, test_on_deepsat_retrieval_set = False, fp_dim = None, max_radius = None):
         if use_hyun_fp:
             rankingset_path = "/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/hyun_fp_stacked_together_sparse/FP_normalized.pt"
         else:
@@ -295,8 +295,13 @@ class DB_Specific_FP_loader(FP_loader):
         save_path = DATASET_root_path / f"radius_mapping_radius_under_{RADIUS_UPPER_LIMIT}.pkl"
         with open(save_path, "rb") as f:
             self.radius_mapping = pickle.load(f)
+        self.max_radius = None
+        self.out_dim = None
         
-    def setup(self, out_dim=6144, max_radius=10):
+    def setup(self, out_dim, max_radius):
+        if self.out_dim == out_dim and self.max_radius == max_radius:
+            print("DB_Specific_FP_loader is already setup")
+            return
         self.max_radius = max_radius
         frags_to_use_counts_and_smiles = [ [v,k] for k, v in self.frags_count.items() if self.radius_mapping[k] <= max_radius]
         counts, frag_smiles = zip(*frags_to_use_counts_and_smiles)
@@ -311,7 +316,7 @@ class DB_Specific_FP_loader(FP_loader):
                                               
         frags_to_keep = frag_smiles[np.lexsort((frag_smiles, entropy_each_frag))[:out_dim]]   
         self.frag_to_index_map = {smiles: i for i, smiles in enumerate(frags_to_keep)}
-        print("DB_Specific_FP_loader is setup")
+        print(f"DB_Specific_FP_loader is setup, {out_dim=}, {max_radius=}")
         return entropy_each_frag, counts, len(self.frags_count)
         
     def build_mfp(self, file_idx, dataset_src, split):
@@ -353,7 +358,7 @@ class DB_Specific_FP_loader(FP_loader):
     
     
     def build_mfp_for_new_SMILES(self, smiles):
-        from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_most_frequent_frags import count_circular_substructures
+        from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import count_circular_substructures
         mfp = np.zeros(self.out_dim)
         
         try:

@@ -8,60 +8,20 @@ from pathlib import Path
 
 ### model selection ###
 
-# stable sort
-# def find_checkpoint_path(model_type):
-#     match model_type:
-#         case "C-NMR":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_c_trial_1/checkpoints/epoch=28-step=46864.ckpt")
-#         case "H-NMR":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_h_trial_1/checkpoints/epoch=23-step=35016.ckpt")
-#         case "HSQC":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_hsqc_trial_1/checkpoints/epoch=21-step=37708.ckpt")
-#         case "only_1d":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_1d_trial_1/checkpoints/epoch=26-step=39393.ckpt")
-#         case "All-NMR":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-all_inputs.ckpt")
-#         case "HSQC_C-NMR":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-HSQC_C_NMR.ckpt")
-#         case "HSQC_H-NMR":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=46-HSQC_H_NMR.ckpt")
-#         case "only_1d_DTD":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=27-only_1d.ckpt")
-#         case "only_C-NMR_DTD":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=45-only_C_NMR.ckpt")
-#         case _:
-#             raise ValueError(f"model_type: {model_type} not recognized")
+def find_checkpoint_path_DB_specific_FP(model_type):
+    match model_type:
+        case "only_1d":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/kekulize_smiles/train_on_all_data_possible/only_1d_trial_1/checkpoints/epoch=81-step=59860.ckpt")
+        case "HSQC":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/kekulize_smiles/train_on_all_data_possible/only_hsqc_trial_1/checkpoints/epoch=80-step=69417.ckpt")
+        case "C-NMR":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/kekulize_smiles/train_on_all_data_possible/only_c_trial_1/checkpoints/epoch=68-step=55752.ckpt")
+        case _:
+            raise ValueError(f"model_type: {model_type} not recognized")
         
-#     return checkpoint_path
+    return checkpoint_path
 
-# # stop on cosine
-# def find_checkpoint_path(model_type):
-#     match model_type:
-#         # case "C-NMR":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_c_trial_1/checkpoints/epoch=28-step=46864.ckpt")
-#         # case "H-NMR":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_h_trial_1/checkpoints/epoch=23-step=35016.ckpt")
-#         # case "HSQC":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_hsqc_trial_1/checkpoints/epoch=21-step=37708.ckpt")
-#         # case "only_1d":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/train_on_all_data_possible/only_1d_trial_1/checkpoints/epoch=26-step=39393.ckpt")
-#         case "All-NMR":
-#             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/flexible_models_larger_no_jittering/r0_r2_FP_trial_1/checkpoints/epoch=28-all_inputs.ckpt")
-#         # case "HSQC_C-NMR":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=32-HSQC_C_NMR.ckpt")
-#         # case "HSQC_H-NMR":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=46-HSQC_H_NMR.ckpt")
-#         # case "only_1d_DTD":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=27-only_1d.ckpt")
-#         # case "only_C-NMR_DTD":
-#         #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stable_argsort/flexible_models_best_FP/r0_r2_FP_trial_1/checkpoints/epoch=45-only_C_NMR.ckpt")
-#         case _:
-#             raise ValueError(f"model_type: {model_type} not recognized")
-        
-#     return checkpoint_path
-
-# larger model, jittering 
-def find_checkpoint_path(model_type):
+def find_checkpoint_path_entropy_based_FP(model_type):
     match model_type:
         case "C-NMR":
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/stop_on_cosine/all_data_possible/only_c_trial_1/checkpoints/epoch=97-step=79184.ckpt")
@@ -94,11 +54,34 @@ from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from datasets.hsqc_folder_dataset import FolderDataModule
 
 from datasets.dataset_utils import fp_loader_configer
-specific_radius_mfp_loader = fp_loader_configer.fp_loader
 
-def choose_model(model_type, include_test_loader=True, shuffle_loader=False):
+
+
+def choose_model_DB_specific_FP(model_type):
+    checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
+    model_path = checkpoint_path.parents[1]
+    hyperpaerameters_path = model_path / "hparams.yaml"
     
-    checkpoint_path = find_checkpoint_path(model_type)
+    with open(hyperpaerameters_path, 'r') as file:
+        hparams = yaml.safe_load(file)
+        
+    del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
+    hparams['use_peak_values'] = False
+    hparams['num_workers'] = 0
+    model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
+    
+    fp_loader = fp_loader_configer.fp_loader
+    max_radius = int(hparams['FP_choice'].split("_")[-1])
+    fp_loader.setup(hparams['out_dim'], max_radius)
+    
+        
+    model.eval()
+    return hparams, model
+        
+            
+def choose_model_entropy_based_FP(model_type, include_test_loader=True, shuffle_loader=False):
+    
+    checkpoint_path = find_checkpoint_path_entropy_based_FP(model_type)
     
     model_path = checkpoint_path.parents[1]
     hyperpaerameters_path = model_path / "hparams.yaml"
@@ -116,6 +99,7 @@ def choose_model(model_type, include_test_loader=True, shuffle_loader=False):
     max_radius = int(hparams['FP_choice'].split("_")[-1][1:])
     print("max_radius: ", max_radius)
     
+    specific_radius_mfp_loader = fp_loader_configer.fp_loader
     if  max_radius!=specific_radius_mfp_loader.max_radius or only_2d!=specific_radius_mfp_loader.only_2d:
         specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
         specific_radius_mfp_loader.set_max_radius(int(hparams['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
@@ -124,6 +108,10 @@ def choose_model(model_type, include_test_loader=True, shuffle_loader=False):
     del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
     hparams['use_peak_values'] = False
     hparams['num_workers'] = 0
+    if "test_on_deepsat_retrieval_set" not in hparams:
+        hparams['test_on_deepsat_retrieval_set'] = False
+    if "rank_by_test_set" not in hparams:
+        hparams['rank_by_test_set'] = False
     model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
     
     if not include_test_loader:
@@ -176,30 +164,7 @@ def choose_model(model_type, include_test_loader=True, shuffle_loader=False):
 
 
 ### input transformation ###
-'''
-deprecated. used for the old delimiter model
-'''
-def unpack_inputs(inputs):
-    # input shape: 1* (n, 3)
-    for i, vals in enumerate(inputs[0]):
-        # if vals is [-1, -1, -1]
-        if vals[0]==-1 and vals[1]==-1 and vals[2]==-1:
-            hsqc_start=i+1
-        elif vals[0]==-2 and vals[1]==-2 and vals[2]==-2:
-            hsqc_end=i
-        elif vals[0]==-3 and vals[1]==-3 and vals[2]==-3:
-            c_nmr_start=i+1
-        elif vals[0]==-4 and vals[1]==-4 and vals[2]==-4:
-            c_nmr_end=i
-        elif vals[0]==-5 and vals[1]==-5 and vals[2]==-5:
-            h_nmr_start=i+1
-        elif vals[0]==-6 and vals[1]==-6 and vals[2]==-6:
-            h_nmr_end=i
-            
-    hsqc = inputs[0,hsqc_start:hsqc_end]
-    c_tensor = inputs[0,c_nmr_start:c_nmr_end,0]
-    h_tensor = inputs[0,h_nmr_start:h_nmr_end,1]
-    return hsqc, c_tensor, h_tensor
+
 
 def unpack_inputs_no_delimiter(inputs, NMR_type_indicator):
     # input shape: (n, 3)
@@ -280,44 +245,72 @@ def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30,
                         
 
 def compute_cos_sim(fp1, fp2):
+    fp1 = fp1.float()
+    fp2 = fp2.float()
     return (fp1 @ fp2) / (torch.norm(fp1) * torch.norm(fp2)).item()
 
 
+from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import get_fragments_for_each_atom_id, get_fragments_for_each_atom_id_v2
+import io
+from PIL import Image
+from math import sqrt
+from rdkit.Chem.Draw import SimilarityMaps
 
-def show_retrieved_mol_with_highlighted_frags(retrieved_mol_smiles, predicted_FP, FP_index_to_frags_mapping, fp_gen, ao):
+def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, show_H=False):
     '''
     used in db-specific FP
     This functions visualizes the retrieved molecule with the predicted fragments highlighted
     '''
-    predicted_frags = [FP_index_to_frags_mapping[i.item()] for i in predicted_FP.nonzero()]
-    mol = Chem.MolFromSmiles(retrieved_mol_smiles)
-    if mol is None:
-        print(f"Failed to parse {retrieved_mol_smiles}")
-        raise ValueError(f"Failed to parse {retrieved_mol_smiles}")
-    mol = Chem.AddHs(mol)
+    def show_png(data):
+        
+        bio = io.BytesIO(data)
+        img = Image.open(bio)
+        return img
 
-    # Compute Morgan fingerprint with radius 
-    fp = fp_gen.GetFingerprint(mol, additionalOutput=ao)
-    info = ao.GetBitInfoMap()
+    def set_based_cosine(x,y):
+        '''x, y are same shape array'''
+        a = set(x)
+        b = set(y)
+        return (len(a&b))/(sqrt(len(a))*sqrt(len(b)))
+    
+    fp_loader = fp_loader_configer.fp_loader
+    
+    predicted_frag_indices = set(predicted_FP.nonzero()[:,0].tolist())
+    retrieval_FP = fp_loader.build_mfp_for_new_SMILES(retrieval_smiles)
+    
+    # Step 1: Create molecule and hydrogenated copy
+    retrieval_mol_h = Chem.MolFromSmiles(retrieval_smiles)
+    retrieval_mol_h = Chem.AddHs(retrieval_mol_h)  # Keep explicit Hs for fragment mapping
+    
+    weights_h = [0] * retrieval_mol_h.GetNumAtoms()
+    base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
+    # Step 2: Compute weights on the molecule WITH hydrogens
+    atom_to_frags, all_frags  = get_fragments_for_each_atom_id_v2(retrieval_smiles)
+    for atom_id, frags in atom_to_frags.items():
+        frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
+        sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
+        
+        # sim_without_this_atom = cosine((all_frags-frags).intersection(fp_loader_frags), {fp_loader.index_to_frag_mapping[i] for i in predicted_frag_indices})
+        weights_h[atom_id] = base_sim - sim_without_this_atom
 
-    # Extract circular subgraphs
+    weights_h, max_weight = SimilarityMaps.GetStandardizedWeights(weights_h)
+    
+    if not show_H:
+        # Step 3: Remove explicit hydrogens and map weights
+        retrieval_mol = Chem.RemoveHs(retrieval_mol_h)
+        
+        # Step 4: Map hydrogenated weights to non-hydrogenated molecule
+        heavy_atom_map = retrieval_mol_h.GetSubstructMatch(retrieval_mol)  # Maps H-heavy to no-H
+        
+        weights = [weights_h[i] for i in heavy_atom_map]  # Remap weights to no-H molecule
 
-    highlight_bonds = set()
-    # display(info)
-    for bit_id, atom_envs in info.items():
-        for atom_idx, curr_radius in atom_envs:
-            # Get the circular environment as a subgraph
-            env = Chem.FindAtomEnvironmentOfRadiusN(mol, curr_radius, atom_idx)
-            submol = Chem.PathToSubmol(mol, env)
-            frag_smiles = Chem.MolToSmiles(submol, canonical=True)
-            
-            if frag_smiles and frag_smiles in predicted_frags:
-                highlight_bonds.update(env)
-                
-    highlight_bonds = list(highlight_bonds)
-
-    # Visualize with highlights
-    img = Draw.MolToImage(mol, highlightBonds=highlight_bonds, size=(600,600))
+    # Step 5: Draw similarity map on molecule without hydrogens
+    d = Draw.MolDraw2DCairo(400, 400)
+    SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d)
+    
+    d.FinishDrawing()
+    img = (show_png(d.GetDrawingText()))
+    
     # img.show()
     return img
                     
@@ -387,7 +380,6 @@ def build_input(compound_dir, mode = None, include_hsqc = True, include_c_nmr = 
 def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
                    k=5, mode = None, ground_truth_FP=None,
                    fp_type = "MFP_Specific_Radius",
-                   index_to_frag_mapping=None, fp_gen=None, ao=None, # for DB_Specific_Radius only
                    filter_by_MW=None,
                    verbose=True,
                    weight_pred = None
@@ -427,7 +419,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
             if fp_type == "MFP_Specific_Radius":
                 img = Draw.MolToImage(mol)
             elif fp_type == "DB_Specific_Radius":
-                img = show_retrieved_mol_with_highlighted_frags(smile, retrieved_FP, index_to_frag_mapping, fp_gen, ao)
+                img = show_retrieved_mol_with_highlighted_frags(retrieved_FP, smile)
             else:
                 raise ValueError("fp_type must be either MFP_Specific_Radius or DB_Specific_Radius")
         
@@ -470,7 +462,7 @@ def visualize_smiles(smiles_list, name_list, file_path):
 inference_invetigate_path = pathlib.Path(__file__).resolve().parents[0] / "inference_examples"
 
 def save_molecule_inference(smiles, name, index_rkst, model, model_name, inputs, NMR_type_indicator, rankingset_data, smiles_and_names, k=20, mode=None, ground_truth_FP=None, 
-                         fp_type="MFP_Specific_Radius", index_to_frag_mapping=None, fp_gen=None, ao=None):
+                         fp_type="MFP_Specific_Radius", ):
     """
     Investigate a single molecule by running inference on it and visualizing the top-k retrieved molecules.
     
@@ -488,9 +480,7 @@ def save_molecule_inference(smiles, name, index_rkst, model, model_name, inputs,
         mode (str): Mode for building input tensor.
         ground_truth_FP (torch.Tensor): Ground truth fingerprint tensor for comparison.
         fp_type (str): Fingerprint type for prediction.
-        index_to_frag_mapping (dict): Mapping of fingerprint index to fragments.
-        fp_gen (FingerprintGenerator): Fingerprint generator for DB_Specific_Radius.
-        ao (AtomEnvironment): Atom environment object for DB_Specific_Radius.
+
         
     """
     
@@ -517,8 +507,8 @@ def save_molecule_inference(smiles, name, index_rkst, model, model_name, inputs,
     # run inference 
     returning_smiles, returning_names = inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
                                       k=k, mode=mode, ground_truth_FP=ground_truth_FP,
-                                      fp_type=fp_type, index_to_frag_mapping=index_to_frag_mapping, 
-                                      fp_gen=fp_gen, ao=ao, verbose=False, filter_by_MW="from_input")
+                                      fp_type=fp_type,  
+                                      verbose=False, filter_by_MW="from_input")
     visualize_smiles(returning_smiles, returning_names, curr_result_path / "visualization.png")
     
     return returning_smiles

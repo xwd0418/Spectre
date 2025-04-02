@@ -2,7 +2,7 @@ import pathlib
 import yaml
 
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "rank_on_entire_set_retest"
+curr_exp_folder_name = "kekulize_smiles"
 
 import logging, os, sys, torch
 import random, pickle

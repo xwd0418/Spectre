@@ -16,6 +16,76 @@ gen = rdFingerprintGenerator.GetMorganGenerator(radius=RADIUS_UPPER_LIMIT)
 ao = rdFingerprintGenerator.AdditionalOutput()
 ao.AllocateBitInfoMap()
 
+
+def get_fragments_for_each_atom_id(SMILES):
+    # return a dict, mappping atom_id to a set of fragements (in smiles)
+    mol = Chem.MolFromSmiles(SMILES)
+    if mol is None:
+        print(f"Failed to parse {SMILES}")
+        # raise ValueError(f"Failed to parse {SMILES}")
+        return None
+    Chem.Kekulize(mol, clearAromaticFlags=True)
+    mol = Chem.AddHs(mol)
+
+    # Compute Morgan fingerprint with radius 
+    fp = gen.GetFingerprint(mol, additionalOutput=ao)
+    info = ao.GetBitInfoMap()
+    
+    # Extract circular subgraphs
+    # display(info)
+    all_shown_fragments = set()
+    return_info = defaultdict(set) # map atom_id to a set of fragements (in smiles)
+    for bit_id, atom_envs in info.items():
+        for atom_idx, curr_radius in atom_envs:
+            # Get the circular environment as a subgraph
+            env = Chem.FindAtomEnvironmentOfRadiusN(mol, curr_radius, atom_idx)
+            submol = Chem.PathToSubmol(mol, env)
+            smiles = Chem.MolToSmiles(submol, canonical=True) # this is canonical in terms of fragment, so it is related to the bond/atom index mapping
+            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), canonical=True) # so, let's treat it as a independent molecule, instead of a fragment
+            if smiles == "" or smiles in all_shown_fragments:
+                continue
+            all_shown_fragments.add(smiles)
+            return_info[atom_idx].add(smiles)
+            
+                
+    return return_info, all_shown_fragments
+
+def get_fragments_for_each_atom_id_v2(SMILES):
+    # return a dict, mappping atom_id to a set of fragements (in smiles)
+    mol = Chem.MolFromSmiles(SMILES)
+    if mol is None:
+        print(f"Failed to parse {SMILES}")
+        # raise ValueError(f"Failed to parse {SMILES}")
+        return None
+    Chem.Kekulize(mol, clearAromaticFlags=True)
+    mol = Chem.AddHs(mol)
+
+    # Compute Morgan fingerprint with radius 
+    fp = gen.GetFingerprint(mol, additionalOutput=ao)
+    info = ao.GetBitInfoMap()
+    
+    # Extract circular subgraphs
+    # display(info)
+    all_shown_fragments = set()
+    return_info = defaultdict(set) # map atom_id to a set of fragements (in smiles)
+    for bit_id, atom_envs in info.items():
+        for atom_idx, curr_radius in atom_envs:
+            # Get the circular environment as a subgraph
+            env = Chem.FindAtomEnvironmentOfRadiusN(mol, curr_radius, atom_idx)
+            submol = Chem.PathToSubmol(mol, env)
+            smiles = Chem.MolToSmiles(submol, canonical=True) # this is canonical in terms of fragment, so it is related to the bond/atom index mapping
+            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), canonical=True) # so, let's treat it as a independent molecule, instead of a fragment
+            if smiles == "" or smiles in all_shown_fragments:
+                continue
+            all_shown_fragments.add(smiles)
+            for bond_idx in env:
+                bond = mol.GetBondWithIdx(bond_idx)
+                return_info[bond.GetBeginAtomIdx()].add(smiles)
+                return_info[bond.GetEndAtomIdx()].add(smiles)            
+                
+    return return_info, all_shown_fragments
+    
+
 # step 1: find all fragments of the entire training set
 def count_circular_substructures(smiles):
     circular_substructures_counts = defaultdict(int) # radius to smiles
@@ -25,23 +95,26 @@ def count_circular_substructures(smiles):
         print(f"Failed to parse {smiles}")
         # raise ValueError(f"Failed to parse {smiles}")
         return circular_substructures_counts, substrucure_radius
+    Chem.Kekulize(mol, clearAromaticFlags=True)
     mol = Chem.AddHs(mol)
 
     # Compute Morgan fingerprint with radius 
     fp = gen.GetFingerprint(mol, additionalOutput=ao)
     info = ao.GetBitInfoMap()
     
-
+    print(f"{info=}")
     # Extract circular subgraphs
     # display(info)
     for bit_id, atom_envs in info.items():
+        # print(f'\n {bit_id=} ')
         for atom_idx, curr_radius in atom_envs:
             # Get the circular environment as a subgraph
             env = Chem.FindAtomEnvironmentOfRadiusN(mol, curr_radius, atom_idx)
             submol = Chem.PathToSubmol(mol, env)
-            smiles = Chem.MolToSmiles(submol, canonical=True)
-            
+            smiles = Chem.MolToSmiles(submol, canonical=True) # this is canonical in terms of fragment, so it is related to the bond/atom index mapping
+            smiles = Chem.MolToSmiles(Chem.MolFromSmiles(smiles), canonical=True) # so, let's treat it as a independent molecule, instead of a fragment
             circular_substructures_counts[smiles] = 1 # inside each molecule, each fragment is either on or off
+            # print(f'{smiles} ', end="")
             if smiles not in substrucure_radius:
                 substrucure_radius[smiles] = curr_radius
             else:
