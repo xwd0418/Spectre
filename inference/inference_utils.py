@@ -250,7 +250,7 @@ def compute_cos_sim(fp1, fp2):
     return (fp1 @ fp2) / (torch.norm(fp1) * torch.norm(fp2)).item()
 
 
-from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import get_fragments_for_each_atom_id, get_fragments_for_each_atom_id_v2
+from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import get_fragments_for_each_atom_id, get_fragments_for_each_atom_idx
 import io
 from PIL import Image
 from math import sqrt
@@ -285,7 +285,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, sh
     weights_h = [0] * retrieval_mol_h.GetNumAtoms()
     base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
     # Step 2: Compute weights on the molecule WITH hydrogens
-    atom_to_frags, all_frags  = get_fragments_for_each_atom_id_v2(retrieval_smiles)
+    atom_to_frags, all_frags  = get_fragments_for_each_atom_idx(retrieval_smiles)
     for atom_id, frags in atom_to_frags.items():
         frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
         sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
