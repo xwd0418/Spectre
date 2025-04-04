@@ -2,7 +2,7 @@ import pathlib
 import yaml
 
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "kekulize_smiles"
+curr_exp_folder_name = "entropy_on_hashes"
 
 import logging, os, sys, torch
 import random, pickle
