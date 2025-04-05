@@ -68,7 +68,7 @@ from datasets.dataset_utils import fp_loader_configer
 
 
 
-def choose_model(model_type, fp_type="entropy_on_hashes"):
+def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False):
     if fp_type == "DB_specific_FP":
         checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
     if fp_type == "entropy_on_hashes":
@@ -82,19 +82,22 @@ def choose_model(model_type, fp_type="entropy_on_hashes"):
     del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
     # hparams['use_peak_values'] = False
     hparams['num_workers'] = 0
-    print("loading model weights...")
     model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
-    print("loading model weights done, setting up fp_loader")
     fp_loader = fp_loader_configer.fp_loader
     max_radius = int(hparams['FP_choice'].split("_")[-1])
     fp_loader.setup(hparams['out_dim'], max_radius)
     
         
     model.eval()
-    return hparams, model
+    if not return_test_loader:
+        return hparams, model
+    
+    test_loader = get_test_loader(model_type, should_shuffle_loader, hparams)
+    model.eval()
+    return hparams, model, test_loader
         
             
-def choose_model_entropy_based_FP(model_type, include_test_loader=True, shuffle_loader=False):
+def choose_model_entropy_based_FP(model_type, include_test_loader=True, should_shuffle_loader=False):
     
     checkpoint_path = find_checkpoint_path_entropy_based_FP(model_type)
     
@@ -132,22 +135,25 @@ def choose_model_entropy_based_FP(model_type, include_test_loader=True, shuffle_
     if not include_test_loader:
         return hparams, model
     
-    if model_type == "HSQC":
-        # datamodule = FolderDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC"], batch_size=hparams['bs'], parser_args=hparams, persistent_workers=False)
+    test_loader = get_test_loader(model_type, should_shuffle_loader, hparams)
+    model.eval()
+    return hparams, model, test_loader
 
-        # # datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=hparams['bs'], parser_args=hparams)
-        # # datamodule.setup("test")
-        # # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = datamodule.test_dataloader()
-        
-        # datamodule.setup("test")
-        # test_loader = datamodule.test_dataloader()
-        input_src=["HSQC"]
-    else:
-        input_src=["HSQC", "oneD_NMR"]
+def get_test_loader(model_type, should_shuffle_loader, hparams):
+    # if model_type == "HSQC":
+    #     # datamodule = FolderDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC"], batch_size=hparams['bs'], parser_args=hparams, persistent_workers=False)
+    #     # # datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=hparams['bs'], parser_args=hparams)
+    #     # # datamodule.setup("test")
+    #     # # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = datamodule.test_dataloader()
+    #     # datamodule.setup("test")
+    #     # test_loader = datamodule.test_dataloader()
+    #     input_src=["HSQC"]
+    # else:
+    #     input_src=["HSQC", "oneD_NMR"]
     datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=1, parser_args=hparams)
     datamodule.setup("predict")
     loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
-        datamodule.predict_dataloader(shuffle=shuffle_loader)
+        datamodule.predict_dataloader(shuffle=should_shuffle_loader)
         
     match model_type:
         case "C-NMR":
@@ -172,8 +178,7 @@ def choose_model_entropy_based_FP(model_type, include_test_loader=True, shuffle_
                         
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
-    model.eval()
-    return hparams, model, test_loader
+    return test_loader
 
 
 
@@ -188,18 +193,29 @@ def unpack_inputs_no_delimiter(inputs, NMR_type_indicator):
     unique_values, indices = torch.unique_consecutive(NMR_type_indicator, return_inverse=True)
 
     # Compute start and end positions
+    print(unique_values)
     indices_location = {}
     for value in unique_values:
         positions = (NMR_type_indicator == value).nonzero(as_tuple=True)[0]
         indices_location[int(value)] = (positions[0].item(), positions[-1].item()+1)
     
-    hsqc_start, hsqc_end = indices_location[0]
-    c_nmr_start, c_nmr_end = indices_location[1]
-    h_nmr_start, h_nmr_end = indices_location[2]
+    if 0 in indices_location:
+        hsqc_start, hsqc_end = indices_location[0]
+        hsqc = inputs[hsqc_start:hsqc_end]
+    else:
+        hsqc = None
+    if 1 in indices_location:
+        c_nmr_start, c_nmr_end = indices_location[1]
+        c_tensor = inputs[c_nmr_start:c_nmr_end,0]
+    else:
+        c_tensor = None
+    if 2 in indices_location:
+        h_nmr_start, h_nmr_end = indices_location[2]
+        h_tensor = inputs[h_nmr_start:h_nmr_end,1]
+    else:
+        h_tensor = None
+
     
-    hsqc = inputs[hsqc_start:hsqc_end]
-    c_tensor = inputs[c_nmr_start:c_nmr_end,0]
-    h_tensor = inputs[h_nmr_start:h_nmr_end,1]
     return hsqc, c_tensor, h_tensor
 
 ### retrieval ###
