@@ -354,7 +354,13 @@ if __name__ == '__main__':
         my_logger.info(f'[Main] using GPU: unknown type')
     
     # FP loader setup
-    if args['FP_choice'].startswith("DB_specific_FP"):
+    if args['FP_choice'].startswith("Hash_Entropy"):
+        fp_loader_configer.select_version("Hash_Entropy")
+        fp_loader = fp_loader_configer.fp_loader
+        radius = int(args['FP_choice'].split("_")[-1])
+        fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
+        
+    elif args['FP_choice'].startswith("DB_specific_FP"):
         fp_loader_configer.select_version("DB_Specific")
         fp_loader = fp_loader_configer.fp_loader
         

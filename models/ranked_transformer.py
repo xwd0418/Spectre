@@ -121,17 +121,17 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.rank_by_test_set = kwargs['rank_by_test_set']
         
         
-        if FP_choice.startswith("DB_specific_FP") :
+        if FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy"):
             self.radius = int(FP_choice.split("_")[-1])
         elif FP_choice.startswith("pick_entropy"):
             self.radius = int(FP_choice.split("_")[-1][1:])
         
-        if not self.rank_by_test_set:
-            self.change_ranker_for_inference()
-        else:
-            assert FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("pick_entropy"), "rank_by_test_set is True, but received unexpected FP_choice"
+        if self.rank_by_test_set:   
+            assert FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy") or FP_choice.startswith("pick_entropy"), "rank_by_test_set is True, but received unexpected FP_choice"
             self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val", predefined_FP = FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
+        else:
+            self.change_ranker_for_inference()
 
         if save_params:
             print("HsqcRankedTransformer saving args")

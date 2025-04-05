@@ -66,8 +66,16 @@ class FP_loader():
         pass
     def build_mfp(self, ):
         pass
-    def build_rankingset(self, ):
-        pass
+    
+    def build_rankingset(self, split, predefined_FP = None):         
+        # assuming rankingset on allinfo-set
+        path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
+        file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
+
+        files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
+        out = torch.vstack(files)
+        return out
+    
     def build_mfp_for_new_SMILES(self, ):
         pass
     def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
@@ -191,6 +199,7 @@ class Specific_Radius_MFP_loader(FP_loader):
 # @set_float32_highest_precision
 class DB_Specific_FP_loader(FP_loader):
     def __init__(self, ) -> None:
+        
         RADIUS_UPPER_LIMIT = 10
         save_path = DATASET_root_path / f"count_fragments_radius_under_{RADIUS_UPPER_LIMIT}.pkl"
         with open(save_path, "rb") as f:
@@ -236,18 +245,11 @@ class DB_Specific_FP_loader(FP_loader):
         for frag in fragments:
             if frag in self.frag_to_index_map:
                 mfp[self.frag_to_index_map[frag]] = 1
-        
         return torch.tensor(mfp).float()
     
     
-    def build_rankingset(self, split, predefined_FP = None):         
-        # assuming rankingset on allinfo-set
-        path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
-        file_idx_for_ranking_set = pickle.load(open(path_to_load_full_info_indices, "rb"))
-
-        files  = [self.build_mfp(int(file_idx.split(".")[0]), "2d", split) for file_idx in sorted(file_idx_for_ranking_set)]
-        out = torch.vstack(files)
-        return out
+    def build_rankingset(self, split, predefined_FP=None):
+        return super().build_rankingset(split, predefined_FP)
 
     def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
         if use_hyun_fp:
@@ -273,10 +275,6 @@ class DB_Specific_FP_loader(FP_loader):
                 mfp[self.frag_to_index_map[frag]] = 1
         
         return torch.tensor(mfp).float()
-        
-        # mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
-        # mfp = mfp[self.indices_kept]
-        # return torch.tensor(mfp).float()
         
     def construct_index_to_frag_mapping(self):
         self.index_to_frag_mapping =  {v:k for k, v in self.frag_to_index_map.items()}
@@ -315,29 +313,50 @@ class Hash_Entropy_FP_loader(FP_loader):
         # bit_infos_to_keep = bitinfos[np.argsort(entropy_each_frag, kind="stable")[:out_dim]]  
         # self.frag_to_index_map = {bit_info: i for i, bit_info in enumerate(bit_infos_to_keep)}
         indices_of_high_entropy = np.argsort(entropy_each_frag, kind="stable")[:out_dim]
-        self.bitInfos_to_fp_index_map = {bitinfos[i]: i for i in indices_of_high_entropy}
+        self.bitInfos_to_fp_index_map = {bitinfos[bitinfo_list_index]: fp_index for fp_index, bitinfo_list_index in enumerate(indices_of_high_entropy)}
         self.fp_index_to_bitInfo_mapping =  {v:k for k, v in self.bitInfos_to_fp_index_map.items()}
         print(f"Hash_Entropy_FP_loader is setup, {out_dim=}, {max_radius=}")
         # return entropy_each_frag, counts, len(self.frags_count)
 
     
-    def build_mfp(self, ):
-        pass
-    def build_rankingset(self, ):
-        pass
+    def build_mfp(self, file_idx, dataset_src, split):
+        if dataset_src == "2d":
+            dataset_dir = "SMILES_dataset"
+        elif dataset_src == "1d":
+            dataset_dir = "OneD_Only_Dataset"
+        else:
+            raise ValueError("dataset should be either 1d or 2d")
+        dataset_path = DATASET_root_path / f"{dataset_dir}/{split}/fragments_of_different_radii"
+        file_path = dataset_path / f"{file_idx}.pt"
+        fragment_infos = torch.load(file_path) 
+        mfp = np.zeros(self.out_dim)
+        for frag_info in fragment_infos:
+            if frag_info in self.bitInfos_to_fp_index_map:
+                mfp[self.bitInfos_to_fp_index_map[frag_info]] = 1
+        return torch.tensor(mfp).float()
+    
+    def build_rankingset(self, split, predefined_FP=None):
+        return super().build_rankingset(split, predefined_FP)
+
     def build_mfp_for_new_SMILES(self, smiles):
         from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import count_circular_substructures
         mfp = np.zeros(self.out_dim)
         
         bitInfos_with_count = count_circular_substructures(smiles)
         for bitInfo in bitInfos_with_count:
-            if bitInfo in self.frag_to_index_map:
-                mfp[self.frag_to_index_map[bitInfo]] = 1
+            if bitInfo in self.bitInfos_to_fp_index_map:
+                mfp[self.bitInfos_to_fp_index_map[bitInfo]] = 1
         return torch.tensor(mfp).float()
     
-    def build_inference_ranking_set_with_everything(self, fp_dim, max_radius):
-        path = ""
-        return torch.load(path)
+    def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
+        if use_hyun_fp:
+            rankingset_path = "/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/hyun_fp_stacked_together_sparse/FP_normalized.pt" # FP and FP_normalized are the same
+        else:
+            rankingset_path = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/non_collision_FP_rankingset_max_radius_{max_radius}_dim_{fp_dim}_stacked_together/FP.pt"
+        if test_on_deepsat_retrieval_set:
+            rankingset_path = rankingset_path.replace("FP_normalized", "FP_normalized_deepsat_retrieval_set")
+        print(f"loading {rankingset_path}")
+        return torch.load(rankingset_path)#.to("cuda")
         
 class FP_Loader_Configer():
     def __init__(self):

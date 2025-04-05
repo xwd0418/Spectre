@@ -7,6 +7,17 @@ import sys, pathlib, json, yaml
 from pathlib import Path
 
 ### model selection ###
+def find_checkpoint_path_entropy_on_hashes_FP(model_type):
+    match model_type:
+        case "C-NMR":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
+        case "HSQC":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_hsqc_trial_2/checkpoints/epoch=61-step=53134.ckpt")
+        case _:
+            raise ValueError(f"model_type: {model_type} not recognized")
+        
+    return checkpoint_path
+
 
 def find_checkpoint_path_DB_specific_FP(model_type):
     match model_type:
@@ -57,8 +68,11 @@ from datasets.dataset_utils import fp_loader_configer
 
 
 
-def choose_model_DB_specific_FP(model_type):
-    checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
+def choose_model(model_type, fp_type="entropy_on_hashes"):
+    if fp_type == "DB_specific_FP":
+        checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
+    if fp_type == "entropy_on_hashes":
+        checkpoint_path = find_checkpoint_path_entropy_on_hashes_FP(model_type)
     model_path = checkpoint_path.parents[1]
     hyperpaerameters_path = model_path / "hparams.yaml"
     
@@ -66,10 +80,11 @@ def choose_model_DB_specific_FP(model_type):
         hparams = yaml.safe_load(file)
         
     del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
-    hparams['use_peak_values'] = False
+    # hparams['use_peak_values'] = False
     hparams['num_workers'] = 0
+    print("loading model weights...")
     model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
-    
+    print("loading model weights done, setting up fp_loader")
     fp_loader = fp_loader_configer.fp_loader
     max_radius = int(hparams['FP_choice'].split("_")[-1])
     fp_loader.setup(hparams['out_dim'], max_radius)
@@ -250,13 +265,13 @@ def compute_cos_sim(fp1, fp2):
     return (fp1 @ fp2) / (torch.norm(fp1) * torch.norm(fp2)).item()
 
 
-from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import get_fragments_for_each_atom_id, get_fragments_for_each_atom_idx
+from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import  get_bitInfos_for_each_atom_idx
 import io
 from PIL import Image
 from math import sqrt
 from rdkit.Chem.Draw import SimilarityMaps
 
-def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, show_H=False):
+def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, need_to_clean_H=False):
     '''
     used in db-specific FP
     This functions visualizes the retrieved molecule with the predicted fragments highlighted
@@ -275,35 +290,53 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, sh
     
     fp_loader = fp_loader_configer.fp_loader
     
-    predicted_frag_indices = set(predicted_FP.nonzero()[:,0].tolist())
+    predicted_frag_indices = set(predicted_FP.to_dense().nonzero()[:,0].tolist())
     retrieval_FP = fp_loader.build_mfp_for_new_SMILES(retrieval_smiles)
     
     # Step 1: Create molecule and hydrogenated copy
-    retrieval_mol_h = Chem.MolFromSmiles(retrieval_smiles)
-    retrieval_mol_h = Chem.AddHs(retrieval_mol_h)  # Keep explicit Hs for fragment mapping
+    retrieval_mol = Chem.MolFromSmiles(retrieval_smiles)
     
-    weights_h = [0] * retrieval_mol_h.GetNumAtoms()
+    weights = [0] * retrieval_mol.GetNumAtoms()
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    #!!!! try to use the ignore_atom parameter in the fp_gen
+    
+    
+    
+    
+    
+    
     base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
     # Step 2: Compute weights on the molecule WITH hydrogens
-    atom_to_frags, all_frags  = get_fragments_for_each_atom_idx(retrieval_smiles)
-    for atom_id, frags in atom_to_frags.items():
-        frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
-        sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
+    atom_to_bit_infos, all_bitInfos  = get_bitInfos_for_each_atom_idx(retrieval_smiles)
+    for atom_id, bit_infos in atom_to_bit_infos.items():
+        # frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
+        # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
         
-        # sim_without_this_atom = cosine((all_frags-frags).intersection(fp_loader_frags), {fp_loader.index_to_frag_mapping[i] for i in predicted_frag_indices})
-        weights_h[atom_id] = base_sim - sim_without_this_atom
+        # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
+        sim_without_this_atom = set_based_cosine((all_bitInfos-set(bit_infos)).intersection(fp_loader.bitInfos_to_fp_index_map), {fp_loader.fp_index_to_bitInfo_mapping[i] for i in predicted_frag_indices})
+        weights[atom_id] = base_sim - sim_without_this_atom
 
-    weights_h, max_weight = SimilarityMaps.GetStandardizedWeights(weights_h)
     
-    if not show_H:
-        # Step 3: Remove explicit hydrogens and map weights
-        retrieval_mol = Chem.RemoveHs(retrieval_mol_h)
+    # if need_to_clean_H:
+    #     # Step 3: Remove explicit hydrogens and map weights
+    #     retrieval_mol = Chem.RemoveHs(retrieval_mol)
         
-        # Step 4: Map hydrogenated weights to non-hydrogenated molecule
-        heavy_atom_map = retrieval_mol_h.GetSubstructMatch(retrieval_mol)  # Maps H-heavy to no-H
+    #     # Step 4: Map hydrogenated weights to non-hydrogenated molecule
+    #     heavy_atom_map = retrieval_mol.GetSubstructMatch(retrieval_mol)  # Maps H-heavy to no-H
         
-        weights = [weights_h[i] for i in heavy_atom_map]  # Remap weights to no-H molecule
+    #     weights = [weights[i] for i in heavy_atom_map]  # Remap weights to no-H molecule
 
+    weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
+    
     # Step 5: Draw similarity map on molecule without hydrogens
     d = Draw.MolDraw2DCairo(400, 400)
     SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d)

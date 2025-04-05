@@ -226,7 +226,7 @@ class FolderDataset(Dataset):
             
         # remember build ranking set
         
-        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP"): # should be in the format of "pick_entropy_r9"
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy") :
             # print(f"current i is {i}")
             # print("self.files len is ", len(self.files))
             mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
