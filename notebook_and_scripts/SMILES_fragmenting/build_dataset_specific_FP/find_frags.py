@@ -18,7 +18,7 @@ ao.AllocateBitInfoMap()
 
 
 
-def get_fragments_for_each_atom_idx(SMILES):
+def get_bitInfos_for_each_atom_idx(SMILES):
     """
 
     Args:
@@ -63,7 +63,7 @@ def count_circular_substructures(smiles):
     bit_info_counter = defaultdict(int) 
     # substrucure_radius = {}
     
-    atom_to_bit_infos, all_bit_infos = get_fragments_for_each_atom_idx(smiles)
+    atom_to_bit_infos, all_bit_infos = get_bitInfos_for_each_atom_idx(smiles)
     if atom_to_bit_infos is None:
         return bit_info_counter
     
@@ -82,20 +82,16 @@ def count_circular_substructures(smiles):
 #     return count_circular_substructures(smile)
 
 
-# def save_frags_for_file(f):
-#     number_part = f.split('/')[-1]
-#     idx = int(number_part.split(".")[0])
-#     smile = smiles_dict[idx]
-#     try:
-#         count, _ = count_circular_substructures(smile)
-#     except ValueError:
-#         print(f"Failed to parse {f}\n\n")
-#         exit(0)
-#         return None
+def save_frags_for_file(f):
+    number_part = f.split('/')[-1]
+    idx = int(number_part.split(".")[0])
+    smile = smiles_dict[idx]
+    bit_info_counter = count_circular_substructures(smile)
+   
   
-#     torch.save(list(count.keys()), f)
+    torch.save(list(bit_info_counter.keys()), f)
     
-#     return None
+    return None
 
 def merge_counts(counts_list):
     """Merges multiple word count dictionaries."""
@@ -151,26 +147,25 @@ def get_all_fragments_from_all_smiles_in_retrieval_dataset():
     with open(save_path, "wb") as f:
         pickle.dump(final_frags_count, f)
    
-# def generate_frags():
+def generate_frags():
 
-#     for dataset, index_souce in zip(DATASETS, DATASET_INDEX_SOURCE):
-#         for split in ["test", "val", "train"]:
-#             os.makedirs(DATASET_root_path / f"{dataset}/{split}/fragments_of_different_radii", exist_ok=True)
-#             global smiles_dict
-#             smiles_dict = pickle.load(open( DATASET_root_path / f"{dataset}/{split}/SMILES/index.pkl", "rb"))
-#             files = os.listdir( DATASET_root_path / f"{dataset}/{split}/{index_souce}")
-#             files = [ f"{DATASET_root_path}/{dataset}/{split}/fragments_of_different_radii/{f}" for f in files]
+    for dataset, index_souce in zip(DATASETS, DATASET_INDEX_SOURCE):
+        for split in ["test", "val", "train"]:
+            os.makedirs(DATASET_root_path / f"{dataset}/{split}/fragments_of_different_radii", exist_ok=True)
+            global smiles_dict
+            smiles_dict = pickle.load(open( DATASET_root_path / f"{dataset}/{split}/SMILES/index.pkl", "rb"))
+            files = os.listdir( DATASET_root_path / f"{dataset}/{split}/{index_souce}")
+            files = [ f"{DATASET_root_path}/{dataset}/{split}/fragments_of_different_radii/{f}" for f in files]
             
-#             with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
-#                 for _ in tqdm.tqdm(pool.imap_unordered(save_frags_for_file, files), total=len(files), desc=f"Processing files {dataset}/{split}/"):
-#                     pass
+            with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+                for _ in tqdm.tqdm(pool.imap_unordered(save_frags_for_file, files), total=len(files), desc=f"Processing files {dataset}/{split}/"):
+                    pass
             
             
                     
    
 if __name__ == "__main__":
-    get_all_fragments_from_all_smiles_in_retrieval_dataset()
-    # get_all_train_set_fragments() # generate fragments for the entire training set
+    # get_all_fragments_from_all_smiles_in_retrieval_dataset()
     
-    # generate_frags() # generate fragments detail for each smiles in our dataset
+    generate_frags() # generate fragments detail for each smiles in our dataset
     # (count_circular_substructures('COC(=O)c1c(O)cc(OC)c(CC=C(C)CCC=C(C)C)c1O'))
