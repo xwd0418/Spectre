@@ -10,9 +10,13 @@ from pathlib import Path
 def find_checkpoint_path_entropy_on_hashes_FP(model_type):
     match model_type:
         case "C-NMR":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
         case "HSQC":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_hsqc_trial_2/checkpoints/epoch=61-step=53134.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_hsqc_trial_2/checkpoints/epoch=61-step=53134.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_hsqc_trial_1/checkpoints/epoch=82-step=71131.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_flexible_MW/r0_r6_trial_1/checkpoints/epoch=99-only_hsqc.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/all_HSQC_jittering_search/only_hsqc_jittering_1/checkpoints/epoch=89-step=19350.ckpt")
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
         
@@ -82,8 +86,8 @@ def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=Fal
     del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
     # hparams['use_peak_values'] = False
     hparams['num_workers'] = 0
-    model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
     fp_loader = fp_loader_configer.fp_loader
+    model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, fp_loader = fp_loader,  **hparams)
     max_radius = int(hparams['FP_choice'].split("_")[-1])
     fp_loader.setup(hparams['out_dim'], max_radius)
     
@@ -150,7 +154,7 @@ def get_test_loader(model_type, should_shuffle_loader, hparams):
     #     input_src=["HSQC"]
     # else:
     #     input_src=["HSQC", "oneD_NMR"]
-    datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=1, parser_args=hparams)
+    datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], fp_loader = fp_loader_configer.fp_loader, batch_size=1, parser_args=hparams)
     datamodule.setup("predict")
     loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
         datamodule.predict_dataloader(shuffle=should_shuffle_loader)
@@ -193,7 +197,6 @@ def unpack_inputs_no_delimiter(inputs, NMR_type_indicator):
     unique_values, indices = torch.unique_consecutive(NMR_type_indicator, return_inverse=True)
 
     # Compute start and end positions
-    print(unique_values)
     indices_location = {}
     for value in unique_values:
         positions = (NMR_type_indicator == value).nonzero(as_tuple=True)[0]

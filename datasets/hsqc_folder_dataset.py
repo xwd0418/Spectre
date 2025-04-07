@@ -29,9 +29,9 @@ class FolderDataset(Dataset):
         - ...
         
     '''
-    def __init__(self, dir, split="train", input_src=["HSQC"], FP_choice="", parser_args=None):
-        from datasets.dataset_utils import fp_loader_configer
-        self.fp_loader = fp_loader_configer.fp_loader
+    def __init__(self, dir, split="train", input_src=["HSQC"], FP_choice="", parser_args=None, fp_loader=None):
+        
+        self.fp_loader = fp_loader
 
         self.dir = os.path.join(dir, split)
         self.split = split
@@ -125,9 +125,10 @@ class FolderDataset(Dataset):
             # hsqc is empty tensor
             hsqc = torch.empty(0,3)
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
-            if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
+            if self.parser_args['jittering'] >0 and self.split=="train":
+                jittering = self.parser_args['jittering']
+                c_tensor = c_tensor + torch.randn_like(c_tensor) * jittering
+                h_tensor = h_tensor + torch.randn_like(h_tensor) * jittering * 0.1
                 
             # input dropout
             if self.parser_args['optional_inputs'] and len(c_tensor) > 0 and len(h_tensor) > 0:
@@ -155,9 +156,10 @@ class FolderDataset(Dataset):
             # Load HSQC as sequence
             elif "HSQC" in self.input_src:
                 hsqc = torch.load(f"{self.dir}/HSQC/{self.files[i]}").type(torch.FloatTensor)
-                if self.parser_args['jittering'] == "normal" and self.split=="train":
-                    hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) * 0.1
-                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * 0.01
+                if self.parser_args['jittering'] >0  and self.split=="train":
+                    jittering = self.parser_args['jittering']
+                    hsqc[:,0] = hsqc[:,0] + torch.randn_like(hsqc[:,0]) * jittering
+                    hsqc[:,1] = hsqc[:,1] + torch.randn_like(hsqc[:,1]) * jittering * 0.1
             
                 if self.parser_args['use_peak_values']:
                     hsqc = normalize_hsqc(hsqc)
@@ -167,9 +169,10 @@ class FolderDataset(Dataset):
             if "oneD_NMR" in self.input_src:
                 if file_exist("oneD_NMR", self.files[i]):
                     c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
-                    if self.parser_args['jittering'] == "normal" and self.split=="train":
-                        c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
-                        h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
+                    if self.parser_args['jittering'] >0 and self.split=="train":
+                        jittering = self.parser_args['jittering']
+                        c_tensor = c_tensor + torch.randn_like(c_tensor) * jittering
+                        h_tensor = h_tensor + torch.randn_like(h_tensor) * jittering * 0.1
                     # randomly drop 1D and 2D NMRs if needed
                     if self.parser_args['optional_inputs']:
                         # DO NOT drop 2D, cuz we have enough amount of 1D data 
@@ -416,9 +419,10 @@ def normalize_hsqc(hsqc, style="minmax"):
     
 
 class FolderDataModule(pl.LightningDataModule):
-    def __init__(self, dir, FP_choice, input_src, batch_size: int = 32,  parser_args=None, persistent_workers = True):
+    def __init__(self, dir, FP_choice, input_src, fp_loader, batch_size: int = 32,  parser_args=None, persistent_workers = True):
         super().__init__()
         self.batch_size = batch_size
+        self.fp_loader = fp_loader
         self.dir = dir
         self.FP_choice = FP_choice
         self.input_src = input_src
@@ -428,10 +432,10 @@ class FolderDataModule(pl.LightningDataModule):
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
-            self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="train", parser_args=self.parser_args)
-            self.val = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src,split="val", parser_args=self.parser_args)
+            self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src=self.input_src, split="train", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.val = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src=self.input_src, split="val", parser_args=self.parser_args, fp_loader=self.fp_loader)
         if stage == "test":
-            self.test = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="test", parser_args=self.parser_args)
+            self.test = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src=self.input_src, split="test", parser_args=self.parser_args, fp_loader=self.fp_loader)
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
 

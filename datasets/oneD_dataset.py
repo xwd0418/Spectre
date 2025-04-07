@@ -28,9 +28,8 @@ class OneDDataset(FolderDataset):
         - ...
         
     '''
-    def __init__(self, dir, split="train", FP_choice="", parser_args=None):
-        from datasets.dataset_utils import fp_loader_configer
-        self.fp_loader = fp_loader_configer.fp_loader
+    def __init__(self, dir, split="train", FP_choice="", parser_args=None, fp_loader=None):
+        self.fp_loader = fp_loader
         
         self.dir = os.path.join(dir, split)
         self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
@@ -106,24 +105,22 @@ class OneDDataset(FolderDataset):
     def __getitem__(self, idx):
         hsqc = torch.empty(0,3)
         
+        # No need to use optional inputs for 1D dataset 
         if idx >= len(self.files): # load 1D dataset
             i = idx - len(self.files)
             # hsqc is empty tensor   
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
-            if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
-            # No need to use optional inputs for 1D dataset 
+            
             
         else :
             ### BEGINNING 2D dataset case
             i = idx
             c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
-            if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) * 0.1
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.01
-            # Again, no need to use optional inputs for 1D dataset
-            ### ENDING 2D dataset case
+            
+        if self.parser_args['jittering'] >0 and self.split=="train":
+            jittering = self.parser_args['jittering']
+            c_tensor = c_tensor + torch.randn_like(c_tensor) * jittering
+            h_tensor = h_tensor + torch.randn_like(h_tensor) * jittering * 0.1
             
         if self.parser_args['only_C_NMR']:
             h_tensor = torch.tensor([]) 
@@ -187,7 +184,7 @@ class OneDDataset(FolderDataset):
     
 
 class  OneDDataModule(pl.LightningDataModule):
-    def __init__(self, dir, FP_choice, batch_size: int = 32, parser_args=None):
+    def __init__(self, dir, FP_choice, fp_loader, batch_size: int = 32, parser_args=None):
         super().__init__()
         self.batch_size = batch_size
         self.dir = dir
@@ -197,10 +194,10 @@ class  OneDDataModule(pl.LightningDataModule):
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
-            self.train = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="train", parser_args=self.parser_args)
-            self.val = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="val", parser_args=self.parser_args)
+            self.train = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="train", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.val = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="val", parser_args=self.parser_args, fp_loader=self.fp_loader)
         if stage == "test":
-            self.test = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="test", parser_args=self.parser_args)
+            self.test = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="test", parser_args=self.parser_args, fp_loader=self.fp_loader)
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
 

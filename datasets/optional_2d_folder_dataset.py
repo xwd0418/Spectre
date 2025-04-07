@@ -12,9 +12,8 @@ repo_path = pathlib.Path(__file__).resolve().parents[1]
 
 
 class All_Info_Dataset(FolderDataset):
-    def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False, show_smiles=False):
-        from datasets.dataset_utils import fp_loader_configer
-        self.fp_loader = fp_loader_configer.fp_loader
+    def __init__(self, dir, FP_choice, split, oneD_type, parser_args, has_HSQC = False, show_smiles=False, fp_loader=None):
+        self.fp_loader = fp_loader
         
         self.dir = os.path.join(dir, split)
         self.fp_suffix = FP_choice
@@ -106,40 +105,41 @@ class All_Info_Dataset(FolderDataset):
 
 
 class OptionalInputDataModule(FolderDataModule):
-    def __init__(self, dir, FP_choice, input_src, batch_size: int = 32, parser_args=None):
-        super().__init__(dir, FP_choice, input_src, batch_size, parser_args)
+    def __init__(self, dir, FP_choice, input_src, fp_loader, batch_size: int = 32, parser_args=None):
+        super().__init__(dir, FP_choice, input_src, fp_loader, batch_size, parser_args)
+        self.fp_loader = fp_loader
         self.collate_fn = collate_to_filter_bad_sample_and_pad
         
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
-            self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="train", parser_args=self.parser_args)
+            self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src = self.input_src, split="train", parser_args=self.parser_args,  fp_loader=self.fp_loader)
             
-            self.val_all_inputs = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True)
-            self.val_only_hsqc  = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True)
-            self.val_only_1d    = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both",  parser_args=self.parser_args)
-            self.val_only_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="H_NMR", parser_args=self.parser_args)
-            self.val_HSQC_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True)
-            self.val_only_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="C_NMR", parser_args=self.parser_args)
-            self.val_HSQC_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True)
+            self.val_all_inputs = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
+            self.val_only_hsqc  = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
+            self.val_only_1d    = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="both",  parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.val_only_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="H_NMR", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.val_HSQC_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
+            self.val_only_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="C_NMR", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.val_HSQC_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="val", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
 
         if stage == "test":
-            self.test_all_inputs = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True)
-            self.test_only_hsqc  = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True)
-            self.test_only_1d    = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args)
-            self.test_only_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args)
-            self.test_HSQC_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True)
-            self.test_only_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args)
-            self.test_HSQC_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True)
+            self.test_all_inputs = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
+            self.test_only_hsqc  = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
+            self.test_only_1d    = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.test_only_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.test_HSQC_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
+            self.test_only_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.test_HSQC_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True, fp_loader=self.fp_loader)
             
             
         if stage == "predict":
-            self.predict_stage_all_inputs = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
-            self.predict_stage_only_hsqc  = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
-            self.predict_stage_only_1d    = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, show_smiles=True)
-            self.predict_stage_only_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, show_smiles=True)
-            self.predict_stage_HSQC_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
-            self.predict_stage_only_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, show_smiles=True)
-            self.predict_stage_HSQC_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True, show_smiles=True)
+            self.predict_stage_all_inputs = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, has_HSQC=True, show_smiles=True, fp_loader=self.fp_loader)
+            self.predict_stage_only_hsqc  = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type=None,    parser_args=self.parser_args, has_HSQC=True, show_smiles=True, fp_loader=self.fp_loader)
+            self.predict_stage_only_1d    = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="both",  parser_args=self.parser_args, show_smiles=True, fp_loader=self.fp_loader)
+            self.predict_stage_only_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, show_smiles=True, fp_loader=self.fp_loader)
+            self.predict_stage_HSQC_H_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="H_NMR", parser_args=self.parser_args, has_HSQC=True, show_smiles=True, fp_loader=self.fp_loader)
+            self.predict_stage_only_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, show_smiles=True, fp_loader=self.fp_loader)
+            self.predict_stage_HSQC_C_NMR = All_Info_Dataset(dir=self.dir, FP_choice=self.FP_choice, split="test", oneD_type="C_NMR", parser_args=self.parser_args, has_HSQC=True, show_smiles=True, fp_loader=self.fp_loader)
             
 
     def train_dataloader(self):

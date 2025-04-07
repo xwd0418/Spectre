@@ -11,8 +11,7 @@ import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.loggers import CSVLogger
-
+from pytorch_lightning.utilities.model_summary import summarize
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch.distributed as dist
 
@@ -29,7 +28,8 @@ from utils.NP_classwise_accu_plot import plot_result_dict_by_sorted_names
 import argparse
 from argparse import ArgumentParser
 from functools import reduce
-from datasets.dataset_utils import  fp_loader_configer
+from datasets.dataset_utils import  FP_Loader_Configer
+fp_loader_configer = FP_Loader_Configer()
 
 
 import warnings
@@ -37,29 +37,8 @@ warnings.filterwarnings("ignore", category=FutureWarning, message="You are using
 warnings.filterwarnings("ignore", category=UserWarning, message="The PyTorch API of nested tensors is in prototype stage and will change in the near future.")
 
 
-def exp_string(expname, args):
-    """
-        Gets an experiment string with a format (expname_[time started]_[some hyperparameters])
-    """
-    def stringify(items, limit=True):
-        # max 8 params
-        if limit:
-            return "_".join(map(lambda x : f'{x[0]}={x[1]}', sorted(list(items), key=lambda x : x[0])[:8]))
-        else:
-            return "_".join(map(lambda x : f'{x[0]}={x[1]}', sorted(list(items), key=lambda x : x[0])))
-    all_grouped = set(reduce(lambda x, y: x.union(y), GROUPS))
-    filtered = [(hyparam, val) for hyparam, val in args if hyparam not in ALWAYS_EXCLUDE]
-    
-    grouped_params = [stringify(filter(lambda x: x[0] in g, filtered)) for g in GROUPS]
-    ungrouped_params = [stringify(filter(lambda x: x[0] not in all_grouped, filtered))]
-    ungrouped_params_unlimited = [stringify(filter(lambda x: x[0] not in all_grouped, filtered), limit=False)]
 
-    hierarchical = grouped_params + ungrouped_params
-    hierarchical_unlimited = grouped_params + ungrouped_params_unlimited
-    # limited hyperparameter experiment name, all hyperparameter string, expname + time
-    return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited), f"{expname}_[{get_curr_time()}]"
-
-def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
+def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args, fp_loader):
     """
         constructs data module based on model_type, and also outputs dimensions of dummy data
         (for graph visualization)
@@ -68,26 +47,26 @@ def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
     kwargs = args # vars(parser.parse_args())
 
     if args['optional_inputs']:
-        return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+        return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     # OneD datamodule is somewhat buggy, so we will not use hsqc_folder_dataset.py 
     if args['only_oneD_NMR']:
         # oned_dir = "/workspace/OneD_Only_Dataset"
         # here the choice is still SMILES_dataset, but infact, OneDDataset use both datasets
-        return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
+        return OneDDataModule(dir=choice, FP_choice=FP_choice, fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs) 
     if model_type == "double_transformer": # wangdong: not using it
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "CNN":
         num_channels = kwargs['num_input_channels']
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "transformer_2d1d":
         if kwargs['use_oneD_NMR_no_solvent']:
-            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
         else:
-            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     
     raise(f"No datamodule for model type {model_type}.")
 
@@ -100,14 +79,9 @@ def apply_args(parser, model_type):
     else:
         raise(f"No model for model type {model_type}.")
 
-def model_mux(parser, model_type, weights_path, freeze, args):
+def model_mux(parser, model_type, weights_path, freeze, args, fp_loader):
     logger = logging.getLogger('logging')
     kwargs = args.copy() #vars(parser.parse_args())
-    ranking_set_type = kwargs["FP_choice"] 
-    kwargs["ranking_set_path"] = DATASET_root_path / f"ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
-    # kwargs["ranking_set_path"] =  DATASET_root_path / f"ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets/val/rankingset.pt"   
-   
-    kwargs["ranking_set_path"] = str(kwargs["ranking_set_path"])
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
@@ -134,7 +108,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
         logger.info("[Main] Loading model from Weights")
     else: # or from scratch
         print(kwargs['modelname'])
-        model = model_class(**kwargs)
+        model = model_class(fp_loader, **kwargs)
         logger.info("[Main] Freshly initializing model")
 
     if freeze:
@@ -187,10 +161,10 @@ def add_parser_arguments( parser):
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
-    parser.add_argument("--bs", type=int, default=32)
-    parser.add_argument("--accumulate_grad_batches_num", type=int, default=4)
+    parser.add_argument("--bs", type=int, default=64)
+    parser.add_argument("--accumulate_grad_batches_num", type=int, default=2)
         
-    parser.add_argument("--patience", type=int, default=8)
+    parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--ds", type=str, default="")
     parser.add_argument("--num_workers", type=int, default=6)
     # for early stopping/model saving
@@ -219,7 +193,7 @@ def add_parser_arguments( parser):
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     parser.add_argument("--use_Jaccard",  type=lambda x:bool(str2bool(x)), default=False, help="using Jaccard similarity instead of cosine similarity")
-    parser.add_argument("--jittering",  type=str, default="None", help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
+    parser.add_argument("--jittering",  type=float, default=0, help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
     parser.add_argument("--rank_by_test_set",  type=lambda x:bool(str2bool(x)), default=False, help="rank by test set instead of entire set. only used during grid search")
     # count-based FP
     parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
@@ -272,7 +246,7 @@ if __name__ == '__main__':
     li_args = list(args.items())
     if args['foldername'] == "debug" or args['debug'] is True:
         args['debug'] = True
-        args["epochs"] = 3
+        args["epochs"] = 1
         
         
 
@@ -334,20 +308,14 @@ if __name__ == '__main__':
     out_path_final =      f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
     os.makedirs(out_path, exist_ok=True)
-    exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
-    if args["name_type"] == 0: # full hyperparameter string
-        path2 = exp_name
-    elif args["name_type"] == 1: # only experiment name and time
-        path2 = exp_time_string
-    else: # only experiment name parameter
-        path2 = args["expname"]
+   
+    path2 = args["expname"]
 
     # Logger setup
     my_logger = init_logger(out_path, path1, path2)
     
     my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
-    my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
     try:
         my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
     except:
@@ -384,37 +352,37 @@ if __name__ == '__main__':
         fp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
        
     
-    # Model and Data setup
-    model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
-    from pytorch_lightning.utilities.model_summary import summarize
-    my_logger.info(f"[Main] Model Summary: {summarize(model)}")
     
-    
-    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args)
-    tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
 
     # Trainer, callbacks
+    tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
     if args['optional_inputs']:
-        checkpoint_callbacks = []
-        my_logger.info("[Main] Using Optional Input")
-        for metric in  ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]:
-            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f'{args["metric"].replace("/", "_")}/{metric}', mode=metricmode,
-                                                           filename= "{epoch}-"+metric, save_top_k = 1) )
+        checkpoint_callback = cb.ModelCheckpoint(monitor=f'{args["metric"].replace("/", "_")}/only_hsqc', mode=metricmode, save_top_k = 1, save_last=False)
+
     else:
-        checkpoint_callbacks =[cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)]
+        checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=False, save_top_k = 1)
         
-    early_stop_metric = f'{args["metric"].replace("/", "_")}/all_inputs' if args['optional_inputs'] else args["metric"]
+    early_stop_metric = f'{args["metric"].replace("/", "_")}/only_hsqc' if args['optional_inputs'] else args["metric"]
     early_stopping = EarlyStopping(monitor=early_stop_metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
                          accelerator="auto",
                          logger=tbl, 
-                         callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
-                         strategy="fsdp" if torch.cuda.device_count() > 1 else "auto",
+                         callbacks=[early_stopping, lr_monitor, checkpoint_callback],
+                        #  strategy="fsdp" if torch.cuda.device_count() > 1 else "auto",
                          accumulate_grad_batches=args["accumulate_grad_batches_num"],
                         )
+    
+    # Model and Data setup
+    model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args, fp_loader)
+    
+    if trainer.global_rank == 0:
+        my_logger.info(f"[Main] Model Summary: {summarize(model)}")
+    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args, fp_loader)
+    
+    
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
         trainer.validate(model, data_module, )
@@ -426,7 +394,7 @@ if __name__ == '__main__':
         # model = HsqcRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)     
         args = hparams
 
-        model.change_ranker_for_testing()
+        model.setup_ranker()
 
         test_result = trainer.test(model, data_module, ckpt_path=checkpoint_path)
 
@@ -445,66 +413,76 @@ if __name__ == '__main__':
             pickle.dump(test_result, f)
         
     else:
-        
-        try:
-            
             # training
             my_logger.info("[Main] Begin Training!")
             trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
 
-            # testing
-            model.change_ranker_for_testing()
-            checkpoint_callback = checkpoint_callbacks[0]
-            # my_logger.info(f"[Main] my process rank: {os.getpid()}")
-            if not args['optional_inputs']:
+            # Ensure all processes synchronize before switching to test mode
+            trainer.strategy.barrier()
+
+            # Now, only rank 0 will proceed to test
+            if trainer.global_rank == 0:
+                
+                # testing
+                model.setup_ranker()
+                model.logger_should_sync_dist = False
+                
+                # my_logger.info(f"[Main] my process rank: {os.getpid()}")
+                trainer = pl.Trainer( devices = 1, accumulate_grad_batches=args["accumulate_grad_batches_num"])
                 my_logger.info(f"[Main] Validation metric {checkpoint_callback.monitor}, best score: {checkpoint_callback.best_model_score.item()}")
                 my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
+                all_test_results = [{}]
                 test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
                 test_result[0]['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
-                NP_classwise_accu = {k.split("/")[-1]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
-                img_path = pathlib.Path(checkpoint_callback.best_model_path).parents[1] / f"NP_class_accu.png"
-                plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
-                all_test_results = test_result
+                if not args['optional_inputs']:
                 
-            else:
-                # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
-                data_module.setup("test")
-                all_7_dataloaders = data_module.test_dataloader()
-                all_test_results = [{}]
-                model_paths = [checkpoint_callback.best_model_path for checkpoint_callback in checkpoint_callbacks]
-                model_monitors = [checkpoint_callback.monitor for checkpoint_callback in checkpoint_callbacks]
-                # for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
-                for loader_idx, (best_model_path, monitor, curr_dataloader) in enumerate(zip(model_paths, model_monitors, all_7_dataloaders)):
-                    model.only_test_this_loader(loader_idx=loader_idx)
-                    my_logger.info(f"[Main] Validation metric {checkpoint_callback.monitor}, best score: {checkpoint_callback.best_model_score.item()}")
-                    my_logger.info(f"[Main] Testing path {best_model_path}!")
-                    # my_logger.info(f"[Main]  monitor {monitor}!")
-                    test_result = trainer.test(model, data_module, ckpt_path=best_model_path)
-                    test_result[0][f'best_epoch_{monitor.split("/")[-1]}'] = best_model_path.split("/")[-1].split("-")[0]
-                    all_test_results[0].update(test_result[0])
-                    
-                    NP_classwise_accu = {k.split("/")[-2]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
-                    NMR_type = pathlib.Path(best_model_path).parts[-1].split(".")[0]
-                    img_path = pathlib.Path(best_model_path).parents[1] / f"NP_class_accu_{NMR_type}.png"
+                    NP_classwise_accu = {k.split("/")[-1]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
+                    img_path = pathlib.Path(checkpoint_callback.best_model_path).parents[1] / f"NP_class_accu.png"
                     plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
-                    
-            with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
-                pickle.dump(all_test_results, f)
+                    all_test_results = test_result
+                else:
+                    # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
+                    for loader_idx, NMR_type in enumerate(["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR", "only_C_NMR"]):
+                        model.only_test_this_loader(loader_idx=loader_idx)
+                        # test/rank_1_of_NP_class/Sesterterpenoids/HSQC_C_NMR
+                        NP_classwise_accu = {k.split("/")[-2]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k and NMR_type in k}
+                        img_path = pathlib.Path(checkpoint_callback.best_model_path).parents[1] / f"NP_class_accu_{NMR_type}.png"
+                        plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
+                    all_test_results = test_result
+                        
+                        
+                # else:
+                #     # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
+                #     data_module.setup("test")
+                #     all_7_dataloaders = data_module.test_dataloader()
+                #     # for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
+                #     for loader_idx, curr_dataloader in enumerate(all_7_dataloaders):
+                #         model.only_test_this_loader(loader_idx=loader_idx)
+                        
+                #         # my_logger.info(f"[Main]  monitor {monitor}!")
+                #         test_result = trainer.test(model, data_module, ckpt_path=best_model_path)
+                #         all_test_results[0].update(test_result[0])
+                        
+                #         NP_classwise_accu = {k.split("/")[-2]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
+                #         NMR_type = pathlib.Path(best_model_path).parts[-1].split(".")[0]
+                #         img_path = pathlib.Path(best_model_path).parents[1] / f"NP_class_accu_{NMR_type}.png"
+                #         plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
+                        
                 
-            
-            
-        except Exception as e:
-            my_logger.error(f"[Main] Error: {e}")
-            raise(e)
-        finally: #Finally move all content from out_path to out_path_final
-            my_logger.info("[Main] Done!")
-            # my_logger.info("[Main] test result: \n")
-            # my_logger.info(f"{test_result}")
-            for key, value in all_test_results[0].items():
-                my_logger.info(f"{key}: {value}")
-            os.system(f"cp -r {out_path}/* {out_path_final}/ ")
-            my_logger.info(f"[Main] Copied all content from {out_path} to {out_path_final}")
-            logging.shutdown()
+
+                with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
+                    pickle.dump(all_test_results, f)
+                    
+                
+    
+                my_logger.info("[Main] Done!")
+                # my_logger.info("[Main] test result: \n")
+                # my_logger.info(f"{test_result}")
+                for key, value in all_test_results[0].items():
+                    my_logger.info(f"{key}: {value}")
+                os.system(f"cp -r {out_path}/* {out_path_final}/ ")
+                my_logger.info(f"[Main] Copied all content from {out_path} to {out_path_final}")
+                logging.shutdown()
 
 
 
