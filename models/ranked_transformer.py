@@ -42,6 +42,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     def __init__(
         self,
         # model args
+        fp_loader,
         dim_model=128,
         dim_coords=[43, 43, 42],
         heads=8,
@@ -71,8 +72,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     ):
         super().__init__()
         
-        from datasets.dataset_utils import fp_loader_configer
-        self.fp_loader = fp_loader_configer.fp_loader
+        self.fp_loader = fp_loader
         
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
@@ -126,12 +126,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         elif FP_choice.startswith("pick_entropy"):
             self.radius = int(FP_choice.split("_")[-1][1:])
         
-        if self.rank_by_test_set:   
-            assert FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy") or FP_choice.startswith("pick_entropy"), "rank_by_test_set is True, but received unexpected FP_choice"
-            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("val", predefined_FP = FP_choice),
-                                             batch_size=self.bs, CE_num_class=self.num_class)
-        else:
-            self.change_ranker_for_inference()
+        self.ranker = None
 
         if save_params:
             print("HsqcRankedTransformer saving args")
@@ -222,6 +217,8 @@ class HsqcRankedTransformer(pl.LightningModule):
             for parameter in self.parameters():
                 parameter.requires_grad = False
         self.out_logger.info("[RankedTransformer] Initialized")
+
+    
 
     @staticmethod
     def add_model_specific_args(parent_parser, model_name=""):
@@ -339,7 +336,8 @@ class HsqcRankedTransformer(pl.LightningModule):
             preds, labels, self.ranker, loss, self.loss, thresh=0.0, 
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx,
-            use_Jaccard = self.use_Jaccard
+            use_Jaccard = self.use_Jaccard,
+            no_ranking = True
             )
         if type(self.validation_step_outputs)==list: # adapt for child class: optional_input_ranked_transformer
             self.validation_step_outputs.append(metrics)
@@ -445,18 +443,20 @@ class HsqcRankedTransformer(pl.LightningModule):
     def log(self, name, value, *args, **kwargs):
         # Set 'sync_dist' to True by default
         if kwargs.get('sync_dist') is None:
-            kwargs['sync_dist'] = kwargs.get(
-                'sync_dist', self.logger_should_sync_dist)
-        if name == "test/mean_rank_1":
-            print(kwargs,"\n\n")
+            kwargs['sync_dist'] = self.logger_should_sync_dist
+        # if name == "test/mean_rank_1":
+        #     print(kwargs,"\n\n")
         super().log(name, value, *args, **kwargs)
         
-    def change_ranker_for_testing(self):
-        if self.rank_by_test_set:
-            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test", predefined_FP = self.FP_choice),
-                                            batch_size=self.bs, CE_num_class=self.num_class)
+    def setup_ranker(self):
+        FP_choice = self.FP_choice
+        if self.rank_by_test_set:   
+            assert FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy") or FP_choice.startswith("pick_entropy"), "rank_by_test_set is True, but received unexpected FP_choice"
+            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test", predefined_FP = FP_choice),
+                                             batch_size=self.bs, CE_num_class=self.num_class)
+        else:
+            self.change_ranker_for_inference()
             
-        # else: # keep the same ranker
 
     def change_ranker_for_inference(self,):
         use_hyun_fp = self.FP_choice=="HYUN_FP"

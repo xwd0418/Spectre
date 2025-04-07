@@ -7,7 +7,8 @@ from inference.inference_utils import choose_model
 print(1)
 
 # load model 
-from datasets.dataset_utils import fp_loader_configer
+from datasets.dataset_utils import  FP_Loader_Configer
+fp_loader_configer = FP_Loader_Configer()
 
 fp_loader_configer.select_version("Hash_Entropy")
 

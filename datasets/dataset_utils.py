@@ -6,7 +6,7 @@ repo_path = pathlib.Path(__file__).resolve().parents[1]
 DATASET_root_path = pathlib.Path("/workspace/")
 from utils.matmul_precision_wrapper import set_float32_highest_precision
 
-from datasets.fp_loader_utils import fp_loader_configer
+from datasets.fp_loader_utils import FP_Loader_Configer, fp_loader_configer
 
 def pad(sequence):
   """
