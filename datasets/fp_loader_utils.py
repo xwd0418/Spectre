@@ -8,6 +8,18 @@ import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 DATASET_root_path = pathlib.Path("/workspace/")
 
+def isomeric_to_canonical_smiles(isomeric_smiles):
+    try:
+        mol = Chem.MolFromSmiles(isomeric_smiles)
+        Chem.RemoveStereochemistry( mol ) 
+    except:
+        # print(isomeric_smiles)
+        return None
+
+    canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
+    
+    return canonical_smiles
+
 # utils about entropy and MFP
 def compute_entropy(data, total_dataset_size, use_natural_log=False):
     # data: an array of counts of each bit, by default in the size of self.out_dim*(max_radius+1)
