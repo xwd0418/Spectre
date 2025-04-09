@@ -53,9 +53,13 @@ class RankingSet(torch.nn.Module):
         with torch.no_grad():
 
             if use_actaul_mw_for_retrival is not None:
+                import pickle
+                with open(f'/root/gurusmart/MorganFP_prediction/inference_data/coconut_loutus_hyun_training/inference_metadata_latest_RDkit.pkl', 'rb') as file:
+                    smiles_infos = pickle.load(file)
+                    
                 self.register_buffer(
                     "MWs",
-                    torch.load(file_path.replace("rankingset", "MW")).float(),
+                    torch.tensor([x[2] for x in smiles_infos]).float(),
                     persistent=False,
                 )
 
@@ -208,9 +212,9 @@ class RankingSet(torch.nn.Module):
         assert queries.size() == truths.size()
         if mw is not None:
             # filtering some mols in rankingset
-            if use_actaul_mw_for_retrival:
+            if use_actaul_mw_for_retrival: # user has provided the actual mw
                 idx_to_keep = torch.abs(mw[0] - self.MWs) < 20
-            else:
+            else:                           # 
                 idx_to_keep = torch.abs(self.MWs - mw[0]) / self.MWs < 0.2
             data = data[idx_to_keep]
 

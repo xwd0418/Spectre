@@ -9,6 +9,8 @@ from pathlib import Path
 ### model selection ###
 def find_checkpoint_path_entropy_on_hashes_FP(model_type):
     match model_type:
+        case "optional":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
         case "C-NMR":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
@@ -178,7 +180,9 @@ def get_test_loader(model_type, should_shuffle_loader, hparams):
             test_loader = loader_only_1d
         case "only_C-NMR_DTD":
             test_loader = loader_only_C_NMR
-            
+        
+        case "optional":
+            test_loader = loader_all_inputs
                         
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
