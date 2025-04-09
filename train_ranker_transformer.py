@@ -157,12 +157,12 @@ def add_parser_arguments( parser):
         
     parser.add_argument("modelname", type=str)
     parser.add_argument("--name_type", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=200)
+    parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
-    parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--accumulate_grad_batches_num", type=int, default=2)
+    parser.add_argument("--bs", type=int, default=32)
+    parser.add_argument("--accumulate_grad_batches_num", type=int, default=4)
         
     parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--ds", type=str, default="")

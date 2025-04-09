@@ -1,6 +1,19 @@
 import numpy as np
+import torch
 from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
+from rdkit.Chem import rdFingerprintGenerator
+
+morgan_generators = [rdFingerprintGenerator.GetMorganGenerator(radius=r, fpSize=2048) for r in range(3)]
+
+def generate_HYUN_FP(mol):
+    if type(mol) == str:
+        mol = Chem.MolFromSmiles(mol)
+    mol = Chem.AddHs(mol)
+    FPs = []
+    for radius in [0, 1, 2]:
+        FPs.append( torch.tensor(morgan_generators[radius].GetFingerprint(mol)) )
+    return torch.cat(FPs, dim=0)
 
 #FP used in this system uses different ranges for each radius to reduce bit collision. ie 0~2047 for radius 0, 2048~4095 for radius 1, and 4096~6143 for radius 2
 def FP_generator(SMILES,radi): # radi is radius for morgan fingerprint

@@ -1,6 +1,7 @@
 import numpy as np, pickle
 import torch
 from rdkit import Chem
+from rdkit.Chem import rdFingerprintGenerator
 
 import sys, pathlib
 
@@ -41,22 +42,25 @@ def convert_bits_positions_to_array(FP_on_bits, length):
     out[FP_on_bits] = 1
     return out
 
-from rdkit.Chem import rdFingerprintGenerator
-def generate_normal_FP_on_bits(mol, radius=2, length=6144):
+
+def generate_morgan_FP(mol, radius=2, length=6144):
+    if type(mol) == str:
+        mol = Chem.MolFromSmiles(mol)
+    mol = Chem.AddHs(mol) # add implicit Hs to the molecule
     gen = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=length)
-    ao = rdFingerprintGenerator.AdditionalOutput()
-    ao.AllocateBitInfoMap()
-    fp = gen.GetFingerprint(mol, additionalOutput=ao)
-    bitInfo = ao.GetBitInfoMap()
-    on_bits = np.array(list(bitInfo.keys()))
-    
-    # print("old way")
-    # # Dictionary to store information about which substructures contribute to setting which bits
-    # bitInfo = {}
-    # # Generate the fingerprint with bitInfo to track the substructures contributing to each bit
-    # fp = rdMolDescriptors.GetMorganFingerprintAsBitVect(mol, radius=radius, nBits=length, bitInfo=bitInfo)
-    # on_bits = np.array(fp.GetOnBits())
-    return on_bits
+ 
+    fp = gen.GetFingerprint(mol)
+    return np.array(fp)
+
+
+
+def generate_morgan_FP_on_bits(mol, radius=2, length=6144):
+    if type(mol) == str:
+        mol = Chem.MolFromSmiles(mol)
+    gen = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=length)
+ 
+    fp = gen.GetFingerprint(mol)
+    return np.array(fp.GetOnBits())
 
 # define abstract class for FP loader
 class FP_loader():
@@ -187,7 +191,7 @@ class Specific_Radius_MFP_loader(FP_loader):
             mol_H = Chem.AddHs(mol) # add implicit Hs to the molecule
             all_plain_fps_on_bits = []
             for radius in range(num_plain_FPs):
-                all_plain_fps_on_bits.append(generate_normal_FP_on_bits(mol_H, radius=radius, length=self.single_FP_size) + radius*self.single_FP_size)
+                all_plain_fps_on_bits.append(generate_morgan_FP_on_bits(mol_H, radius=radius, length=self.single_FP_size) + radius*self.single_FP_size)
             FP_on_bits = np.concatenate(all_plain_fps_on_bits)
             
             mfp = convert_bits_positions_to_array(FP_on_bits, self.single_FP_size*16)
