@@ -9,6 +9,8 @@ from pathlib import Path
 ### model selection ###
 def find_checkpoint_path_entropy_on_hashes_FP(model_type):
     match model_type:
+        case "backend":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/epoch=73-step=16724.ckpt")
         case "optional":
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
         case "C-NMR":

@@ -12,7 +12,7 @@ def retrieve_by_rankingset(data, prediction_query, smiles_and_names):
 
     results = []
     query_products = (data @ query)
-    values, indices = torch.topk(query_products,k=1000)
+    values, indices = torch.topk(query_products,k=500)
     # instead of topk, we will sort the values and get all
     # values, indices = torch.sort(query_products, descending=True)
     
@@ -26,30 +26,6 @@ def retrieve_by_rankingset(data, prediction_query, smiles_and_names):
   
     return ret
 
-def get_delimeter(delimeter_name):
-    match delimeter_name:
-        case "HSQC_start":
-            return torch.tensor([-1,-1,-1]).float()
-        case "HSQC_end":
-            return torch.tensor([-2,-2,-2]).float()
-        case "C_NMR_start":
-            return torch.tensor([-3,-3,-3]).float()
-        case "C_NMR_end":
-            return torch.tensor([-4,-4,-4]).float()
-        case "H_NMR_start":
-            return torch.tensor([-5,-5,-5]).float()
-        case "H_NMR_end":
-            return torch.tensor([-6,-6,-6]).float()
-        case "solvent_start":
-            return torch.tensor([-7,-7,-7]).float()
-        case "solvent_end":
-            return torch.tensor([-8,-8,-8]).float()
-        case "ms_start":
-            return torch.tensor([-12,-12,-12]).float()
-        case "ms_end":
-            return torch.tensor([-13,-13,-13]).float()
-        case _:
-            raise Exception(f"unknown {delimeter_name}")
 
 
 def build_input(hsqc=None, c_tensor=None, h_tensor=None, mw = 457.0, mode = "Default"):
