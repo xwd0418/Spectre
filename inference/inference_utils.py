@@ -12,7 +12,8 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
         case "backend":
             checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/epoch=73-step=16724.ckpt")
         case "optional":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW/r0_r6_trial_1/checkpoints/epoch=73-step=16724.ckpt")
         case "C-NMR":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
@@ -405,6 +406,20 @@ def build_input(compound_dir, mode = None, include_hsqc = True, include_c_nmr = 
             hsqc[:,2] = -hsqc[:,2]
     c_tensor = load_1d("C")
     h_tensor = load_1d("H")
+    with open(os.path.join(compound_dir, "mw.txt"), 'r') as file:
+            # Read the content of the file
+            content = file.read()
+            # Convert the content to a float
+            mw = float(content)
+            
+    NMR_type_indicator, inputs = get_inputs_and_indicators_from_NMR_tensors(include_hsqc, include_c_nmr, include_h_nmr, include_MW, hsqc, c_tensor, h_tensor, mw)
+    
+    # print(inputs)
+    # print(hsqc, c_tensor, h_tensor)
+    # plot_NMR(hsqc, c_tensor[:,0], h_tensor[:,0])
+    return inputs, NMR_type_indicator
+
+def get_inputs_and_indicators_from_NMR_tensors(include_hsqc, include_c_nmr, include_h_nmr, include_MW, hsqc, c_tensor, h_tensor, mw):
     input_NMRs = []
     NMR_type_indicator = []
     if include_hsqc:
@@ -418,21 +433,12 @@ def build_input(compound_dir, mode = None, include_hsqc = True, include_c_nmr = 
         NMR_type_indicator+= [2]*h_tensor.shape[0]
     inputs = torch.vstack(input_NMRs)   
     if include_MW:
-        with open(os.path.join(compound_dir, "mw.txt"), 'r') as file:
-            # Read the content of the file
-            content = file.read()
-            # Convert the content to a float
-            mw = float(content)
         mol_weight = torch.tensor([mw,0,0]).float()
         inputs = torch.vstack([inputs, mol_weight])
         input_NMRs.append(mol_weight)
         NMR_type_indicator.append(3)
     NMR_type_indicator = torch.tensor(NMR_type_indicator)
-    
-    # print(inputs)
-    # print(hsqc, c_tensor, h_tensor)
-    # plot_NMR(hsqc, c_tensor[:,0], h_tensor[:,0])
-    return inputs, NMR_type_indicator
+    return NMR_type_indicator,inputs
 
 
 def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
