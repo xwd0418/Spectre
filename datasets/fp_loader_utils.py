@@ -343,11 +343,11 @@ class Hash_Entropy_FP_loader(FP_loader):
     def build_rankingset(self, split, predefined_FP=None):
         return super().build_rankingset(split, predefined_FP)
 
-    def build_mfp_for_new_SMILES(self, smiles):
+    def build_mfp_for_new_SMILES(self, smiles, ignoreAtoms = []):
         from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import count_circular_substructures
         mfp = np.zeros(self.out_dim)
         
-        bitInfos_with_count = count_circular_substructures(smiles)
+        bitInfos_with_count = count_circular_substructures(smiles, ignoreAtoms = ignoreAtoms)
         for bitInfo in bitInfos_with_count:
             if bitInfo in self.bitInfos_to_fp_index_map:
                 mfp[self.bitInfos_to_fp_index_map[bitInfo]] = 1
