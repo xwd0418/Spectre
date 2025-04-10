@@ -258,13 +258,13 @@ def retrieve_top_k_by_dir(dir, prediction_query, smiles_and_names , k=30):
   
     return ret
 
-def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30, filter_by_MW=None, weight_pred = None):
+def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30, filter_by_MW=None, weighting_pred = None):
     # data means the rankingset data
     # Expect filter by MW to be [lower_bnound, upper_bound]
     query = F.normalize(prediction_query, dim=1, p=2.0).squeeze()
     # print("query shape: ", query.shape, query.dtype)
-    if weight_pred is not None:
-        query = query * weight_pred
+    if weighting_pred is not None:
+        query = query * weighting_pred
         # print("query shape after weight: ", query.shape, query.dtype)
     results = []
     query_products = (data @ query)
@@ -446,7 +446,8 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                    fp_type = "MFP_Specific_Radius",
                    filter_by_MW=None,
                    verbose=True,
-                   weight_pred = None
+                   weighting_pred = None,
+                   infer_in_backend_service = False
                    ):
     """
     Run inference on a given input tensor and visualize the top-k retrieved molecules.
@@ -458,6 +459,9 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
 
     returning_smiles = []
     returning_names = []
+    returning_imgs = []
+    returning_values = []
+    returning_MWs = []
     inputs = inputs.unsqueeze(0).to(model.device)
     NMR_type_indicator = NMR_type_indicator.to(model.device)
     rankingset_data = rankingset_data.to(model.device)
@@ -473,11 +477,11 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
         filter_by_MW = [mw_from_input*0.8, mw_from_input*1.2]
     if filter_by_MW is not None and type(filter_by_MW) != list:
         raise ValueError("filter_by_MW must be a list of two elements, or 'from_input' or None!")
-    topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k, filter_by_MW=filter_by_MW, weight_pred = weight_pred)
+    topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k, filter_by_MW=filter_by_MW, weighting_pred = weighting_pred)
        
     i=0
-    for value, (smile, name, _, _), retrieved_FP in topk:
-        if verbose:
+    for value, (smile, name, mw, _), retrieved_FP in topk:
+        if verbose or infer_in_backend_service:
             mol = Chem.MolFromSmiles(smile)
     
             if fp_type == "MFP_Specific_Radius":
@@ -486,19 +490,26 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                 img = show_retrieved_mol_with_highlighted_frags(retrieved_FP, smile)
             else:
                 raise ValueError("fp_type must be either MFP_Specific_Radius or DB_Specific_Radius")
-        
-            print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
-            if ground_truth_FP is not None:
-                print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()).item())
 
-            print(f"SMILES: {smile}") 
-            print(f"Name {name}")
-            img.show()
+            if verbose:
+                print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
+                if ground_truth_FP is not None:
+                    print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()).item())
+
+                print(f"SMILES: {smile}") 
+                print(f"Name {name}")
+                img.show()
+            if infer_in_backend_service:
+                returning_MWs.append(mw)
+                returning_imgs.append(img)
+                returning_values.append(value.item())
         i+=1
         returning_smiles.append(smile)
         returning_names.append(name)
+    if returning_imgs:
+        return returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values
     return returning_smiles, returning_names
-        
+
 ### save visualization as PNG 
 
 def visualize_smiles(smiles_list, name_list, file_path):

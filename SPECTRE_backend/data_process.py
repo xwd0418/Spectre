@@ -28,36 +28,6 @@ def retrieve_by_rankingset(data, prediction_query, smiles_and_names):
 
 
 
-def build_input(hsqc=None, c_tensor=None, h_tensor=None, mw = 457.0, mode = "Default"):
-    '''
-    hsqc, c_tensor, h_tensor are either None or torch.tensor
-    will return the stacked input tensor as transformer input
-    '''
-    
-    if hsqc is not None:
-        if mode == "no_sign":
-            hsqc = torch.abs(hsqc)
-        elif mode == "flip_sign":
-            hsqc[:,2] = -hsqc[:,2]
-            
-    if hsqc is None:
-        hsqc = torch.empty(0,3)
-          
-    if c_tensor is None: 
-        c_tensor = torch.empty(0,3)
-    if h_tensor is None:
-        h_tensor = torch.empty(0,3)
-    
-    inputs = torch.vstack([
-                    get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-                    get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-                    get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-                    ])   
-
-    mol_weight = torch.tensor([mw,0,0]).float()
-    # print(inputs)
-    return torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
-
 def convert_to_tensor_1d_nmr(tensor_1d):
     try:
         if tensor_1d == "":

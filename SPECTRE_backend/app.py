@@ -23,13 +23,16 @@ import sys, pathlib
 root_path = pathlib.Path(__file__).resolve().parents[2]
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(repo_path))
-from datasets.dataset_utils import specific_radius_mfp_loader
-from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
+# from datasets.dataset_utils import specific_radius_mfp_loader
+# from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 
 
 # helper functions 
 from data_process import retrieve_by_rankingset, build_input, plot_NMR, convert_to_tensor_1d_nmr
 from flask_utils import build_actual_response
+
+from inference.inference_utils import inference_topK, get_inputs_and_indicators_from_NMR_tensors
+
 
 app = Flask(__name__)
 CORS(app)
@@ -42,29 +45,42 @@ def basic_authentication():
         return Response()
     
 '''for a single model, show top-5'''
-def show_topK(inputs, k=5, MW_range = None):
-    inputs = inputs.unsqueeze(0)
-    pred = model(inputs)
-    pred = torch.sigmoid(pred) # sigmoid
-    # pred_FP = torch.where(pred.squeeze()>0.5, 1, 0)
-
-    sorted_retrievals = retrieve_by_rankingset(rankingset_data, pred, smiles_and_names)
-    
-    i=0
+def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
     retrievals_to_return = []
-    for ite, (value, (smile, name, mw, db_name), retrieved_FP) in enumerate(sorted_retrievals):
+    # inputs = inputs.unsqueeze(0)
+    # pred = model(inputs)
+    # pred = torch.sigmoid(pred) # sigmoid
+    # # pred_FP = torch.where(pred.squeeze()>0.5, 1, 0)
+
+    # sorted_retrievals = retrieve_by_rankingset(rankingset_data, pred, smiles_and_names)
+    
+    # i=0
+    # for ite, (value, (smile, name, mw, db_name), retrieved_FP) in enumerate(sorted_retrievals):
+    #     if MW_range is not None:
+    #         if mw < MW_range[0] or mw > MW_range[1]:
+    #             continue
+    #     print(f"_retival #{i+1}, retrival cosine similarity to prediction: {value.item()}_")
+    #     mol = Chem.MolFromSmiles(smile)
+    #     # print("retrived FP", retrieved_FP.squeeze().tolist())
+       
+    #     # print(f"SMILES: {smile}")
+    #     # print(f"Name {name}")
+
+    #     img = Draw.MolToImage(mol)
+        
+    returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values =  inference_topK(
+        inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
+            k=5, mode = None, ground_truth_FP=None,
+            fp_type = "DB_Specific_Radius",
+            filter_by_MW=None,
+            verbose=False,
+            weight_pred = None,
+            infer_in_backend_service = True
+    )
+    for smile, name, img, mw, cos_value in zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values):
         if MW_range is not None:
             if mw < MW_range[0] or mw > MW_range[1]:
                 continue
-        print(f"_retival #{i+1}, retrival cosine similarity to prediction: {value.item()}_")
-        mol = Chem.MolFromSmiles(smile)
-        # print("retrived FP", retrieved_FP.squeeze().tolist())
-       
-        # print(f"SMILES: {smile}")
-        # print(f"Name {name}")
-
-        img = Draw.MolToImage(mol)
-        
         buffered = BytesIO()
         img.save(buffered, format="PNG")
         img_bytes = buffered.getvalue()
@@ -75,7 +91,7 @@ def show_topK(inputs, k=5, MW_range = None):
         retrievals_to_return.append({"smile": smile, 
                               "name": name, 
                               "MW": mw,
-                              "cos": value.item(),
+                              "cos": cos_value.item(),
                               "image": img_base64})
         if i == k:
             break
@@ -124,8 +140,14 @@ def generate_image():
     c_tensor = None if C_NMR=="" else convert_to_tensor_1d_nmr(C_NMR) 
     h_tensor = None if H_NMR=="" else convert_to_tensor_1d_nmr(H_NMR)
     
-    inputs = build_input(hsqc, c_tensor, h_tensor, float(mw))
-    retrieved_molecules = show_topK(inputs, k=k, MW_range = mw_range)
+    NMR_type_indicator, inputs = get_inputs_and_indicators_from_NMR_tensors(
+        include_hsqc = hsqc is not None, 
+        include_c_nmr = c_tensor is not None, 
+        include_h_nmr = h_tensor is not None,
+        include_MW = mw != "",
+        hsqc = hsqc, c_tensor = c_tensor, h_tensor = h_tensor, mw = float(mw) if mw != "" else None,
+    )
+    retrieved_molecules = show_topK(inputs, NMR_type_indicator, k=k, MW_range = mw_range)
     nmr_fig_str= plot_NMR(hsqc, c_tensor, h_tensor)
     res = jsonify({'retrievals': retrieved_molecules, "NMR_plt": nmr_fig_str})
     return build_actual_response(res)
