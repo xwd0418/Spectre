@@ -1,3 +1,9 @@
+import pathlib
+import yaml
+
+DATASET_root_path = pathlib.Path("/workspace/")
+curr_exp_folder_name = "entropy_on_hashes"
+
 import logging, os, sys, torch
 import random, pickle
 import numpy as np
@@ -5,8 +11,7 @@ import pytorch_lightning as pl
 import pytorch_lightning.callbacks as cb
 
 from pytorch_lightning.loggers import TensorBoardLogger
-from pytorch_lightning.loggers import CSVLogger
-
+from pytorch_lightning.utilities.model_summary import summarize
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import torch.distributed as dist
 
@@ -18,63 +23,50 @@ from datasets.hsqc_folder_dataset import FolderDataModule
 from datasets.oneD_dataset import OneDDataModule
 from datasets.optional_2d_folder_dataset import OptionalInputDataModule
 from utils.constants import ALWAYS_EXCLUDE, GROUPS, EXCLUDE_FROM_MODEL_ARGS, get_curr_time
+from utils.NP_classwise_accu_plot import plot_result_dict_by_sorted_names
 
 import argparse
 from argparse import ArgumentParser
 from functools import reduce
-from datasets.dataset_utils import specific_radius_mfp_loader
+from datasets.dataset_utils import  FP_Loader_Configer
+fp_loader_configer = FP_Loader_Configer()
 
 
-def exp_string(expname, args):
-    """
-        Gets an experiment string with a format (expname_[time started]_[some hyperparameters])
-    """
-    def stringify(items, limit=True):
-        # max 8 params
-        if limit:
-            return "_".join(map(lambda x : f'{x[0]}={x[1]}', sorted(list(items), key=lambda x : x[0])[:8]))
-        else:
-            return "_".join(map(lambda x : f'{x[0]}={x[1]}', sorted(list(items), key=lambda x : x[0])))
-    all_grouped = set(reduce(lambda x, y: x.union(y), GROUPS))
-    filtered = [(hyparam, val) for hyparam, val in args if hyparam not in ALWAYS_EXCLUDE]
-    
-    grouped_params = [stringify(filter(lambda x: x[0] in g, filtered)) for g in GROUPS]
-    ungrouped_params = [stringify(filter(lambda x: x[0] not in all_grouped, filtered))]
-    ungrouped_params_unlimited = [stringify(filter(lambda x: x[0] not in all_grouped, filtered), limit=False)]
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning, message="You are using `torch.load` with `weights_only=False`")
+warnings.filterwarnings("ignore", category=UserWarning, message="The PyTorch API of nested tensors is in prototype stage and will change in the near future.")
 
-    hierarchical = grouped_params + ungrouped_params
-    hierarchical_unlimited = grouped_params + ungrouped_params_unlimited
-    # limited hyperparameter experiment name, all hyperparameter string, expname + time
-    return f"{expname}_[{get_curr_time()}]_[{'_'.join(hierarchical)}]", '_'.join(hierarchical_unlimited), f"{expname}_[{get_curr_time()}]"
 
-def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args):
+
+def data_mux(parser, model_type, data_src, FP_choice, batch_size, ds, args, fp_loader):
     """
         constructs data module based on model_type, and also outputs dimensions of dummy data
         (for graph visualization)
     """
     choice = data_src
-    kwargs = vars(parser.parse_args())
+    kwargs = args # vars(parser.parse_args())
 
     if args['optional_inputs']:
-        return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+        return OptionalInputDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     # OneD datamodule is somewhat buggy, so we will not use hsqc_folder_dataset.py 
-    # if args['only_oneD_NMR']:
-    #     # oned_dir = "/workspace/OneD_Only_Dataset"
-    #     return OneDDataModule(dir=choice, FP_choice=FP_choice, batch_size=batch_size, parser_args=kwargs) 
-    # if model_type == "double_transformer": # wangdong: not using it
-    #     return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], batch_size=batch_size, parser_args=kwargs )
+    if args['only_oneD_NMR']:
+        # oned_dir = "/workspace/OneD_Only_Dataset"
+        # here the choice is still SMILES_dataset, but infact, OneDDataset use both datasets
+        return OneDDataModule(dir=choice, FP_choice=FP_choice, fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs) 
+    if model_type == "double_transformer": # wangdong: not using it
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "MS"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs )
     elif model_type == "hsqc_transformer":
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "CNN":
         num_channels = kwargs['num_input_channels']
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=[f"HSQC_images_{num_channels}channel"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "ms_transformer":
-        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], batch_size=batch_size, parser_args=kwargs)
+        return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["MS"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     elif model_type == "transformer_2d1d":
         if kwargs['use_oneD_NMR_no_solvent']:
-            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], batch_size=batch_size, parser_args=kwargs)
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC", "oneD_NMR"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
         else:
-            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], batch_size=batch_size, parser_args=kwargs)
+            return FolderDataModule(dir=choice, FP_choice=FP_choice, input_src=["HSQC"], fp_loader=fp_loader, batch_size=batch_size, parser_args=kwargs)
     
     raise(f"No datamodule for model type {model_type}.")
 
@@ -87,12 +79,9 @@ def apply_args(parser, model_type):
     else:
         raise(f"No model for model type {model_type}.")
 
-def model_mux(parser, model_type, weights_path, freeze, args):
+def model_mux(parser, model_type, weights_path, freeze, args, fp_loader):
     logger = logging.getLogger('logging')
-    kwargs = vars(parser.parse_args())
-    ranking_set_type = kwargs["FP_choice"] 
-    kwargs["ranking_set_path"] = f"/workspace/ranking_sets_cleaned_by_inchi/SMILES_{ranking_set_type}_ranking_sets_only_all_info_molecules/val/rankingset.pt"   
-   
+    kwargs = args.copy() #vars(parser.parse_args())
     for v in EXCLUDE_FROM_MODEL_ARGS:
         if v in kwargs:
             del kwargs[v]
@@ -119,7 +108,7 @@ def model_mux(parser, model_type, weights_path, freeze, args):
         logger.info("[Main] Loading model from Weights")
     else: # or from scratch
         print(kwargs['modelname'])
-        model = model_class(**kwargs)
+        model = model_class(fp_loader, **kwargs)
         logger.info("[Main] Freshly initializing model")
 
     if freeze:
@@ -153,10 +142,8 @@ def seed_everything(seed):
     np.random.seed(seed)
     random.seed(seed)
     # torch.use_deterministic_algorithms(True)
-    
-def main(optuna_params=None):
-    torch.set_float32_matmul_precision('medium')
 
+def add_parser_arguments( parser):
     def str2bool(v):    
         # specifically used for arg-paser with boolean values
         if isinstance(v, bool):
@@ -167,31 +154,33 @@ def main(optuna_params=None):
             return False
         else:
             raise argparse.ArgumentTypeError('Boolean value expected.')    
-
-    # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
-    parser = ArgumentParser(add_help=True)
+        
     parser.add_argument("modelname", type=str)
     parser.add_argument("--name_type", type=int, default=2)
-    parser.add_argument("--epochs", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")
     parser.add_argument("--expname", type=str, default=f"experiment")
     parser.add_argument("--datasrc", type=str, default=f"/workspace/SMILES_dataset")
-    parser.add_argument("--bs", type=int, default=64)
-    parser.add_argument("--patience", type=int, default=15)
+    parser.add_argument("--bs", type=int, default=32)
+    parser.add_argument("--accumulate_grad_batches_num", type=int, default=4)
+        
+    parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--ds", type=str, default="")
-    parser.add_argument("--num_workers", type=int, default=16)
+    parser.add_argument("--num_workers", type=int, default=6)
     # for early stopping/model saving
-    parser.add_argument("--metric", type=str, default="val/mean_rank_1")
+    parser.add_argument("--metric", type=str, default="val/mean_cos")
     parser.add_argument("--metricmode", type=str, default="max")
 
     parser.add_argument("--load_all_weights", type=str, default="")
     parser.add_argument("--freeze", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--validate", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--test", type=lambda x:bool(str2bool(x)), default=False)
+    parser.add_argument("--test_on_deepsat_retrieval_set", type=lambda x:bool(str2bool(x)), default=False)
+    
+    parser.add_argument("--debug", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
 
     # different versions of input/output
-    # parser.add_argument("--do_hyun_FP", action='store_true', help="use HYUN_FP, otherwise use default R2-6144FP")
     parser.add_argument("--FP_choice", type=str, default="R2-6144FP", help="use which fingerprint as ground truth, default: r2-6144fp") 
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
@@ -204,14 +193,15 @@ def main(optuna_params=None):
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     parser.add_argument("--use_Jaccard",  type=lambda x:bool(str2bool(x)), default=False, help="using Jaccard similarity instead of cosine similarity")
-    parser.add_argument("--jittering",  type=str, default="None", help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
-    
+    parser.add_argument("--jittering",  type=float, default=0, help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
+    parser.add_argument("--rank_by_test_set",  type=lambda x:bool(str2bool(x)), default=False, help="rank by test set instead of entire set. only used during grid search")
     # count-based FP
     parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
     parser.add_argument("--loss_func",  type=str, default="MSE", help="either MSE or CE")
     
     # optional 2D input
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
+    parser.add_argument("--optional_MW",  type=lambda x:bool(str2bool(x)), default=False, help="also make molecular weight as optional input")
     parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
     parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
     parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
@@ -224,8 +214,21 @@ def main(optuna_params=None):
     
     # entropy based FP
     parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact")
-    parser.add_argument("--out_dim", type=int, default="6144", help="the size of output fingerprint to be predicted")
+    parser.add_argument("--out_dim", type=lambda x: int(x) if x.isdigit() else x, default="6144", help="the size of output fingerprint to be predicted. If set to inf, then use all fragements/bits")
+
+    # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
+    # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
+        
     
+if __name__ == '__main__':
+    torch.set_float32_matmul_precision('medium')
+
+    # dependencies: hyun_fp_data, hyun_pair_ranking_set_07_22
+    parser = ArgumentParser(add_help=True)
+    add_parser_arguments(parser)
+    
+    args = vars(parser.parse_known_args()[0])
+    apply_args(parser, args["modelname"])
     args = vars(parser.parse_known_args()[0])
     # if args['only_C_NMR'] or args['only_H_NMR']:
     #     assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
@@ -234,129 +237,253 @@ def main(optuna_params=None):
     if args['weighted_sample_based_on_input_type']:
         assert args['combine_oneD_only_dataset'] and args['optional_inputs'], "Only available for combined dataset"
     
-    if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-            only_2d = not args['use_oneD_NMR_no_solvent']
-            FP_building_type = args['FP_building_type'].split("_")[-1]
-            specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
-            specific_radius_mfp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
-    
     seed_everything(seed=args["random_seed"])   
     
     # general args
-    apply_args(parser, args["modelname"])
+    # apply_args(parser, args["modelname"])
 
     # Model args
-    args_with_model = vars(parser.parse_known_args()[0])
-    li_args = list(args_with_model.items())
-    if args['foldername'] == "debug":
-        args["epochs"] = 2
+    li_args = list(args.items())
+    if args['foldername'] == "debug" or args['debug'] is True:
+        args['debug'] = True
+        args["epochs"] = 1
+        
+        
+
+    if args['test']:
+        checkpoint_path = pathlib.Path(args['checkpoint_path'])
+        model_path = checkpoint_path.parents[1]
+
+        def comment_out_problematic_yaml_lines(yaml_file_path, patterns_to_comment=None):
+            """
+            Comment out lines matching specific patterns in a YAML file.
+            
+            Args:
+                yaml_file_path (str): Path to the YAML file
+                patterns_to_comment (list): List of patterns to look for and comment out
+                
+            Returns:
+                str: Path to the new YAML file
+            """
+            clear_stage = False
+            if patterns_to_comment is None:
+                patterns_to_comment = ["!!python/object/apply:pathlib.PosixPath"]
+            
+            with open(yaml_file_path, 'r') as f:
+                lines = f.readlines()
+            
+            new_lines = []
+            for line in lines:
+                if not clear_stage:
+                    if any(pattern in line for pattern in patterns_to_comment):
+                        new_lines.append(f"# {line}")  # Comment out the line
+                        clear_stage = True
+                    else:
+                        new_lines.append(line)
+                else:
+                    if line.startswith("- "):
+                        new_lines.append(f"# {line}")
+                    else:
+                        new_lines.append(line)
+                        clear_stage = False
+            
+            # new_file_path = str(yaml_file_path).replace('.yaml', '_fixed.yaml')
+            with open(str(yaml_file_path), 'w') as f:
+                f.writelines(new_lines)
+
+    
+        hyperpaerameters_path = model_path / "hparams.yaml"
+
+        comment_out_problematic_yaml_lines(hyperpaerameters_path)
+        with open(hyperpaerameters_path, 'r') as file:
+            hparams = yaml.safe_load(file)
+        args.update(hparams)
+        args['test'] = True
+    
 
     # Tensorboard setup
-    # curr_exp_folder_name = 'NewRepoNewDataOldCode'
-    curr_exp_folder_name = "Jittering"
-    out_path       =      f"/workspace/reproduce_previous_works/{curr_exp_folder_name}"
-    # out_path =            f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
-    out_path_final =      f"/root/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    
+    out_path       =       DATASET_root_path / f"reproduce_previous_works/{curr_exp_folder_name}"
+    # out_path =            f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
+    out_path_final =      f"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/{curr_exp_folder_name}"
     os.makedirs(out_path_final, exist_ok=True)
     os.makedirs(out_path, exist_ok=True)
-    exp_name, hparam_string, exp_time_string = exp_string(args["expname"], li_args)
     path1 = args["foldername"]
-    if args["name_type"] == 0: # full hyperparameter string
-        path2 = exp_name
-    elif args["name_type"] == 1: # only experiment name and time
-        path2 = exp_time_string
-    else: # only experiment name parameter
-        path2 = args["expname"]
+   
+    path2 = args["expname"]
 
     # Logger setup
     my_logger = init_logger(out_path, path1, path2)
     
     my_logger.info(f'[Main] Output Path: {out_path}/{path1}/{path2}')
-    my_logger.info(f'[Main] Hyperparameters: {hparam_string}')
-    # my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    try:
+        my_logger.info(f'[Main] using GPU : {torch.cuda.get_device_name()}')
+    except:
+        my_logger.info(f'[Main] using GPU: unknown type')
     
-    # Model and Data setup
-    model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args)
-    from pytorch_lightning.utilities.model_summary import summarize
-    my_logger.info(f"[Main] Model Summary: {summarize(model)}")
+    # FP loader setup
+    if args['FP_choice'].startswith("Hash_Entropy"):
+        fp_loader_configer.select_version("Hash_Entropy")
+        fp_loader = fp_loader_configer.fp_loader
+        radius = int(args['FP_choice'].split("_")[-1])
+        fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
+        
+    elif args['FP_choice'].startswith("DB_specific_FP"):
+        fp_loader_configer.select_version("DB_Specific")
+        fp_loader = fp_loader_configer.fp_loader
+        
+        try:
+            radius = int(args['FP_choice'].split("_")[-1])
+        except ValueError:
+            my_logger.info("[Main] Cannot find radius in FP_choice, using default radius 10")
+            radius = 10
+        fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
+        if fp_loader.out_dim != args['out_dim']:
+            args['out_dim'] = fp_loader.out_dim
+    else:
+        fp_loader_configer.select_version("MFP_Specific_Radius")
+        fp_loader = fp_loader_configer.fp_loader
+            
+    if args['FP_choice'].startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
+        only_2d = False
+        FP_building_type = args['FP_building_type'].split("_")[-1]
+
+        fp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type, out_dim=args['out_dim'])
+        fp_loader.set_max_radius(int(args['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
+       
     
-    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args)
-    tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
+    
 
     # Trainer, callbacks
+    tbl = TensorBoardLogger(save_dir=out_path, name=path1, version=path2)
     metric, metricmode, patience = args["metric"], args["metricmode"], args["patience"]
     if args['optional_inputs']:
-        checkpoint_callbacks = []
-        my_logger.info("[Main] Using Optional Input")
-        # metric = "val_mean_rank_1/all_nmr_combination_avg" # essientially the same as mean_rank_1, just naming purposes
-        for metric in  ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]:
-            checkpoint_callbacks.append(cb.ModelCheckpoint(monitor=f"val_mean_rank_1/{metric}", mode=metricmode,
-                                                           filename= "{epoch}-"+metric)) 
+        checkpoint_callback = cb.ModelCheckpoint(monitor=f'{args["metric"].replace("/", "_")}/only_hsqc', mode=metricmode, save_top_k = 1, save_last=False)
+
     else:
-        checkpoint_callbacks =[cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=True, save_top_k = 1)]
+        checkpoint_callback = cb.ModelCheckpoint(monitor=metric, mode=metricmode, save_last=False, save_top_k = 1)
         
-    early_stop_metric = 'val_mean_rank_1/all_inputs' if args['optional_inputs'] else args["metric"]
+    early_stop_metric = f'{args["metric"].replace("/", "_")}/only_hsqc' if args['optional_inputs'] else args["metric"]
     early_stopping = EarlyStopping(monitor=early_stop_metric, mode=metricmode, patience=patience)
     lr_monitor = cb.LearningRateMonitor(logging_interval="step")
     trainer = pl.Trainer(
                          max_epochs=args["epochs"],
                          accelerator="auto",
                          logger=tbl, 
-                         callbacks=[early_stopping, lr_monitor]+checkpoint_callbacks,
+                         callbacks=[early_stopping, lr_monitor, checkpoint_callback],
+                        #  strategy="fsdp" if torch.cuda.device_count() > 1 else "auto",
+                         accumulate_grad_batches=args["accumulate_grad_batches_num"],
                         )
+    
+    # Model and Data setup
+    model = model_mux(parser, args["modelname"], args["load_all_weights"], args["freeze"], args, fp_loader)
+    
+    if trainer.global_rank == 0:
+        my_logger.info(f"[Main] Model Summary: {summarize(model)}")
+    data_module = data_mux(parser, args["modelname"], args["datasrc"], args["FP_choice"], args["bs"], args["ds"], args, fp_loader)
+    
+    
     if args["validate"]:
         my_logger.info("[Main] Just performing validation step")
-        trainer.validate(model, data_module)
+        trainer.validate(model, data_module, )
     elif args['test']:
-        my_logger.info("[Main] Just performing test step")
-        raise Exception("should use test_on_all_info_subset.ipynb")
+        
+        trainer = pl.Trainer( accelerator="auto", accumulate_grad_batches=args["accumulate_grad_batches_num"])
+        del hparams['checkpoint_path']
+        hparams['test_on_deepsat_retrieval_set'] = args['test_on_deepsat_retrieval_set']
+        # model = HsqcRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)     
+        args = hparams
+
+        model.setup_ranker()
+
+        test_result = trainer.test(model, data_module, ckpt_path=checkpoint_path)
+
+        if checkpoint_path.parts[-1].split("-")[-1].startswith("step="):
+            pkl_name = "test_result.pkl"
+        else:
+            pkl_name = checkpoint_path.parts[-1].split("-")[-1].replace(".ckpt", ".pkl")
+
+        if args['test_on_deepsat_retrieval_set']:
+            test_result_save_parent_dir = out_path_final + "_retrieve_on_deepsat_set/" + "/".join(str(checkpoint_path).split("/")[-4:-2])
+        else:
+            test_result_save_parent_dir = out_path_final + "/" + "/".join(str(checkpoint_path).split("/")[-4:-2])
+        os.makedirs(test_result_save_parent_dir, exist_ok=True)
+            
+        with open(test_result_save_parent_dir + "/" + pkl_name, "wb") as f:
+            pickle.dump(test_result, f)
         
     else:
-        try:
+            # training
             my_logger.info("[Main] Begin Training!")
             trainer.fit(model, data_module,ckpt_path=args["checkpoint_path"])
 
-            model.change_ranker_for_testing()
-            checkpoint_callback = checkpoint_callbacks[0]
-            if not args['optional_inputs']:
+            # Ensure all processes synchronize before switching to test mode
+            trainer.strategy.barrier()
+
+            # Now, only rank 0 will proceed to test
+            if trainer.global_rank == 0:
+                
+                # testing
+                model.setup_ranker()
+                model.logger_should_sync_dist = False
+                
+                # my_logger.info(f"[Main] my process rank: {os.getpid()}")
+                trainer = pl.Trainer( devices = 1, accumulate_grad_batches=args["accumulate_grad_batches_num"])
+                my_logger.info(f"[Main] Validation metric {checkpoint_callback.monitor}, best score: {checkpoint_callback.best_model_score.item()}")
                 my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
+                all_test_results = [{}]
                 test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
                 test_result[0]['best_epoch'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
-                # save test result as pickle
-                with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
-                    pickle.dump(test_result, f)
-            else:
-                # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
-                data_module.setup("test")
-                all_7_dataloaders = data_module.test_dataloader()
-                all_test_results = [{}]
-                for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
-                    model.only_test_this_loader(loader_idx=loader_idx)
-                    my_logger.info(f"[Main] Testing path {checkpoint_callback.best_model_path}!")
-                    test_result = trainer.test(model, data_module,ckpt_path=checkpoint_callback.best_model_path)
-                    test_result[0][f'best_epoch_{checkpoint_callback.monitor.split("/")[-1]}'] = checkpoint_callback.best_model_path.split("/")[-1].split("-")[0]
-                    all_test_results[0].update(test_result[0])
-                # save test result as pickle
+                if not args['optional_inputs']:
+                
+                    NP_classwise_accu = {k.split("/")[-1]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
+                    img_path = pathlib.Path(checkpoint_callback.best_model_path).parents[1] / f"NP_class_accu.png"
+                    plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
+                    all_test_results = test_result
+                else:
+                    # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
+                    for loader_idx, NMR_type in enumerate(["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR", "only_C_NMR"]):
+                        model.only_test_this_loader(loader_idx=loader_idx)
+                        # test/rank_1_of_NP_class/Sesterterpenoids/HSQC_C_NMR
+                        NP_classwise_accu = {k.split("/")[-2]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k and NMR_type in k}
+                        img_path = pathlib.Path(checkpoint_callback.best_model_path).parents[1] / f"NP_class_accu_{NMR_type}.png"
+                        plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
+                    all_test_results = test_result
+                        
+                        
+                # else:
+                #     # loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR
+                #     data_module.setup("test")
+                #     all_7_dataloaders = data_module.test_dataloader()
+                #     # for loader_idx, (checkpoint_callback, curr_dataloader) in enumerate(zip(checkpoint_callbacks, all_7_dataloaders)):                               
+                #     for loader_idx, curr_dataloader in enumerate(all_7_dataloaders):
+                #         model.only_test_this_loader(loader_idx=loader_idx)
+                        
+                #         # my_logger.info(f"[Main]  monitor {monitor}!")
+                #         test_result = trainer.test(model, data_module, ckpt_path=best_model_path)
+                #         all_test_results[0].update(test_result[0])
+                        
+                #         NP_classwise_accu = {k.split("/")[-2]:v for k,v in test_result[0].items() if "rank_1_of_NP_class" in k}
+                #         NMR_type = pathlib.Path(best_model_path).parts[-1].split(".")[0]
+                #         img_path = pathlib.Path(best_model_path).parents[1] / f"NP_class_accu_{NMR_type}.png"
+                #         plot_result_dict_by_sorted_names(NP_classwise_accu, img_path)
+                        
+                
+
                 with open(f"{out_path}/{path1}/{path2}/test_result.pkl", "wb") as f:
                     pickle.dump(all_test_results, f)
-            
-        except Exception as e:
-            my_logger.error(f"[Main] Error: {e}")
-            raise(e)
-        finally: #Finally move all content from out_path to out_path_final
-            my_logger.info("[Main] Done!")
-            my_logger.info("[Main] test result: \n")
-            # my_logger.info(f"{test_result}")
-            for key, value in test_result[0].items():
-                my_logger.info(f"{key}: {value}")
-            os.system(f"cp -r {out_path}/* {out_path_final}/ && rm -rf {out_path}/*")
-            logging.shutdown()
-
-    # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
-    # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
-        
-
-
-if __name__ == '__main__':
+                    
+                
     
-    main()
+                my_logger.info("[Main] Done!")
+                # my_logger.info("[Main] test result: \n")
+                # my_logger.info(f"{test_result}")
+                for key, value in all_test_results[0].items():
+                    my_logger.info(f"{key}: {value}")
+                os.system(f"cp -r {out_path}/* {out_path_final}/ ")
+                my_logger.info(f"[Main] Copied all content from {out_path} to {out_path_final}")
+                logging.shutdown()
+
+
+
+    

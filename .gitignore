@@ -560,8 +560,12 @@ ignore/
 dataloader_inspect.ipynb
 find_pos_weight_vector.ipynb
 debug_rank1.ipynb
-notebooks/dataset_building/FP_on_bits_pickles/
+notebook_and_scripts/dataset_building/FP_on_bits_pickles/
 reproducing_deepsat/
 spectre_frontend
 
 /datasets/*.pkl
+
+inference/hsqc*.txt
+inference/HSQC_for_deepsat/
+compare_with_deepsat

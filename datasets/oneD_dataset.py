@@ -1,4 +1,4 @@
-"""Deprecated. Using this file may introduce some bug...."""
+"""Used for training with all data of H | C | H and C"""
 
 import logging
 import pickle
@@ -6,13 +6,14 @@ import torch, os, pytorch_lightning as pl
 import torch.distributed as dist
 from torch.utils.data import DataLoader, Dataset
 import torch.nn.functional as F
-from datasets.hsqc_folder_dataset import get_delimeter, pad
-from datasets.dataset_utils import specific_radius_mfp_loader
+from datasets.hsqc_folder_dataset import pad, FolderDataset
+
+
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
 
-class OneDDataset(Dataset):
+class OneDDataset(FolderDataset):
     '''
         Creates a folder-based dataset. Assumes that folder has the following structure: 
 
@@ -27,14 +28,16 @@ class OneDDataset(Dataset):
         - ...
         
     '''
-    def __init__(self, dir, split="train", FP_choice="", parser_args=None):
+    def __init__(self, dir, split="train", FP_choice="", parser_args=None, fp_loader=None):
+        self.fp_loader = fp_loader
+        
         self.dir = os.path.join(dir, split)
         self.dir_1d = f"/workspace/OneD_Only_Dataset/{split}"
         self.split = split
         self.fp_suffix = FP_choice
         self.parser_args = parser_args
 
-        print(self.dir)
+        print(self.dir_1d)
         assert(os.path.exists(self.dir))
         assert(split in ["train", "val", "test"])
         
@@ -52,10 +55,15 @@ class OneDDataset(Dataset):
                 logger.setLevel(logging.WARNING)
         logger.info(f"[OneD Dataset]: dir={dir}, split={split},FP={FP_choice}")
         
+        if split in ["test"]:
+            with open(os.path.join(self.dir, "Superclass/index.pkl"), "rb") as f:
+                self.NP_classes = pickle.load(f)
+        
         if parser_args['train_on_all_info_set']  or split in ["val", "test"]:
             logger.info(f"[OneD Dataset]: only all info datasets: {split}")
             path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
+            self.files.sort()
             logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
             return 
         if self.parser_args['only_C_NMR']:
@@ -84,10 +92,10 @@ class OneDDataset(Dataset):
         self.files_1d = list(filter(filter_unavailable_1d, self.files_1d))
         logger.info(f"[OneD Dataset]: dataset size is {len(self)}")
         
+                
     def __len__(self):
-        # return 100
         length = len(self.files)
-        if self.parser_args['train_on_all_info_set']:
+        if self.parser_args['train_on_all_info_set']  or self.split in ["val", "test"] :
            return length 
         length += len(self.files_1d)
         return length
@@ -97,40 +105,28 @@ class OneDDataset(Dataset):
     def __getitem__(self, idx):
         hsqc = torch.empty(0,3)
         
+        # No need to use optional inputs for 1D dataset 
         if idx >= len(self.files): # load 1D dataset
             i = idx - len(self.files)
             # hsqc is empty tensor   
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
-            if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) 
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
-            # No need to use optional inputs for 1D dataset 
+            
             
         else :
             ### BEGINNING 2D dataset case
             i = idx
             c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{self.files[i]}")  
-            if self.parser_args['jittering'] == "normal" and self.split=="train":
-                c_tensor = c_tensor + torch.randn_like(c_tensor) 
-                h_tensor = h_tensor + torch.randn_like(h_tensor) * 0.1
-            # Again, no need to use optional inputs for 1D dataset
-            ### ENDING 2D dataset case
+            
+        if self.parser_args['jittering'] >0 and self.split=="train":
+            jittering = self.parser_args['jittering']
+            c_tensor = c_tensor + torch.randn_like(c_tensor) * jittering
+            h_tensor = h_tensor + torch.randn_like(h_tensor) * jittering * 0.1
             
         if self.parser_args['only_C_NMR']:
             h_tensor = torch.tensor([]) 
         elif self.parser_args['only_H_NMR']:
             c_tensor = torch.tensor([])
       
-        c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
-        c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (0, 2), "constant", 0)     
-            
-        inputs = torch.vstack([
-            get_delimeter("HSQC_start"),  hsqc,     get_delimeter("HSQC_end"),
-            get_delimeter("C_NMR_start"), c_tensor, get_delimeter("C_NMR_end"), 
-            get_delimeter("H_NMR_start"), h_tensor, get_delimeter("H_NMR_end"),
-            ])    
-                
-            
         # loading MW and MFP in different datasets 
         if idx >= len(self.files): # load 1D dataset    
             mol_weight_dict = self.mol_weight_1d
@@ -143,13 +139,17 @@ class OneDDataset(Dataset):
             dataset_dir = self.dir
             current_dataset = "2d"
             
+        mol_weight = None
         if self.parser_args['use_MW']:
             mol_weight = mol_weight_dict[int(dataset_files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
-            inputs = torch.vstack([inputs, get_delimeter("ms_start"), mol_weight, get_delimeter("ms_end")])
             
-        if self.fp_suffix.startswith("pick_entropy"): # should be in the format of "pick_entropy_r9"
-            mfp = specific_radius_mfp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
+        # padding and stacking： 
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+         
+            
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy"):
+            mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
             # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
             # print("current dataset is ", current_dataset)
             # print("load path is ", f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}") 
@@ -157,8 +157,8 @@ class OneDDataset(Dataset):
             # assert (mfp==mfp_orig).all(), f"mfp should be the same\n mfp is " #{mfp.nonzero()}\n mfp_orig is {mfp_orig.nonzero()}"
         else:   
             mfp = torch.load(f"{dataset_dir}/{self.fp_suffix}/{dataset_files[i]}").float()  
-     
-        combined = (inputs, mfp)
+                
+        combined = (inputs, mfp, NMR_type_indicator)
         
         if self.parser_args['separate_classifier']:
             # input types are one of the following:
@@ -171,8 +171,12 @@ class OneDDataset(Dataset):
             if len(c_tensor):
                 input_type+=1
             input_type = 7-input_type
-            combined = (inputs, mfp, input_type)
-
+            combined = (inputs, mfp, NMR_type_indicator, mol_weight)
+            
+         
+        if self.split in ["test"]:
+            combined = (inputs, mfp, NMR_type_indicator, self.NP_classes[int(dataset_files[i].split(".")[0])])
+        
         return combined
    
 
@@ -180,7 +184,7 @@ class OneDDataset(Dataset):
     
 
 class  OneDDataModule(pl.LightningDataModule):
-    def __init__(self, dir, FP_choice, batch_size: int = 32, parser_args=None):
+    def __init__(self, dir, FP_choice, fp_loader, batch_size: int = 32, parser_args=None):
         super().__init__()
         self.batch_size = batch_size
         self.dir = dir
@@ -190,10 +194,10 @@ class  OneDDataModule(pl.LightningDataModule):
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
-            self.train = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="train", parser_args=self.parser_args)
-            self.val = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="val", parser_args=self.parser_args)
+            self.train = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="train", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.val = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="val", parser_args=self.parser_args, fp_loader=self.fp_loader)
         if stage == "test":
-            self.test = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="test", parser_args=self.parser_args)
+            self.test = OneDDataset(dir=self.dir, FP_choice=self.FP_choice, split="test", parser_args=self.parser_args, fp_loader=self.fp_loader)
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
 

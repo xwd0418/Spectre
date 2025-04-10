@@ -8,6 +8,7 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         super().__init__(*args, **kwargs)
         self.validation_step_outputs = defaultdict(list)
         self.test_step_outputs = defaultdict(list)
+        self.test_np_classes_rank1 = defaultdict(lambda : defaultdict(list))
         self.all_dataset_names = ["all_inputs", "HSQC_H_NMR", "HSQC_C_NMR", "only_hsqc", "only_1d", "only_H_NMR",  "only_C_NMR"]
         if self.separate_classifier:
             self.classifiers = nn.ModuleList([nn.Linear(self.dim_model, self.out_dim) for i in range(len(self.all_dataset_names))])
@@ -21,8 +22,8 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         if not self.separate_classifier:
             return super().training_step(batch, batch_idx)
         
-        x, labels, input_type = batch
-        out, _ = self.encode(x)
+        inputs, labels, NMR_type_indicator, input_type = batch
+        out = self.forward(inputs, NMR_type_indicator)
         cls_token = out[:, :1, :].squeeze(1)
         total_loss = 0
         for i, classifier in enumerate(self.classifiers):
@@ -47,16 +48,21 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
         self.validation_step_outputs[current_batch_name].append(metrics)
         return metrics
     
-    def test_step(self, batch, batch_idx, dataloader_idx):
+    def test_step(self, batch, batch_idx, dataloader_idx=0):
         if self.loader_idx != None  and self.loader_idx != dataloader_idx:
             # print(f"skipping loader {dataloader_idx} because self.loader_idx is {self.loader_idx}")
             return
         if self.separate_classifier:
             self.fc = self.classifiers[dataloader_idx]
         current_batch_name = self.all_dataset_names[dataloader_idx]
-        metrics = super().test_step(batch, batch_idx)
+        metrics, np_classes, rank_1_hits = super().test_step(batch, batch_idx)
         self.test_step_outputs[current_batch_name].append(metrics)
-        return metrics
+        
+        for curr_classes, curr_rank_1_hits in zip(np_classes, rank_1_hits.tolist()):
+                for np_class in curr_classes:
+                    self.test_np_classes_rank1[current_batch_name][np_class].append(curr_rank_1_hits)
+        
+        # return metrics
     
     def predict_step(self, batch, batch_idx, dataloader_idx,return_representations=False):
         if self.separate_classifier:
@@ -77,7 +83,12 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
                 di[f"val_mean_{feat}/{dataset_name}"] = curr_dataset_curr_feature
                 total_features[feat].append(curr_dataset_curr_feature)
             for k, v in di.items():
-                self.log(k, v, on_epoch=True, prog_bar="rank_1" in k)
+                self.log(k, v, on_epoch=True, prog_bar="rank_1/" in k)
+                
+        # from pytorch_lightning.callbacks import ModelCheckpoint
+        # for callback in self.trainer.callbacks:
+        #     if isinstance(callback, ModelCheckpoint):
+        #         print(f"Checkpoint tracking {callback.monitor} -> Best model path: {callback.best_model_path}")
                 
         # # log the avg metric for all datasets
         # for k, v in total_features.items():
@@ -101,7 +112,10 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
                 total_features[feat].append(curr_dataset_curr_feature)
             for k, v in di.items():
                 self.log(k, v, on_epoch=True, prog_bar="rank_1" in k)
-                
+            
+            for np_class, rank1_hits in self.test_np_classes_rank1[dataset_name].items():
+                self.log(f"test/rank_1_of_NP_class/{np_class}/{dataset_name}", np.mean(rank1_hits), on_epoch=True)
+
         # # log the avg metric for all datasets
         # for k, v in total_features.items():
         #     self.log(f"test_mean_{k}/all_nmr_combination_avg", np.mean(v), on_epoch=True, prog_bar="rank_1" in k)

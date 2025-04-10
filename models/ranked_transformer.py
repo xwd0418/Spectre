@@ -6,7 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import tqdm
 import torch.distributed as dist
-from datasets.dataset_utils import specific_radius_mfp_loader
+
+
 
 from utils import ranker, constants
 from models import compute_metrics
@@ -41,6 +42,7 @@ class HsqcRankedTransformer(pl.LightningModule):
     def __init__(
         self,
         # model args
+        fp_loader,
         dim_model=128,
         dim_coords=[43, 43, 42],
         heads=8,
@@ -49,7 +51,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         coord_enc="sce",
         wavelength_bounds=None,
         gce_resolution=1,
-        dropout=0,
+        dropout=0.1,
         # other business logic stuff
         save_params=True,
         ranking_set_path="",
@@ -69,6 +71,9 @@ class HsqcRankedTransformer(pl.LightningModule):
         **kwargs,
     ):
         super().__init__()
+        
+        self.fp_loader = fp_loader
+        
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
         if dist.is_initialized():
@@ -85,9 +90,10 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         # === All Parameters ===
-        out_dim = kwargs['out_dim']
+        out_dim = kwargs['out_dim']         
         self.FP_length = out_dim # 6144 
         self.separate_classifier = kwargs['separate_classifier']
+        self.test_on_deepsat_retrieval_set = kwargs['test_on_deepsat_retrieval_set']
         if FP_choice == "R0_to_R4_30720_FP":
             out_dim = self.FP_length * 5
         elif FP_choice == "R0_to_R6_exact_R_concat_FP":
@@ -96,6 +102,7 @@ class HsqcRankedTransformer(pl.LightningModule):
             assert(FP_choice == "R2-6144-count-based-FP")
             out_dim = self.FP_length * kwargs['num_class']
         self.out_dim = out_dim
+        
         self.bs = kwargs['bs']
         self.num_class = kwargs['num_class'] if loss_func == "CE" else None
         self.lr = lr
@@ -107,24 +114,19 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.dim_model = dim_model
         
         self.use_Jaccard = use_Jaccard
-        print("Using jaccard: ", use_Jaccard)
         
         # don't set ranking set if you just want to treat it as a module
         self.FP_choice=FP_choice
         self.rank_by_soft_output = kwargs['rank_by_soft_output']
-        if kwargs.get('skip_ranker', False):
-            self.ranker = None
-        elif FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
-          
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("val"),
-                                             batch_size=self.bs, CE_num_class=self.num_class)
-            
-        elif ranking_set_path:
-            assert ("all_info_molecules" in ranking_set_path), "ranking_set_path should be all-info only. haven't implemented yet"
-            self.ranking_set_path = ranking_set_path
-            # print(ranking_set_path)
-            assert os.path.exists(ranking_set_path), f"{ranking_set_path} does not exist"
-            self.ranker = ranker.RankingSet(file_path=ranking_set_path, batch_size=self.bs, CE_num_class=self.num_class)
+        self.rank_by_test_set = kwargs['rank_by_test_set']
+        
+        
+        if FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy"):
+            self.radius = int(FP_choice.split("_")[-1])
+        elif FP_choice.startswith("pick_entropy"):
+            self.radius = int(FP_choice.split("_")[-1][1:])
+        
+        self.ranker = None
 
         if save_params:
             print("HsqcRankedTransformer saving args")
@@ -144,10 +146,11 @@ class HsqcRankedTransformer(pl.LightningModule):
         else:
             try:
                 pos_weight_value = float(pos_weight)
-                self.bce_pos_weight= torch.full((self.FP_length,), pos_weight_value)
+                # self.bce_pos_weight= torch.full((self.FP_length,), pos_weight_value)
+                self.bce_pos_weight= torch.tensor([pos_weight_value])
                 self.out_logger.info(f"[RankedTransformer] bce_pos_weight is {pos_weight_value}")
         
-            except ValueError:
+            except :
                 if pos_weight == "ratio":
                     self.bce_pos_weight = torch.load(f'{repo_path}/pos_weight_array_based_on_ratio.pt')
                     self.out_logger.info("[RankedTransformer] bce_pos_weight is loaded ")
@@ -174,10 +177,17 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.validation_step_outputs = []
         self.training_step_outputs = []
         self.test_step_outputs = []
+        from collections import defaultdict
+        self.test_np_classes_rank1 = defaultdict(list)
 
-        
-            
+        self.NMR_type_embedding = nn.Embedding(4, dim_model)
+        # HSQC, C NMR, H NMR, MW
+        # MW isn't NMR, but, whatever......
+        self.out_logger.info("[RankedTransformer] nn.linear layer to be initialized")
+        # print("out_dim is ", out_dim, " dim_model is ", dim_model)
+        # exit(0)
         self.fc = nn.Linear(dim_model, out_dim)
+        self.out_logger.info("[RankedTransformer] nn.linear layer is initialized")
         # (1, 1, dim_model)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
 
@@ -195,6 +205,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         )
         # === END Parameters ===
 
+        self.out_logger.info("[RankedTransformer] weights are initialized")
+        
         if L1_decay:
             self.out_logger.info("[RankedTransformer] L1_decay is applied")
             self.transformer_encoder = L1(self.transformer_encoder, L1_decay)
@@ -206,30 +218,32 @@ class HsqcRankedTransformer(pl.LightningModule):
                 parameter.requires_grad = False
         self.out_logger.info("[RankedTransformer] Initialized")
 
+    
+
     @staticmethod
     def add_model_specific_args(parent_parser, model_name=""):
         model_name = model_name if len(model_name) == 0 else f"{model_name}_"
         parser = parent_parser.add_argument_group(model_name)
         parser.add_argument(f"--{model_name}lr", type=float, default=1e-5)
         parser.add_argument(f"--{model_name}noam_factor", type=float, default=1.0)
-        parser.add_argument(f"--{model_name}dim_model", type=int, default=384)
+        parser.add_argument(f"--{model_name}dim_model", type=int, default=784)
         parser.add_argument(f"--{model_name}dim_coords", metavar='N',
-                            type=int, default=[180,180,24],
+                            type=int, default=[365, 365, 54 ],
                             nargs="+", action="store")
         parser.add_argument(f"--{model_name}heads", type=int, default=8)
-        parser.add_argument(f"--{model_name}layers", type=int, default=8)
-        parser.add_argument(f"--{model_name}ff_dim", type=int, default=512)
+        parser.add_argument(f"--{model_name}layers", type=int, default=16)
+        parser.add_argument(f"--{model_name}ff_dim", type=int, default=3072)
         parser.add_argument(f"--{model_name}wavelength_bounds",
-                            type=float, default=None, nargs='+', action='append')
-        parser.add_argument(f"--{model_name}dropout", type=float, default=0.0)
+                            type=float, default=[[0.01, 400.0], [0.01, 20.0]], nargs='+', action='append')
+        parser.add_argument(f"--{model_name}dropout", type=float, default=0.1)
         parser.add_argument(f"--{model_name}pos_weight", type=str, default=None, 
                             help = "if none, then not to be used; if ratio,\
                                 then used the save tensor which is the ratio of num_0/num_1, \
                                 if float num ,then use this as the ratio")
         parser.add_argument(f"--{model_name}weight_decay", type=float, default=0.0)
         parser.add_argument(f"--{model_name}L1_decay", type=float, default=0.0)
-        parser.add_argument(f"--{model_name}warm_up_steps", type=int, default=4000)
-        parser.add_argument(f"--{model_name}scheduler", type=str, default=None)
+        parser.add_argument(f"--{model_name}warm_up_steps", type=int, default=8000)
+        parser.add_argument(f"--{model_name}scheduler", type=str, default="attention")
         parser.add_argument(f"--{model_name}coord_enc", type=str, default="sce")
         parser.add_argument(
             f"--{model_name}gce_resolution", type=float, default=1)
@@ -245,7 +259,7 @@ class HsqcRankedTransformer(pl.LightningModule):
                  for k, v in vals.items() if k.startswith(model_name)]
         return dict(items)
 
-    def encode(self, hsqc, mask=None):
+    def encode(self, hsqc, NMR_type_indicator, mask=None):
         """
         Returns
         -------
@@ -264,19 +278,21 @@ class HsqcRankedTransformer(pl.LightningModule):
             mask = torch.cat(mask, dim=1)
             mask = mask.to(self.device)
 
-        # print(hsqc[0])
-        points = self.enc(hsqc) # something like positional encoding 
-        # pickle.dump(points.cpu(), open("out_1.pkl", "wb"))
-        
+        points = self.enc(hsqc) # something like positional encoding , but encoding cooridinates
+        NMR_type_embedding = self.NMR_type_embedding(NMR_type_indicator)
+        # print("points shape is ", points.shape, " NMR_type_embedding shape is ", NMR_type_embedding.shape)
+        points += NMR_type_embedding
         # print(points.shape)
         # Add the spectrum representation to each input:
         latent = self.latent.expand(points.shape[0], -1, -1) # make batch_size copies of latent
         # print(latent.device, points.device)
+        
         points = torch.cat([latent, points], dim=1)
+      
         out = self.transformer_encoder(points, src_key_padding_mask=mask)
         return out, mask
-
-    def forward(self, hsqc, return_representations=False):
+    
+    def forward(self, hsqc, NMR_type_indicator, return_representations=False):
         """The forward pass.
         Parameters
         ----------
@@ -287,16 +303,16 @@ class HsqcRankedTransformer(pl.LightningModule):
             should be zero-padded, such that all of the hsqc in the batch
             are the same length.
         """
-        out, _ = self.encode(hsqc)  # (b_s, seq_len, dim_model)
+        out, _ = self.encode(hsqc, NMR_type_indicator)  # (b_s, seq_len, dim_model)
         out_cls = self.fc(out[:, :1, :].squeeze(1))  # extracts cls token : (b_s, dim_model) -> (b_s, out_dim)
-        
         if return_representations:
             return out.detach().cpu().numpy()
         return out_cls
 
     def training_step(self, batch, batch_idx):
-        x, labels = batch
-        out = self.forward(x)
+        
+        inputs, labels, NMR_type_indicator = batch
+        out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
 
@@ -306,9 +322,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-     
-        x, labels = batch
-        out = self.forward(x)
+        inputs, labels, NMR_type_indicator = batch
+        out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
             preds = out.argmax(dim=1)
@@ -317,34 +332,40 @@ class HsqcRankedTransformer(pl.LightningModule):
         # print((labels) )
         # print("\n\n\n")
         loss = self.loss(out, labels)
-        metrics = self.compute_metric_func(
+        metrics, rank_1_hits = self.compute_metric_func(
             preds, labels, self.ranker, loss, self.loss, thresh=0.0, 
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx,
-            use_Jaccard = self.use_Jaccard
+            use_Jaccard = self.use_Jaccard,
+            no_ranking = True
             )
         if type(self.validation_step_outputs)==list: # adapt for child class: optional_input_ranked_transformer
             self.validation_step_outputs.append(metrics)
         return metrics
     
     def test_step(self, batch, batch_idx):
-        x, labels = batch
-        out = self.forward(x)
+        inputs, labels, NMR_type_indicator, np_classes = batch
+        out = self.forward(inputs, NMR_type_indicator)
         if self.loss_func == "CE":
             out = out.view(out.shape[0],  self.num_class, self.FP_length)
             preds = out.argmax(dim=1)
         else:
             preds = out
         loss = self.loss(out, labels)
-        metrics = self.compute_metric_func(
+        metrics, rank_1_hits = self.compute_metric_func(
             preds, labels, self.ranker, loss, self.loss, thresh=0.0,
             rank_by_soft_output=self.rank_by_soft_output,
             query_idx_in_rankingset=batch_idx,
             use_Jaccard = self.use_Jaccard
             )
+        
         if type(self.test_step_outputs)==list:
             self.test_step_outputs.append(metrics)
-        return metrics
+            for curr_classes, curr_rank_1_hits in zip(np_classes, rank_1_hits.tolist()):
+                # print(curr_rank_1_hits)
+                for np_class in curr_classes:
+                    self.test_np_classes_rank1[np_class].append(curr_rank_1_hits)
+        return metrics, np_classes, rank_1_hits
 
     def predict_step(self, batch, batch_idx, return_representations=False):
         x, smiles_chemical_name = batch
@@ -394,8 +415,11 @@ class HsqcRankedTransformer(pl.LightningModule):
             di[f"test/mean_{feat}"] = np.mean([v[feat]
                                              for v in self.test_step_outputs])
         for k, v in di.items():
-            self.log(k, v, on_epoch=True, sync_dist=False)
+            self.log(k, v, on_epoch=True)
             # self.log(k, v, on_epoch=True)
+            
+        for np_class, rank1_hits in self.test_np_classes_rank1.items():
+            self.log(f"test/rank_1_of_NP_class/{np_class}", np.mean(rank1_hits), on_epoch=True)
         self.test_step_outputs.clear()
 
     def configure_optimizers(self):
@@ -419,25 +443,29 @@ class HsqcRankedTransformer(pl.LightningModule):
     def log(self, name, value, *args, **kwargs):
         # Set 'sync_dist' to True by default
         if kwargs.get('sync_dist') is None:
-            kwargs['sync_dist'] = kwargs.get(
-                'sync_dist', self.logger_should_sync_dist)
-        if name == "test/mean_rank_1":
-            print(kwargs,"\n\n")
+            kwargs['sync_dist'] = self.logger_should_sync_dist
+        # if name == "test/mean_rank_1":
+        #     print(kwargs,"\n\n")
         super().log(name, value, *args, **kwargs)
         
-    def change_ranker_for_testing(self, test_ranking_set_path=None ):
-        if self.FP_choice.startswith("pick_entropy"): # build rankingset by specific_radius_mfp_loader
-            self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_rankingset("test"),
+    def setup_ranker(self):
+        FP_choice = self.FP_choice
+        if self.rank_by_test_set:   
+            assert FP_choice=="HYUN_FP" or FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy") or FP_choice.startswith("pick_entropy"), "rank_by_test_set is True, but received unexpected FP_choice"
+            self.ranker = ranker.RankingSet(store=self.fp_loader.build_rankingset("test", predefined_FP = FP_choice),
                                              batch_size=self.bs, CE_num_class=self.num_class)
-            return
-        if test_ranking_set_path is None:
-            test_ranking_set_path = self.ranking_set_path.replace("val", "test")
-        self.ranker = ranker.RankingSet(file_path=test_ranking_set_path, batch_size=self.bs,  CE_num_class=self.num_class)
+        else:
+            self.change_ranker_for_inference()
+            
 
-
-    def change_ranker_for_inference(self, test_ranking_set_path=None ):
-        self.ranker = ranker.RankingSet(store=specific_radius_mfp_loader.build_inference_ranking_set_with_everything(),
-                                          batch_size=self.bs, CE_num_class=self.num_class)
+    def change_ranker_for_inference(self,):
+        use_hyun_fp = self.FP_choice=="HYUN_FP"
+        self.ranker = ranker.RankingSet(store=self.fp_loader.build_inference_ranking_set_with_everything(
+                                                                fp_dim = self.FP_length, 
+                                                                max_radius = self.radius,
+                                                                use_hyun_fp=use_hyun_fp,
+                                                                test_on_deepsat_retrieval_set=self.test_on_deepsat_retrieval_set),
+                                          batch_size=self.bs, CE_num_class=self.num_class, need_to_normalize=False, )
 
 
 

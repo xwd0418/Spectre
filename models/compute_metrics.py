@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torchmetrics.classification import BinaryRecall, BinaryPrecision, BinaryF1Score, BinaryAccuracy
+from utils.ranker import RankingSet
 
 do_cos = nn.CosineSimilarity(dim=1)
 def do_jaccard(pred, label):
@@ -16,8 +17,8 @@ do_precision = BinaryPrecision()
 do_accuracy = BinaryAccuracy()
 
 
-def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, 
-       query_idx_in_rankingset=None, mw=None,use_actaul_mw_for_retrival=None, use_Jaccard = False):
+def cm(model_output, fp_label, ranker: RankingSet, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, 
+       query_idx_in_rankingset=None, mw=None,use_actaul_mw_for_retrival=None, use_Jaccard = False, no_ranking=False):
 
     global do_f1, do_recall, do_precision, do_accuracy
     do_f1 = do_f1.to(model_output)
@@ -55,7 +56,20 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
     # print( pos_contr.device, fp_label.device)
     pos_loss = loss_fn(pos_contr, fp_label)
     neg_loss = loss_fn(neg_contr, fp_label)
-
+    if no_ranking:
+        return {
+            f"ce_loss": loss.item(),
+            f"pos_loss": pos_loss.item(),
+            f"neg_loss": neg_loss.item(),
+            f"pos_neg_loss": (pos_loss + neg_loss).item(),
+            f"cos": cos,
+            f"jaccard": jaccard,
+            f"active_bits": active,
+            f"f1": f1,
+            f"precision": prec,
+            f"recall": rec,
+            f"accuracy": acc,
+        }, None
     # === Do Ranking ===
     if use_Jaccard:
         queries = fp_pred
@@ -87,8 +101,9 @@ def cm(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_
         f"recall": rec,
         f"accuracy": acc,
         f"mean_rank": mean_rank,
+        
         **ranks
-    }
+    }, rank_res.squeeze() < 1 # return an array of batch_size with True if it hits rank-1
 
 
 
@@ -126,7 +141,7 @@ def cm_count_based_mse(model_output, fp_label, ranker, loss, loss_fn, thresh: fl
         f"cos": cos,
         f"mean_rank": mean_rank,
         **ranks
-    }
+    }, None
 
 
 def cm_count_based_ce(model_output, fp_label, ranker, loss, loss_fn, thresh: float = 0.0, rank_by_soft_output=False, query_idx_in_rankingset=None):
@@ -164,4 +179,4 @@ def cm_count_based_ce(model_output, fp_label, ranker, loss, loss_fn, thresh: flo
         f"cos": cos,
         f"mean_rank": mean_rank,
         **ranks
-    }
+    }, None
