@@ -561,6 +561,7 @@ dataloader_inspect.ipynb
 find_pos_weight_vector.ipynb
 debug_rank1.ipynb
 notebook_and_scripts/dataset_building/FP_on_bits_pickles/
+notebooks/
 reproducing_deepsat/
 spectre_frontend
 
