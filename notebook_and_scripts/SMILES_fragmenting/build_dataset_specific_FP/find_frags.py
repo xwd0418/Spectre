@@ -18,7 +18,7 @@ ao.AllocateBitInfoMap()
 
 
 
-def get_bitInfos_for_each_atom_idx(SMILES):
+def get_bitInfos_for_each_atom_idx(SMILES, ignoreAtoms=[]):
     """
 
     Args:
@@ -37,7 +37,8 @@ def get_bitInfos_for_each_atom_idx(SMILES):
     # Chem.Kekulize(mol, clearAromaticFlags=True)
 
     # Compute Morgan fingerprint with radius 
-    fp = gen.GetSparseFingerprint(mol, additionalOutput=ao)
+    fp = gen.GetSparseFingerprint(mol, additionalOutput=ao, ) #ignoreAtoms=ignoreAtoms
+    # print("active bits: ", len(torch.tensor(fp).nonzero())) 
     info = ao.GetBitInfoMap()          
     
     atom_to_bit_infos = defaultdict(list)
@@ -45,6 +46,8 @@ def get_bitInfos_for_each_atom_idx(SMILES):
     for bit_id, atom_envs in info.items():
         # print(f'\n {bit_id=} ')
         for atom_idx, curr_radius in atom_envs:
+            if atom_idx in ignoreAtoms:
+                continue
             # Get the circular environment as a subgraph
             env = Chem.FindAtomEnvironmentOfRadiusN(mol, curr_radius, atom_idx)
             submol = Chem.PathToSubmol(mol, env)
@@ -59,11 +62,11 @@ def get_bitInfos_for_each_atom_idx(SMILES):
     
 
 # step 1: find all fragments of the entire training set
-def count_circular_substructures(smiles):
+def count_circular_substructures(smiles, ignoreAtoms=[]):
     bit_info_counter = defaultdict(int) 
     # substrucure_radius = {}
     
-    atom_to_bit_infos, all_bit_infos = get_bitInfos_for_each_atom_idx(smiles)
+    atom_to_bit_infos, all_bit_infos = get_bitInfos_for_each_atom_idx(smiles, ignoreAtoms)
     if atom_to_bit_infos is None:
         return bit_info_counter
     

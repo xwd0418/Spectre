@@ -288,7 +288,8 @@ def retrieve_top_k_by_rankingset(data, prediction_query, smiles_and_names, k=30,
 def compute_cos_sim(fp1, fp2):
     fp1 = fp1.float()
     fp2 = fp2.float()
-    return (fp1 @ fp2) / (torch.norm(fp1) * torch.norm(fp2)).item()
+    
+    return ((fp1 @ fp2).item() / (torch.norm(fp1) * torch.norm(fp2))).item()
 
 
 from notebook_and_scripts.SMILES_fragmenting.build_dataset_specific_FP.find_frags import  get_bitInfos_for_each_atom_idx
@@ -316,40 +317,35 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
     
     fp_loader = fp_loader_configer.fp_loader
     
-    predicted_frag_indices = set(predicted_FP.to_dense().nonzero()[:,0].tolist())
     retrieval_FP = fp_loader.build_mfp_for_new_SMILES(retrieval_smiles)
     
     # Step 1: Create molecule and hydrogenated copy
     retrieval_mol = Chem.MolFromSmiles(retrieval_smiles)
     
-    weights = [0] * retrieval_mol.GetNumAtoms()
+    
+    baseSimilarity = compute_cos_sim(retrieval_FP, predicted_FP.cpu())
+    print("base similarity: ", baseSimilarity)
+    weights = [
+        baseSimilarity - compute_cos_sim(predicted_FP.cpu(), fp_loader.build_mfp_for_new_SMILES(retrieval_smiles, [atomId]))
+        for atomId in range(retrieval_mol.GetNumAtoms())
+    ] 
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    #!!!! try to use the ignore_atom parameter in the fp_gen
-    
-    
-    
-    
-    
-    
-    base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
-    # Step 2: Compute weights on the molecule WITH hydrogens
-    atom_to_bit_infos, all_bitInfos  = get_bitInfos_for_each_atom_idx(retrieval_smiles)
-    for atom_id, bit_infos in atom_to_bit_infos.items():
-        # frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
-        # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
+    ######################### the following code is an old version of similarity mapping, which only works well if your prediction is super precise #########################
+    # predicted_frag_indices = set(predicted_FP.nonzero()[:,0].tolist())
+    # weights = [0] * retrieval_mol.GetNumAtoms()
+    # base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
+    # print("base similarity: ", base_sim)
+    # # Step 2: Compute weights on the molecule WITH hydrogens
+    # atom_to_bit_infos, all_bitInfos  = get_bitInfos_for_each_atom_idx(retrieval_smiles)
+    # for atom_id, bit_infos in atom_to_bit_infos.items():
+    #     # frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
+    #     # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
         
-        # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
-        sim_without_this_atom = set_based_cosine((all_bitInfos-set(bit_infos)).intersection(fp_loader.bitInfos_to_fp_index_map), {fp_loader.fp_index_to_bitInfo_mapping[i] for i in predicted_frag_indices})
-        weights[atom_id] = base_sim - sim_without_this_atom
+    #     # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
+    #     sim_without_this_atom = set_based_cosine((all_bitInfos-set(bit_infos)).intersection(fp_loader.bitInfos_to_fp_index_map), {fp_loader.fp_index_to_bitInfo_mapping[i] for i in predicted_frag_indices})
+    #     weights[atom_id] = base_sim - sim_without_this_atom
 
     
     # if need_to_clean_H:
@@ -360,7 +356,6 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
     #     heavy_atom_map = retrieval_mol.GetSubstructMatch(retrieval_mol)  # Maps H-heavy to no-H
         
     #     weights = [weights[i] for i in heavy_atom_map]  # Remap weights to no-H molecule
-
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
     
     # Step 5: Draw similarity map on molecule without hydrogens
@@ -487,9 +482,13 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
             if fp_type == "MFP_Specific_Radius":
                 img = Draw.MolToImage(mol)
             elif fp_type == "DB_Specific_Radius":
-                img = show_retrieved_mol_with_highlighted_frags(retrieved_FP, smile)
+                img = show_retrieved_mol_with_highlighted_frags(pred[0], smile) #
             else:
                 raise ValueError("fp_type must be either MFP_Specific_Radius or DB_Specific_Radius")
+        
+            print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
+            if ground_truth_FP is not None:
+                print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()))
 
             if verbose:
                 print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
