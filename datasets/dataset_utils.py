@@ -5,6 +5,10 @@ import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 DATASET_root_path = pathlib.Path("/workspace/")
 from utils.matmul_precision_wrapper import set_float32_highest_precision
+<<<<<<< HEAD
+=======
+from rdkit import Chem
+>>>>>>> 3fbd07926c1de6ea08350402d4f9be417635cf53
 
 from datasets.fp_loader_utils import FP_Loader_Configer, fp_loader_configer
 
@@ -167,3 +171,14 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
 
                 
     
+def isomeric_to_canonical_smiles(isomeric_smiles):
+    try:
+        mol = Chem.MolFromSmiles(isomeric_smiles)
+        Chem.RemoveStereochemistry( mol ) 
+    except:
+        # print(isomeric_smiles)
+        return None
+
+    canonical_smiles = Chem.MolToSmiles(mol, canonical=True)
+    
+    return canonical_smiles
