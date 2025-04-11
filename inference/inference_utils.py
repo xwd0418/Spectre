@@ -5,6 +5,10 @@ from rdkit.Chem import Draw
 import numpy as np
 import sys, pathlib, json, yaml
 from pathlib import Path
+from io import BytesIO
+from PIL import Image
+import base64
+
 
 ### model selection ###
 def find_checkpoint_path_entropy_on_hashes_FP(model_type):
@@ -324,7 +328,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
     
     
     baseSimilarity = compute_cos_sim(retrieval_FP, predicted_FP.cpu())
-    print("base similarity: ", baseSimilarity)
+    # print("base similarity: ", baseSimilarity)
     weights = [
         baseSimilarity - compute_cos_sim(predicted_FP.cpu(), fp_loader.build_mfp_for_new_SMILES(retrieval_smiles, [atomId]))
         for atomId in range(retrieval_mol.GetNumAtoms())
@@ -442,7 +446,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                    filter_by_MW=None,
                    verbose=True,
                    weighting_pred = None,
-                   infer_in_backend_service = False
+                   infer_in_backend_service = False,
                    ):
     """
     Run inference on a given input tensor and visualize the top-k retrieved molecules.
@@ -500,7 +504,13 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                 img.show()
             if infer_in_backend_service:
                 returning_MWs.append(mw)
-                returning_imgs.append(img)
+                
+                buffered = BytesIO()
+                img.save(buffered, format="PNG")
+                img_bytes = buffered.getvalue()
+                img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+        
+                returning_imgs.append(img_base64)
                 returning_values.append(value.item())
         i+=1
         returning_smiles.append(smile)

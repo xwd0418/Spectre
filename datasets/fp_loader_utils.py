@@ -6,7 +6,11 @@ from rdkit.Chem import rdFingerprintGenerator
 import sys, pathlib
 
 repo_path = pathlib.Path(__file__).resolve().parents[1]
-DATASET_root_path = pathlib.Path("/workspace/")
+import os
+if os.getenv("RUNNING_BACKEND"):
+    DATASET_root_path = pathlib.Path("/home/ad.ucsd.edu/w6xu/Spectre_datasets")
+else:
+    DATASET_root_path = pathlib.Path("/workspace/")
 
 
 # utils about entropy and MFP

@@ -11,9 +11,7 @@ from flask_cors import CORS
 
 import torch, numpy as np
 import yaml
-import base64
-from io import BytesIO
-from PIL import Image
+
 torch.set_printoptions(precision=10)
 torch.set_float32_matmul_precision('medium')
     
@@ -28,7 +26,7 @@ sys.path.insert(0,str(repo_path))
 
 
 # helper functions 
-from data_process import retrieve_by_rankingset, build_input, plot_NMR, convert_to_tensor_1d_nmr
+from data_process import  plot_NMR, convert_to_tensor_1d_nmr
 from flask_utils import build_actual_response
 
 from inference.inference_utils import inference_topK, get_inputs_and_indicators_from_NMR_tensors
@@ -70,28 +68,19 @@ def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
         
     returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values =  inference_topK(
         inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
-            k=5, mode = None, ground_truth_FP=None,
+            k=k, mode = None, ground_truth_FP=None,
             fp_type = "DB_Specific_Radius",
-            filter_by_MW=None,
+            filter_by_MW=MW_range,
             verbose=False,
-            weight_pred = None,
-            infer_in_backend_service = True
+            weighting_pred = None,
+            infer_in_backend_service = True,
     )
-    for smile, name, img, mw, cos_value in zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values):
-        if MW_range is not None:
-            if mw < MW_range[0] or mw > MW_range[1]:
-                continue
-        buffered = BytesIO()
-        img.save(buffered, format="PNG")
-        img_bytes = buffered.getvalue()
-        img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-
-        i+=1
+    for i, (smile, name, img_base64, mw, cos_value) in enumerate(zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values)):
         
         retrievals_to_return.append({"smile": smile, 
                               "name": name, 
                               "MW": mw,
-                              "cos": cos_value.item(),
+                              "cos": cos_value,
                               "image": img_base64})
         if i == k:
             break
