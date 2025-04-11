@@ -1,1 +1,1 @@
-C[C@H]([C@H]1C[C@@H](C(C)C)C[C@@H](NC2=[NH+]C=CN2)O1)[C@]3([H])[C@]4(C)[C@](C(C3)=O)([H])[C@]5([H])[C@@H](OP([O-])(O)=O)[C@H](O)[C@@]6([H])[C@@H](O)[C@H](O)CC[C@]6 (C)[C@@]5([H])CC4
+C[C@H]([C@H]1C[C@@H](C(C)C)C[C@@H](NC2=[NH+]C=CN2)O1)[C@]3([H])[C@]4(C)[C@](C(C3)=O)([H])[C@]5([H])[C@@H](OP([O-])(O)=O)[C@H](O)[C@@]6([H])[C@@H](O)[C@H](O)CC[C@]6(C)[C@@]5([H])CC4
