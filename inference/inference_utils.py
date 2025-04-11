@@ -490,7 +490,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
             if verbose:
                 print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
                 if ground_truth_FP is not None:
-                    print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()).item())
+                    print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()))
 
                 print(f"SMILES: {smile}") 
                 print(f"Name {name}")

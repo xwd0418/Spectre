@@ -191,6 +191,7 @@ class  OneDDataModule(pl.LightningDataModule):
         self.FP_choice = FP_choice
         self.collate_fn = pad
         self.parser_args = parser_args
+        self.fp_loader = fp_loader
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
