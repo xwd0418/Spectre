@@ -312,31 +312,25 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
         bio = io.BytesIO(data)
         img = Image.open(bio)
         return img
-
-    def set_based_cosine(x,y):
-        '''x, y are same shape array'''
-        a = set(x)
-        b = set(y)
-        return (len(a&b))/(sqrt(len(a))*sqrt(len(b)))
-    
     fp_loader = fp_loader_configer.fp_loader
     
-    retrieval_FP = fp_loader.build_mfp_for_new_SMILES(retrieval_smiles)
+    # retrieval_FP = fp_loader.build_mfp_for_new_SMILES(retrieval_smiles)
     
     # Step 1: Create molecule and hydrogenated copy
     retrieval_mol = Chem.MolFromSmiles(retrieval_smiles)
     
-    
+    atom_to_bit_infos,_ = get_bitInfos_for_each_atom_idx(retrieval_smiles)
+    retrieval_FP = fp_loader.build_mfp_from_bitInfo(atom_to_bit_infos)
     baseSimilarity = compute_cos_sim(retrieval_FP, predicted_FP.cpu())
     # print("base similarity: ", baseSimilarity)
     weights = [
-        baseSimilarity - compute_cos_sim(predicted_FP.cpu(), fp_loader.build_mfp_for_new_SMILES(retrieval_smiles, [atomId]))
+        baseSimilarity - compute_cos_sim(predicted_FP.cpu(), fp_loader.build_mfp_from_bitInfo(atom_to_bit_infos, [atomId]))
         for atomId in range(retrieval_mol.GetNumAtoms())
     ] 
     
     
     
-    ######################### the following code is an old version of similarity mapping, which only works well if your prediction is super precise #########################
+    ######################### the following code is an old version of similarity mapping , which only works well if your prediction is super precise #########################
     # predicted_frag_indices = set(predicted_FP.nonzero()[:,0].tolist())
     # weights = [0] * retrieval_mol.GetNumAtoms()
     # base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
@@ -361,7 +355,6 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
         
     #     weights = [weights[i] for i in heavy_atom_map]  # Remap weights to no-H molecule
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
-    
     # Step 5: Draw similarity map on molecule without hydrogens
     d = Draw.MolDraw2DCairo(400, 400)
     SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d)
@@ -515,7 +508,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
         i+=1
         returning_smiles.append(smile)
         returning_names.append(name)
-    if returning_imgs:
+    if infer_in_backend_service:
         return returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values
     return returning_smiles, returning_names
 
