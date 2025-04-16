@@ -440,6 +440,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                    verbose=True,
                    weighting_pred = None,
                    infer_in_backend_service = False,
+                   encode_img = True,
                    ):
     """
     Run inference on a given input tensor and visualize the top-k retrieved molecules.
@@ -483,9 +484,6 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
             else:
                 raise ValueError("fp_type must be either MFP_Specific_Radius or DB_Specific_Radius")
         
-            print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
-            if ground_truth_FP is not None:
-                print("________retival's   cosine similarity to ground truth: ", compute_cos_sim(ground_truth_FP, retrieved_FP.to_dense().to("cpu").float()))
 
             if verbose:
                 print(f"________retival #{i+1}, cosine similarity to prediction: {value.item()}_________________")
@@ -497,13 +495,15 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                 img.show()
             if infer_in_backend_service:
                 returning_MWs.append(mw)
-                
-                buffered = BytesIO()
-                img.save(buffered, format="PNG")
-                img_bytes = buffered.getvalue()
-                img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-        
-                returning_imgs.append(img_base64)
+                if encode_img:
+                    buffered = BytesIO()
+                    img.save(buffered, format="PNG")
+                    img_bytes = buffered.getvalue()
+                    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+            
+                    returning_imgs.append(img_base64)
+                else:
+                    returning_imgs.append(img)
                 returning_values.append(value.item())
         i+=1
         returning_smiles.append(smile)
