@@ -1,0 +1,1 @@
+OC([C@@H](C/C(C)=C/[C@@]1([H])C=C[C@](CC[C@H]2C)([H])[C@@]2([H])[C@@]1([H])C(C3=C(Cl)C(Cl)=C(Cl)N3)=O)C)=O
