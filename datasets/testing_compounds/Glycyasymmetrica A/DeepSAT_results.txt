@@ -1,0 +1,3 @@
+COc1cc(O)c(C2COc3cc(O)ccc3C2)cc1C1c2ccc(O)cc2OCC1c1ccc(OC)c(O)c1OC
+COc1cc(O)c(C2COc3cc(O)ccc3C2c2c(OC)cc(O)cc2C2COc3cc(O)ccc3C2)cc1OC
+COc1ccc(C2COc3cc(O)ccc3C2c2c(OC)cc(O)cc2C2COc3cc(O)ccc3C2)c(O)c1

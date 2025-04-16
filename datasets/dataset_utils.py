@@ -127,8 +127,8 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if hsqc is not None:
         pos = hsqc[hsqc[:,2]>0]
         neg = hsqc[hsqc[:,2]<0]
-        ax1.scatter(pos[:,1], pos[:,0], c="blue", label="CH or CH3", s=5)
-        ax1.scatter(neg[:,1], neg[:,0], c="red", label="CH2", s=5)
+        ax1.scatter(pos[:,1], pos[:,0], c="red", label="CH or CH3", s=5)
+        ax1.scatter(neg[:,1], neg[:,0], c="blue", label="CH2", s=5)
         # print("scatter!!")
         # print(pos, neg)
     ax1.set_title("HSQC")
