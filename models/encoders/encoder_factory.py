@@ -1,5 +1,5 @@
 from typing import Tuple
-from encoder import CoordinateEncoder, SignCoordinateEncoder
+from models.encoder import CoordinateEncoder, SignCoordinateEncoder
 from models.encoders.graycode_encoder import GraycodeEncoder
 
 def build_encoder(coord_enc: str, dim_model: int, 
