@@ -328,32 +328,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
         for atomId in range(retrieval_mol.GetNumAtoms())
     ] 
     
-    
-    
-    ######################### the following code is an old version of similarity mapping , which only works well if your prediction is super precise #########################
-    # predicted_frag_indices = set(predicted_FP.nonzero()[:,0].tolist())
-    # weights = [0] * retrieval_mol.GetNumAtoms()
-    # base_sim = set_based_cosine(predicted_frag_indices, retrieval_FP.nonzero()[:,0].tolist())
-    # print("base similarity: ", base_sim)
-    # # Step 2: Compute weights on the molecule WITH hydrogens
-    # atom_to_bit_infos, all_bitInfos  = get_bitInfos_for_each_atom_idx(retrieval_smiles)
-    # for atom_id, bit_infos in atom_to_bit_infos.items():
-    #     # frag_indices_with_this_atom = {fp_loader.frag_to_index_map[frag] for frag in (all_frags-frags) if frag in fp_loader.frag_to_index_map }
-    #     # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
-        
-    #     # sim_without_this_atom = set_based_cosine(frag_indices_with_this_atom, predicted_frag_indices)
-    #     sim_without_this_atom = set_based_cosine((all_bitInfos-set(bit_infos)).intersection(fp_loader.bitInfos_to_fp_index_map), {fp_loader.fp_index_to_bitInfo_mapping[i] for i in predicted_frag_indices})
-    #     weights[atom_id] = base_sim - sim_without_this_atom
 
-    
-    # if need_to_clean_H:
-    #     # Step 3: Remove explicit hydrogens and map weights
-    #     retrieval_mol = Chem.RemoveHs(retrieval_mol)
-        
-    #     # Step 4: Map hydrogenated weights to non-hydrogenated molecule
-    #     heavy_atom_map = retrieval_mol.GetSubstructMatch(retrieval_mol)  # Maps H-heavy to no-H
-        
-    #     weights = [weights[i] for i in heavy_atom_map]  # Remap weights to no-H molecule
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
     # Step 5: Draw similarity map on molecule without hydrogens
     d = Draw.MolDraw2DCairo(400, 400)

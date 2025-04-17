@@ -179,6 +179,7 @@ def add_parser_arguments( parser):
     
     parser.add_argument("--debug", type=lambda x:bool(str2bool(x)), default=False)
     parser.add_argument("--checkpoint_path", type=str, default=None, help="Path to the checkpoint file to resume training")
+    parser.add_argument("--delete_checkpoint", type=lambda x:bool(str2bool(x)), default=False, help="Delete the checkpoint file after training")
 
     # different versions of input/output
     parser.add_argument("--FP_choice", type=str, default="R2-6144FP", help="use which fingerprint as ground truth, default: r2-6144fp") 
@@ -480,6 +481,9 @@ if __name__ == '__main__':
                 # my_logger.info(f"{test_result}")
                 for key, value in all_test_results[0].items():
                     my_logger.info(f"{key}: {value}")
+                if args['delete_checkpoint']:
+                    os.remove(checkpoint_callback.best_model_path)
+                    my_logger.info(f"[Main] Deleted checkpoint {checkpoint_callback.best_model_path}")
                 os.system(f"cp -r {out_path}/* {out_path_final}/ ")
                 my_logger.info(f"[Main] Copied all content from {out_path} to {out_path_final}")
                 logging.shutdown()

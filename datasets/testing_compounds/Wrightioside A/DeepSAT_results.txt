@@ -1,0 +1,3 @@
+COc1cc(C(=O)OCc2ccc(OC3OC(COC(=O)c4ccc(O)c(OC)c4)C(O)C(O)C3O)c(O)c2)ccc1O
+COc1cc(C(=O)OCC2OC(Oc3ccc(OC4OC(COC(=O)c5ccc(O)c(OC)c5)C(O)C(O)C4O)c(OC)c3)C(O)C(O)C2O)ccc1O
+O=C(OCc1ccc(OC2OC(CO)C(O)C(O)C2O)c(O)c1)c1ccc(O)c(OC2OC(CO)C(O)C(O)C2O)c1
