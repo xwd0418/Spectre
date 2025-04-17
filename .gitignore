@@ -570,3 +570,5 @@ spectre_frontend
 inference/hsqc*.txt
 inference/HSQC_for_deepsat/
 compare_with_deepsat
+
+task_scripts/inchi_mapping.pkl 
