@@ -210,7 +210,9 @@ class SignCoordinateEncoder(torch.nn.Module):
             # print(peaks)
             # exit(0)
         else:
-            signs = torch.where(X[:, :, [-1] * self.sign_embedding_dims] >= 0, 1, -1).float()
+            # signs = torch.where(X[:, :, [-1] * self.sign_embedding_dims] >= 0, 1, -1).float()
+            multiplicity_values = X[:, :, [-1] * self.sign_embedding_dims]
+            signs = torch.sign(multiplicity_values).float()
             embeddings.append(signs)
             # print(signs)
             # exit(0)

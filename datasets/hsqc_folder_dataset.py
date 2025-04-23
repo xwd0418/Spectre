@@ -186,6 +186,9 @@ class FolderDataset(Dataset):
                             elif random_num_for_dropping <= 0.3530+0.2939: # drop H rate
                                 h_tensor = torch.tensor([])
                             # else: keep both
+                        if random.random() <= 0.5:
+                            # the last column of HSQC is all 0
+                            hsqc[:,2] = 0
                                           
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
                             
@@ -260,10 +263,25 @@ class FolderDataset(Dataset):
         return combined
     
     def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight):
+        '''
+        embedding mapping:
+        0: HSQC
+        1: C NMR
+        2: H NMR
+        3: MW
+        4: normal hsqc
+        
+        future:
+        Mass Spectrometry
+        
+        '''
+        
         c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
         c_tensor,h_tensor = F.pad(c_tensor, (0, 2), "constant", 0), F.pad(h_tensor, (1, 1), "constant", 0)
         inputs = [hsqc, c_tensor, h_tensor]
-        NMR_type_indicator = [0]*len(hsqc)+[1]*len(c_tensor)+[2]*len(h_tensor)
+        # hsqc_type = 4 if (hsqc[:2]==0).all() else 0 # if multiplicity is all 0s, it is normal hsqc
+        hsqc_type = 0
+        NMR_type_indicator = [hsqc_type]*len(hsqc)+[1]*len(c_tensor)+[2]*len(h_tensor)
         if mol_weight is not None and len(mol_weight) > 0:
             inputs.append(mol_weight)
             NMR_type_indicator.append(3)

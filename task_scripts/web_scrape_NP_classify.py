@@ -1,8 +1,9 @@
 import  requests, json,pickle,tqdm, os, sys
 import pathlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
-spectre_dir = pathlib.Path(__file__).resolve().parents[1] / "reproduce_previous_works/Spectre"
+spectre_dir = pathlib.Path(__file__).resolve().parents[1] 
 sys.path.insert(0, str(spectre_dir))
+print(spectre_dir)
 from utils.get_NP_class import get_superclass_and_glycoside
 
 
@@ -37,6 +38,6 @@ if __name__ == "__main__":
         save_path = f"/workspace/SMILES_dataset/{split}/Superclass/index.pkl"
         os.mkdir(f"/workspace/SMILES_dataset/{split}/Superclass")
         print(f"Saving to {save_path}")
-        print(superclass_results)
+        # print(superclass_results)
         with open(save_path, 'wb') as f:
             pickle.dump(superclass_results, f)

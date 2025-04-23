@@ -166,7 +166,7 @@ def add_parser_arguments( parser):
         
     parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--ds", type=str, default="")
-    parser.add_argument("--num_workers", type=int, default=6)
+    parser.add_argument("--num_workers", type=int, default=4)
     # for early stopping/model saving
     parser.add_argument("--metric", type=str, default="val/mean_cos")
     parser.add_argument("--metricmode", type=str, default="max")

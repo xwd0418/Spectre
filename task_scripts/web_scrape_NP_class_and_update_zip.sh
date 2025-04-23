@@ -1,0 +1,2 @@
+python /root/gurusmart/MorganFP_prediction/reproduce_previous_works/Spectre/task_scripts/web_scrape_NP_classify.py
+zip -u /root/gurusmart/MorganFP_prediction/entropy_based_datasets/entropy_of_hashes_DB.zip /workspace/SMILES_dataset/val/Superclass/index.pkl /workspace/SMILES_dataset/train/Superclass/index.pkl

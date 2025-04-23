@@ -17,7 +17,8 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
             checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/epoch=73-step=16724.ckpt")
         case "optional":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW/r0_r6_trial_1/checkpoints/epoch=73-step=16724.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW/r0_r6_trial_1/checkpoints/epoch=73-step=16724.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW_flexible_normal_hsqc/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
         case "C-NMR":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
@@ -81,11 +82,14 @@ from datasets.dataset_utils import fp_loader_configer
 
 
 
-def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False):
-    if fp_type == "DB_specific_FP":
-        checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
-    if fp_type == "entropy_on_hashes":
-        checkpoint_path = find_checkpoint_path_entropy_on_hashes_FP(model_type)
+def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False, checkpoint_path=None):
+    if checkpoint_path is None:
+        if fp_type == "DB_specific_FP":
+            checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
+        if fp_type == "entropy_on_hashes":
+            checkpoint_path = find_checkpoint_path_entropy_on_hashes_FP(model_type)
+    else:
+        checkpoint_path = Path(checkpoint_path)
     model_path = checkpoint_path.parents[1]
     hyperpaerameters_path = model_path / "hparams.yaml"
     
@@ -96,6 +100,7 @@ def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=Fal
     # hparams['use_peak_values'] = False
     hparams['num_workers'] = 0
     fp_loader = fp_loader_configer.fp_loader
+    print("loading model from: ", checkpoint_path)
     model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, fp_loader = fp_loader,  **hparams)
     max_radius = int(hparams['FP_choice'].split("_")[-1])
     fp_loader.setup(hparams['out_dim'], max_radius)
@@ -331,7 +336,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
 
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
     # Step 5: Draw similarity map on molecule without hydrogens
-    d = Draw.MolDraw2DCairo(400, 400)
+    d = Draw.MolDraw2DCairo(800, 800)
     SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d)
     
     d.FinishDrawing()
@@ -349,9 +354,9 @@ def build_input(compound_dir, mode = None, include_hsqc = True, include_c_nmr = 
     
     return inputs, NMR_type_indicator
     """
-    print("\n\n")
-    print(compound_dir.split("/")[-1])
-    print("\n")
+    # print("\n\n")
+    # print(compound_dir.split("/")[-1])
+    # print("\n")
     def load_2d():
         return torch.tensor(np.loadtxt(os.path.join(compound_dir, "HSQC.txt"), delimiter=",")).float()
     def load_1d(nmr ):
@@ -391,7 +396,10 @@ def get_inputs_and_indicators_from_NMR_tensors(include_hsqc, include_c_nmr, incl
     NMR_type_indicator = []
     if include_hsqc:
         input_NMRs.append(hsqc)
-        NMR_type_indicator+= [0]*hsqc.shape[0]
+        # hsqc_type = 4 if (hsqc[:2]==0).all() else 0 # if multiplicity is all 0s, it is normal hsqc
+        hsqc_type = 0
+        NMR_type_indicator+= [hsqc_type]*hsqc.shape[0]
+        
     if include_c_nmr:
         input_NMRs.append(c_tensor)
         NMR_type_indicator+= [1]*c_tensor.shape[0]
