@@ -51,7 +51,7 @@ def convert_bits_positions_to_array(FP_on_bits, length):
 def generate_morgan_FP(mol, radius=2, length=6144):
     if type(mol) == str:
         mol = Chem.MolFromSmiles(mol)
-    mol = Chem.AddHs(mol) # add implicit Hs to the molecule
+    # mol = Chem.AddHs(mol) # add implicit Hs to the molecule
     gen = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=length)
  
     fp = gen.GetFingerprint(mol)

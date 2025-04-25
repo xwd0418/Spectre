@@ -1,3 +1,8 @@
+import sys
+import pathlib
+# Add the current directory to sys.path
+sys.path.insert(0, pathlib.Path(__file__).parent.parent.parent.absolute().__str__())
+
 from typing import Tuple
 from models.encoder import CoordinateEncoder, SignCoordinateEncoder
 from models.encoders.graycode_encoder import GraycodeEncoder
