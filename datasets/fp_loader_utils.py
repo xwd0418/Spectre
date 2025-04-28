@@ -377,24 +377,3 @@ class Hash_Entropy_FP_loader(FP_loader):
             rankingset_path = rankingset_path.replace("FP_normalized", "FP_normalized_deepsat_retrieval_set")
         print(f"loading {rankingset_path}")
         return torch.load(rankingset_path)#.to("cuda")
-        
-class FP_Loader_Configer():
-    def __init__(self):
-        # print("FP_Loader_Configer is initialized\n\n\n\n")
-        self.fp_loader = None
-    
-    def select_version(self, version):
-        if version == "MFP_Specific_Radius":
-            print("choosing Specific_Radius_MFP_loader")
-            self.fp_loader = Specific_Radius_MFP_loader()
-        elif version == "DB_Specific":
-            print("choosing DB_Specific_FP_loader")
-            self.fp_loader = DB_Specific_FP_loader()
-        elif version == "Hash_Entropy":
-            print("choosing Hash_Entropy_FP_loader")
-            self.fp_loader = Hash_Entropy_FP_loader()
-
-        else:
-            raise ValueError("version should be either Specific_Radius or DB_Specific")
-
-fp_loader_configer = FP_Loader_Configer()

@@ -1,0 +1,75 @@
+defaults:
+  - _self_
+  - override hydra/hydra_logging: disabled  
+  - override hydra/job_logging: disabled  
+
+base_config:
+  model_name: transformer_2d1d
+  experiment_name: default
+  model_type: HSQCRankedTransformer
+  mode: train
+  debug: false
+
+  log_folder: default
+  data_folder: /workspace/
+
+  epochs: 300
+  batch_size: 32
+  accumulate_grad_batches_num: 4
+  num_workers: 4
+
+  metric: val/mean_cos
+  metricmode: max
+  patience: 7
+
+  load_all_weights: ""
+  freeze: false
+
+  checkpoint_path: null
+  delete_checkpoint: false
+
+  fp_choice: hash_entropy
+  fp_radius: 6
+  normalize_hsqc: false
+  disable_solvent: false
+  enable_hsqc_delimiter_only_2d: false
+  use_peak_values: false
+  use_1d_nmr_no_solvent: true
+  rank_by_soft_output: true
+  use_mw: true
+  similarity_measure: cosine
+  jittering: 0.0
+  rank_by_test_set: false
+
+  num_class: 25
+  loss_func: MSE
+
+  input_types: ["2d"]
+  separate_classifier: false
+  weighted_sample_based_on_input_type: false
+  weighted_sampling_strategy: none
+  random_seed: 42
+  train_on_all_info_set: false
+
+  fp_building_type: normal
+  out_dim: 6144
+
+model_args: 
+  lr: 1e-5
+  noam_factor: 1.0
+  dim_model: 784
+  dim_coords: [365, 365, 54]
+  heads: 8
+  layers: 16
+  ff_dim: 3072
+  wavelength_bounds: [[0.01, 400.0], [0.01, 20.0]]
+  dropout: 0.1
+  pos_weight: null
+  weight_decay: 0.0
+  l1_decay: 0.0
+  warmup_steps: 8000
+  scheduler: attention
+  coord_encoder: sce
+  gce_resolution: 1.0
+  freeze_weights: false
+  ranking_set_path: ""

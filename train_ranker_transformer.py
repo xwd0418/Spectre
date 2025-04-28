@@ -155,7 +155,7 @@ def add_parser_arguments( parser):
         else:
             raise argparse.ArgumentTypeError('Boolean value expected.')    
         
-    parser.add_argument("modelname", type=str)
+    parser.add_argument("modelname", type=str) # done
     parser.add_argument("--name_type", type=int, default=2)
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--foldername", type=str, default=f"lightning_logs")

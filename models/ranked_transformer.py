@@ -25,6 +25,8 @@ from utils.L1_decay import L1
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 
+from config import ProjectConfig
+
 RANKED_TNSFMER_ARGS = [
     "dim_model", "dim_coords", "heads", "layers", "ff_dim", "coord_enc", "wavelength_bounds",
     # exclude save_params
@@ -41,38 +43,14 @@ class HsqcRankedTransformer(pl.LightningModule):
 
     def __init__(
         self,
-        # model args
-        fp_loader,
-        dim_model=128,
-        dim_coords=[43, 43, 42],
-        heads=8,
-        layers=8,
-        ff_dim=1024,
-        coord_enc="sce",
-        wavelength_bounds=None,
-        gce_resolution=1,
-        dropout=0.1,
-        # other business logic stuff
-        save_params=True,
-        ranking_set_path="",
-        FP_choice="R2-6144FP",
-        loss_func = "",
-        # training args
-        lr=1e-5,
-        noam_factor = 1,
-        pos_weight = None,
-        weight_decay = 0.0,
-        L1_decay = 0.0,
-        scheduler=None,  # None, "attention"
-        warm_up_steps=0,
-        freeze_weights=False,
-        use_Jaccard = False,
-        *args,
-        **kwargs,
+        config: ProjectConfig,
+        fp_loader
     ):
         super().__init__()
         
         self.fp_loader = fp_loader
+        base_config = config.base_config
+        model_args = config.model_args
         
         params = locals().copy()
         self.out_logger = logging.getLogger("lightning")
@@ -90,86 +68,89 @@ class HsqcRankedTransformer(pl.LightningModule):
 
 
         # === All Parameters ===
-        out_dim = kwargs['out_dim']         
-        self.FP_length = out_dim # 6144 
-        self.separate_classifier = kwargs['separate_classifier']
-        self.test_on_deepsat_retrieval_set = kwargs['test_on_deepsat_retrieval_set']
-        if FP_choice == "R0_to_R4_30720_FP":
-            out_dim = self.FP_length * 5
-        elif FP_choice == "R0_to_R6_exact_R_concat_FP":
-            out_dim = self.FP_length * 7
-        if loss_func == "CE":
-            assert(FP_choice == "R2-6144-count-based-FP")
-            out_dim = self.FP_length * kwargs['num_class']
-        self.out_dim = out_dim
+        self.out_dim = base_config.out_dim
+        self.fp_length = self.out_dim # 6144 
+        self.separate_classifier = base_config.separate_classifier
+        self.test_on_deepsat_retrieval_set = base_config.mode == 'test_deepsat'
         
-        self.bs = kwargs['bs']
-        self.num_class = kwargs['num_class'] if loss_func == "CE" else None
-        self.lr = lr
-        self.noam_factor = noam_factor
-        self.weight_decay = weight_decay
+        # TODO: fp choice handling ?
+        #if FP_choice == "R0_to_R4_30720_FP":
+        #    out_dim = self.FP_length * 5
+        #elif FP_choice == "R0_to_R6_exact_R_concat_FP":
+        #    out_dim = self.FP_length * 7
+        #if base_config.loss_func == "CE":
+        #    assert(FP_choice == "R2-6144-count-based-FP")
+        #    out_dim = self.fp_length * base_config.num_class
+        
+        self.bs = base_config.batch_size
+        self.num_class = base_config.num_class if base_config.loss_func == "CE" else None
+        self.lr = model_args.lr
+        self.noam_factor = model_args.noam_factor
+        self.weight_decay = model_args.weight_decay
 
-        self.scheduler = scheduler
-        self.warm_up_steps = warm_up_steps
-        self.dim_model = dim_model
+        self.scheduler = model_args.scheduler
+        self.warm_up_steps = model_args.warmup_steps
+        self.dim_model = model_args.dim_model
         
-        self.use_Jaccard = use_Jaccard
+        self.use_Jaccard = base_config.similarity_measure == "jaccard"
         
         # don't set ranking set if you just want to treat it as a module
-        self.FP_choice=FP_choice
-        self.rank_by_soft_output = kwargs['rank_by_soft_output']
-        self.rank_by_test_set = kwargs['rank_by_test_set']
-        
-        
-        if FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy"):
-            self.radius = int(FP_choice.split("_")[-1])
-        elif FP_choice.startswith("pick_entropy"):
-            self.radius = int(FP_choice.split("_")[-1][1:])
+        self.fp_choice = base_config.fp_choice
+        self.radius = base_config.fp_radius
+        self.rank_by_soft_output = base_config.rank_by_soft_output
+        self.rank_by_test_set = base_config.rank_by_test_set # TODO: condense these params
         
         self.ranker = None
 
-        if save_params:
-            print("HsqcRankedTransformer saving args")
-            self.save_hyperparameters(*RANKED_TNSFMER_ARGS, *kwargs.keys())
+        # TODO: do we need to save hyperparameters if using yaml?
+        #if save_params:
+        #    print("HsqcRankedTransformer saving args")
+        #    self.save_hyperparameters(*RANKED_TNSFMER_ARGS, *kwargs.keys())
 
         # ranked encoder
         self.enc = build_encoder(
-            coord_enc, dim_model, dim_coords, wavelength_bounds, gce_resolution, kwargs['use_peak_values'])
+            model_args.coord_encoder,
+            model_args.dim_model,
+            model_args.dim_coords,
+            model_args.wavelength_bounds,
+            model_args.gce_resolution,
+            base_config.use_peak_values)
         self.out_logger.info(
             f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
 
         ### Loss function 
-        if pos_weight==None:
+        if model_args.pos_weight==None:
             self.bce_pos_weight = None
             self.out_logger.info("[RankedTransformer] bce_pos_weight = None")
         else:
             try:
-                pos_weight_value = float(pos_weight)
+                pos_weight_value = float(model_args.pos_weight)
                 # self.bce_pos_weight= torch.full((self.FP_length,), pos_weight_value)
                 self.bce_pos_weight= torch.tensor([pos_weight_value])
                 self.out_logger.info(f"[RankedTransformer] bce_pos_weight is {pos_weight_value}")
         
             except :
-                if pos_weight == "ratio":
+                if model_args.pos_weight == "ratio":
                     self.bce_pos_weight = torch.load(f'{repo_path}/pos_weight_array_based_on_ratio.pt')
                     self.out_logger.info("[RankedTransformer] bce_pos_weight is loaded ")
                 else:
-                    raise ValueError(f"pos_weight {pos_weight} is not valid")
+                    raise ValueError(f"pos_weight {model_args.pos_weight} is not valid")
         
-        self.loss_func = loss_func
-        if FP_choice == "R2-6144-count-based-FP":
-            if loss_func == "MSE":
-                self.loss = nn.MSELoss()
-                self.compute_metric_func = compute_metrics.cm_count_based_mse
-            elif loss_func == "CE":
-                self.loss = nn.CrossEntropyLoss()
-                self.compute_metric_func = compute_metrics.cm_count_based_ce
-            else:
-                raise Exception("loss_func should be either MSE or CE when using count-based FP")
-        else: #  Bit based FP
-            self.loss = nn.BCEWithLogitsLoss(pos_weight=self.bce_pos_weight)
-            self.compute_metric_func = compute_metrics.cm
+        self.loss_func = base_config.loss_func
+        # TODO: handle alternative fp choice
+        #if FP_choice == "R2-6144-count-based-FP":
+        #    if loss_func == "MSE":
+        #        self.loss = nn.MSELoss()
+        #        self.compute_metric_func = compute_metrics.cm_count_based_mse
+        #    elif loss_func == "CE":
+        #        self.loss = nn.CrossEntropyLoss()
+        #        self.compute_metric_func = compute_metrics.cm_count_based_ce
+        #    else:
+        #        raise Exception("loss_func should be either MSE or CE when using count-based FP")
+        #else: #  Bit based FP
+        self.loss = nn.BCEWithLogitsLoss(pos_weight=self.bce_pos_weight)
+        self.compute_metric_func = compute_metrics.cm
         
         
         
@@ -180,42 +161,38 @@ class HsqcRankedTransformer(pl.LightningModule):
         from collections import defaultdict
         self.test_np_classes_rank1 = defaultdict(list)
 
-        self.NMR_type_embedding = nn.Embedding(4, dim_model)
+        self.NMR_type_embedding = nn.Embedding(4, model_args.dim_model)
         # HSQC, C NMR, H NMR, MW
         # MW isn't NMR, but, whatever......
         self.out_logger.info("[RankedTransformer] nn.linear layer to be initialized")
         # print("out_dim is ", out_dim, " dim_model is ", dim_model)
         # exit(0)
-        self.fc = nn.Linear(dim_model, out_dim)
+        self.fc = nn.Linear(model_args.dim_model, base_config.out_dim)
         self.out_logger.info("[RankedTransformer] nn.linear layer is initialized")
         # (1, 1, dim_model)
-        self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
+        self.latent = torch.nn.Parameter(torch.randn(1, 1, model_args.dim_model)) # the <cls> token
 
         # The Transformer layers:
         layer = torch.nn.TransformerEncoderLayer(
-            d_model=dim_model,
-            nhead=heads,
-            dim_feedforward=ff_dim,
+            d_model=model_args.dim_model,
+            nhead=model_args.heads,
+            dim_feedforward=model_args.ff_dim,
             batch_first=True,
-            dropout=dropout,
+            dropout=model_args.dropout,
         )
         self.transformer_encoder = torch.nn.TransformerEncoder(
             layer,
-            num_layers=layers,
+            num_layers=model_args.layers,
         )
         # === END Parameters ===
 
         self.out_logger.info("[RankedTransformer] weights are initialized")
         
-        if L1_decay:
+        if model_args.l1_decay:
             self.out_logger.info("[RankedTransformer] L1_decay is applied")
-            self.transformer_encoder = L1(self.transformer_encoder, L1_decay)
-            self.fc = L1(self.fc, L1_decay)
-            
-        if freeze_weights:
-            self.out_logger.info("[RankedTransformer] Freezing Weights")
-            for parameter in self.parameters():
-                parameter.requires_grad = False
+            self.transformer_encoder = L1(self.transformer_encoder, model_args.l1_decay)
+            self.fc = L1(self.fc, model_args.l1_decay)
+
         self.out_logger.info("[RankedTransformer] Initialized")
 
     

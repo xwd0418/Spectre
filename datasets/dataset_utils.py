@@ -7,8 +7,6 @@ DATASET_root_path = pathlib.Path("/workspace/")
 from utils.matmul_precision_wrapper import set_float32_highest_precision
 from rdkit import Chem
 
-from datasets.fp_loader_utils import FP_Loader_Configer, fp_loader_configer
-
 def pad(sequence):
   """
     Assume sequence is a (batch)list of sequences that can be variable size.
