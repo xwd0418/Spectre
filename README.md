@@ -9,7 +9,8 @@ pip install -r requirements.txt
 gitlab-registry.nrp-nautilus.io/w6xu/guru-docker-image:3699f97c
 
 ## Dataset Structure
-Inner developer dataset (only shared with project developers), available [here](https://drive.google.com/file/d/1nM0P6NLnUwt9SdSHuOe7VYjxXXLVKsGb/view?usp=sharing) 
+Inner developer dataset (only accessible with project developers), available [here](https://drive.google.com/file/d/1uM45DYIaZQjvaT417uRcG3RiL7snp8xu/view?usp=sharing) 
+
 Public dataset, with HSQC spectra removed due to legal concerns, is available [here](https://drive.google.com/file/d/16eKPJz2hwsfnPIKweJyKrfi9cZiGVErD/view?usp=sharing).
 
 Unfortunately, in our repo, we have hard-coded our datasets' name and file paths. Everyone is more than welcome to orgnize the paths. Otherwise, we suggest to 
