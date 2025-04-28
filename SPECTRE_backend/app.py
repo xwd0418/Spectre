@@ -69,19 +69,22 @@ def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
     returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values =  inference_topK(
         inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
             k=k, mode = None, ground_truth_FP=None,
-            fp_type = "DB_Specific_Radius",
+            similarity_mapping_showing = "both",
             filter_by_MW=MW_range,
             verbose=False,
             weighting_pred = None,
             infer_in_backend_service = True,
     )
-    for i, (smile, name, img_base64, mw, cos_value) in enumerate(zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values)):
+    for i, (smile, name, (img_no_sim_map, image_with_sim_map), mw, cos_value) in enumerate(zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values)):
         
         retrievals_to_return.append({"smile": smile, 
                               "name": name, 
                               "MW": mw,
                               "cos": cos_value,
-                              "image": img_base64})
+                              "image_no_sim_map": img_no_sim_map,
+                              "image_with_sim_map": image_with_sim_map,
+                                    })
+
         if i == k:
             break
     return retrievals_to_return

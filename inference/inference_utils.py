@@ -307,7 +307,7 @@ from PIL import Image
 from math import sqrt
 from rdkit.Chem.Draw import SimilarityMaps
 
-def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, need_to_clean_H=False):
+def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, need_to_clean_H=False, img_size=400): 
     '''
     used in db-specific FP
     This functions visualizes the retrieved molecule with the predicted fragments highlighted
@@ -336,7 +336,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
 
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
     # Step 5: Draw similarity map on molecule without hydrogens
-    d = Draw.MolDraw2DCairo(800, 800)
+    d = Draw.MolDraw2DCairo(img_size, img_size)
     SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d)
     
     d.FinishDrawing()
@@ -418,12 +418,13 @@ def get_inputs_and_indicators_from_NMR_tensors(include_hsqc, include_c_nmr, incl
 
 def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
                    k=5, mode = None, ground_truth_FP=None,
-                   fp_type = "MFP_Specific_Radius",
+                   similarity_mapping_showing = "MFP_Specific_Radius",
                    filter_by_MW=None,
                    verbose=True,
                    weighting_pred = None,
                    infer_in_backend_service = False,
                    encode_img = True,
+                   img_size = 400,
                    ):
     """
     Run inference on a given input tensor and visualize the top-k retrieved molecules.
@@ -460,10 +461,14 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
         if verbose or infer_in_backend_service:
             mol = Chem.MolFromSmiles(smile)
     
-            if fp_type == "MFP_Specific_Radius":
+            if similarity_mapping_showing in ["MFP_Specific_Radius", 0, False]:
                 img = Draw.MolToImage(mol)
-            elif fp_type == "DB_Specific_Radius":
+            elif similarity_mapping_showing in ["DB_Specific_Radius", 1, True]:
                 img = show_retrieved_mol_with_highlighted_frags(pred[0], smile) #
+            elif similarity_mapping_showing == "both":
+                img_no_sim_map = Draw.MolToImage(mol, size=(img_size,img_size))
+                img_with_sim_map = show_retrieved_mol_with_highlighted_frags(pred[0], smile, img_size=img_size) #
+                
             else:
                 raise ValueError("fp_type must be either MFP_Specific_Radius or DB_Specific_Radius")
         
@@ -479,12 +484,15 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
             if infer_in_backend_service:
                 returning_MWs.append(mw)
                 if encode_img:
-                    buffered = BytesIO()
-                    img.save(buffered, format="PNG")
-                    img_bytes = buffered.getvalue()
-                    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
-            
-                    returning_imgs.append(img_base64)
+                    
+                    if similarity_mapping_showing == "both":
+                        img_no_sim_map_base64 = encode_image(img_no_sim_map)
+                        img_with_sim_map_base64 = encode_image(img_with_sim_map)
+                        returning_imgs.append([img_no_sim_map_base64, img_with_sim_map_base64])
+                    else:
+                        img_base64 = encode_image(img)
+                        returning_imgs.append(img_base64)
+                        
                 else:
                     returning_imgs.append(img)
                 returning_values.append(value.item())
@@ -494,6 +502,13 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
     if infer_in_backend_service:
         return returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values
     return returning_smiles, returning_names
+
+def encode_image(img):
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_bytes = buffered.getvalue()
+    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+    return img_base64
 
 ### save visualization as PNG 
 
@@ -567,7 +582,7 @@ def save_molecule_inference(smiles, name, index_rkst, model, model_name, inputs,
     # run inference 
     returning_smiles, returning_names = inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
                                       k=k, mode=mode, ground_truth_FP=ground_truth_FP,
-                                      fp_type=fp_type,  
+                                      similarity_mapping_showing=fp_type,  
                                       verbose=False, filter_by_MW="from_input")
     visualize_smiles(returning_smiles, returning_names, curr_result_path / "visualization.png")
     
