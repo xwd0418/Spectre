@@ -1,6 +1,10 @@
 import os
-
-root_dir = '/root/gurusmart/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/testing_compounds'
+from pathlib import Path
+curr_file_path = Path(__file__).resolve()
+curr_file_dir = curr_file_path.parent
+# root_dir = f'/root/gurusmart/MorganFP_prediction/reproduce_previous_works/Spectre/datasets/testing_compounds'
+root_dir = str(curr_file_dir)
+print(f"Root directory: {root_dir}")
 
 for subdir, dirs, files in os.walk(root_dir):
     if 'HSQC.txt' in files:
@@ -17,6 +21,6 @@ for subdir, dirs, files in os.walk(root_dir):
                 parts = line.strip().split(',')
                 if len(parts) == 3:
                     h, c, _ = parts
-                    f.write(f"{h},{c},0\n")
+                    f.write(f"{h},{c}\n")
 
         print(f"Processed {hsqc_path} -> {normal_hsqc_path}")

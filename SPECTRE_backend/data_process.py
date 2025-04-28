@@ -75,12 +75,19 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if hsqc is not None:
         pos = hsqc[hsqc[:,2]>0]
         neg = hsqc[hsqc[:,2]<0]
+        normal = hsqc[hsqc[:,2]==0]
+        # edited HSQC plot
         # CH3/CH (positive phase): Red
         # CH2 (negative phase): Blue
-        ax1.scatter(pos[:,1], pos[:,0], c="red", label=r"CH or CH$_3$", s=5)
-        ax1.scatter(neg[:,1], neg[:,0], c="blue", label=r"CH$_2$", s=5)
+        if len(pos):
+            ax1.scatter(pos[:,1], pos[:,0], c="red", label=r"CH or CH$_3$", s=5)
+        if len(neg):
+            ax1.scatter(neg[:,1], neg[:,0], c="blue", label=r"CH$_2$", s=5)
         # print("scatter!!")
         # print(pos, neg)
+        # original HSQC plot
+        if len(normal):
+            ax1.scatter(normal[:,1], normal[:,0], c="black", s=2)
     ax1.set_title("HSQC")
     ax1.set_xlabel('Proton Shift (1H)')  # X-axis label
     ax1.set_xlim([0, 12])

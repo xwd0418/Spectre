@@ -118,7 +118,10 @@ def generate_image():
         for peak in HSQC.split("\n"):
             if peak.strip() == "":
                 continue
-            hsqc_stacked.append(np.fromstring(peak, sep=", "))
+            hsqc_peak = np.fromstring(peak, sep=", ")
+            if len(hsqc_peak) == 2:
+                hsqc_peak = np.append(hsqc_peak, 0)
+            hsqc_stacked.append(hsqc_peak)
         # print(hsqc_stacked)
         hsqc = torch.tensor(np.array(hsqc_stacked)).float()  
         if swap_c_h:         
