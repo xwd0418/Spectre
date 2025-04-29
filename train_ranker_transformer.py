@@ -183,43 +183,136 @@ def add_parser_arguments( parser):
 
     # different versions of input/output
     parser.add_argument("--FP_choice", type=str, default="R2-6144FP", help="use which fingerprint as ground truth, default: r2-6144fp") 
+    parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact") # deprecated, mainly used for pick_entropy 
+    
     parser.add_argument("--normalize_hsqc", action='store_true', help="input hsqc coordinates will be normalized")
     parser.add_argument("--disable_solvent", action='store_true', help="zero-pad solvent tensor")
-    # parser.add_argument("--disable_hsqc_peaks", action='store_true', help="zero-pad hsqc peaks tensor")
-    # parser.add_argument("--disable_hsqc_intensity", action='store_true', help="hsqc peaks tensor will be +/-1")    
+ 
     parser.add_argument("--enable_hsqc_delimeter_only_2d", action='store_true', 
                         help="add start and end token for hsqc. this flag will be used with only 2d hsqc tensor input")
     parser.add_argument("--use_peak_values",  type=lambda x:bool(str2bool(x)), default=False, help="use peak values in addition to peak signs")
-    parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data")
     parser.add_argument("--rank_by_soft_output",  type=lambda x:bool(str2bool(x)), default=True, help="rank by soft output instead of binary output")
-    parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     parser.add_argument("--use_Jaccard",  type=lambda x:bool(str2bool(x)), default=False, help="using Jaccard similarity instead of cosine similarity")
     parser.add_argument("--jittering",  type=float, default=0, help="a data augmentation technique that jitters the peaks. Choose 'normal' or 'uniform' to choose jittering distribution" )
     parser.add_argument("--rank_by_test_set",  type=lambda x:bool(str2bool(x)), default=False, help="rank by test set instead of entire set. only used during grid search")
-    # count-based FP
+    # # count-based FP
     parser.add_argument("--num_class",  type=int, default=25, help="size of CE label class when using count based FP")
     parser.add_argument("--loss_func",  type=str, default="MSE", help="either MSE or CE")
     
-    # optional 2D input
+    # control inputs
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
     parser.add_argument("--optional_MW",  type=lambda x:bool(str2bool(x)), default=False, help="also make molecular weight as optional input")
-    parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="use molecules with only 1D input")
-    parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
-    parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
-    parser.add_argument("--only_H_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD H_NMR. Need to use together with only_oneD_NMR")
+    parser.add_argument("--use_HSQC", type=lambda x:bool(str2bool(x)), default=True, help="also make molecular weight as optional input")
+    parser.add_argument("--use_H_NMR",  type=lambda x:bool(str2bool(x)), default=True, help="using 1D NMR")
+    parser.add_argument("--use_C_NMR",  type=lambda x:bool(str2bool(x)), default=True, help="using 1D NMR")
+    parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
+    parser.add_argument("--train_on_all_info_set", type=lambda x:bool(str2bool(x)), default=False, help="train on subset of training set, where every mol has 3 types of NMR")
+    ### the args above will be used to assign values to the following args
+    # parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data, but not using solvent data")
+    # parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="will use /workspace/OneD_Only_Dataset/")
+    # parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
+    # parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
+    # parser.add_argument("--only_H_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD H_NMR. Need to use together with only_oneD_NMR")
+    
+    ### some fancy stuff i tried but didn't work
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
     parser.add_argument("--weighted_sample_based_on_input_type",  type=lambda x:bool(str2bool(x)), default=False, help="use weighted loss based on input type")
     parser.add_argument("--sampling_strategy",  type=str, default="none", help="sampling strategy for weighted loss")
+    
     parser.add_argument("--random_seed", type=int, default=42)
-    parser.add_argument("--train_on_all_info_set", type=lambda x:bool(str2bool(x)), default=False)
     
     # entropy based FP
-    parser.add_argument("--FP_building_type", type=str, default="Normal", help="Normal or Exact")
     parser.add_argument("--out_dim", type=lambda x: int(x) if x.isdigit() else x, default="6144", help="the size of output fingerprint to be predicted. If set to inf, then use all fragements/bits")
 
     # return test_result[0]['test/mean_rank_1'] # for optuna with non-flexble model
     # return test_result[0]['test/mean_rank_1_all_inputs'] # for optuna with non-flexble model
+       
+def parse_nmr_input_types(args):
+    """
+    Parse the NMR input types and update the arguments accordingly.
+    """
+    # out_logger = logging.getLogger("lightning") 
+    
+    ### backward compatible:
+    if {"use_oneD_NMR_no_solvent", "combine_oneD_only_dataset", "only_oneD_NMR", "only_C_NMR", "only_H_NMR" }.issubset(args.keys()):
+        print("[parsing nmr input]: NMR input type args already provided") 
+        return args
+    
+    # assign default values
+    args['use_oneD_NMR_no_solvent'] = True    # whether to use 1D NMR in /workspace/Smiles_dataset/
+    args['combine_oneD_only_dataset'] = False # whether to use /workspace/OneD_Only_Dataset/
+    args['only_oneD_NMR'] = False
+    args['only_C_NMR'] = False
+    args['only_H_NMR'] = False
+    # finish assigning default values
         
+    if args['optional_inputs']: # flexible models
+        assert args['use_HSQC'] and args['use_H_NMR'] and args['use_C_NMR'], "optional_inputs should be used with all of HSQC, H_NMR, C_NMR"
+
+        args["combine_oneD_only_dataset"] = True
+        # CAUTION: we still still need to configure --optional_MW from command line !! 
+        return args
+        
+    ### non-flexible models
+    assert not args['optional_MW'] , "optional_MW should be only used with optional_inputs"
+    assert args['use_HSQC']  or args['use_H_NMR']  or args['use_C_NMR'] , "at least one of HSQC, H_NMR, C_NMR should be used"
+    
+    if args['use_HSQC']  and args['use_H_NMR']  and args['use_C_NMR'] : # use all three
+        if args['train_on_all_info_set'] :
+            return args
+        else:
+            print("Warning: --train_on_all_info_set is set to False, but all three inputs are used.")
+            print("\t train_on_all_info_set is overriden to True!!!")
+            args['train_on_all_info_set'] = True
+            return args
+            
+    if args['use_HSQC']  and args['use_H_NMR']  : # HSQC + H_NMR
+        args['only_H_NMR'] = True
+        return args
+
+    if args['use_HSQC']  and args['use_C_NMR']  : # HSQC + C_NMR
+        args['use_C_NMR'] = True
+        return args
+        
+    if args['use_H_NMR']  and args['use_C_NMR'] : # H_NMR + C_NMR
+        args['only_oneD_NMR'] = True
+        args['combine_oneD_only_dataset'] = True
+        return args
+        
+    if args['use_HSQC'] : # use HSQC only
+        args['use_oneD_NMR_no_solvent'] = False
+        return args     
+    
+    if args['use_H_NMR']:
+        args['only_oneD_NMR'] = True
+        args['combine_oneD_only_dataset'] = True
+        args['only_H_NMR'] = True
+        return args
+    
+    if args['use_C_NMR']:
+        args['only_oneD_NMR'] = True
+        args['combine_oneD_only_dataset'] = True
+        args['only_C_NMR'] = True
+        return args
+    
+    # if args['use_H_NMR'] and args['use_C_NMR']:
+    #     args['only_oneD_NMR'] = False
+    #     args['only_H_NMR'] = False
+    #     args['only_C_NMR'] = False
+    # elif args['use_H_NMR']:
+    #     args['only_oneD_NMR'] = True
+    #     args['only_H_NMR'] = True
+    #     args['only_C_NMR'] = False
+    # elif args['use_C_NMR']:
+    #     args['only_oneD_NMR'] = True
+    #     args['only_H_NMR'] = False
+    #     args['only_C_NMR'] = True
+    # else:
+    #     args['only_oneD_NMR'] = False
+    #     args['only_H_NMR'] = False
+    #     args['only_C_NMR'] = False
+
+    return args
     
 if __name__ == '__main__':
     torch.set_float32_matmul_precision('medium')
@@ -231,6 +324,8 @@ if __name__ == '__main__':
     args = vars(parser.parse_known_args()[0])
     apply_args(parser, args["modelname"])
     args = vars(parser.parse_known_args()[0])
+    
+    args = parse_nmr_input_types(args)
     # if args['only_C_NMR'] or args['only_H_NMR']:
     #     assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
     # if args['only_oneD_NMR']:
