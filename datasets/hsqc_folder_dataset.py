@@ -9,10 +9,10 @@ from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
 import torch.nn.functional as F
 
-
-
 import sys, pathlib
 repo_path = pathlib.Path(__file__).resolve().parents[1]
+
+from config import ProjectConfig
 
 class FolderDataset(Dataset):
     '''
@@ -29,32 +29,33 @@ class FolderDataset(Dataset):
         - ...
         
     '''
-    def __init__(self, dir, split="train", input_src=["HSQC"], FP_choice="", parser_args=None, fp_loader=None):
+    def __init__(self, config: ProjectConfig, split="train", fp_loader=None):
         
         self.fp_loader = fp_loader
-
-        self.dir = os.path.join(dir, split)
+        self.base_config = config.base_config
+        self.dir = os.path.join(config.base_config.data_folder, split)
         self.split = split
-        self.fp_suffix = FP_choice
-        self.input_src = input_src
-        self.parser_args = parser_args
+        self.fp_suffix = f'{config.base_config.fp_choice}-r{config.base_config.fp_radius}'
+        self.input_src = config.base_config.input_types
         logger = logging.getLogger("lightning")
 
         assert os.path.exists(self.dir), f"{self.dir} does not exist"
-        assert(split in ["train", "val", "test"])
-        for src in input_src:
+        for src in self.input_src:
+            # TODO: fix path assertions
             assert os.path.exists(os.path.join(self.dir, src)),"{} does not exist".format(os.path.join(self.dir, src))
-            
-        if parser_args['use_MW']:
+        
+        # TODO: check this is accurate
+        if 'mw' in self.input_src:
             with open(os.path.join(self.dir, "MW/index.pkl"), "rb") as f:
                 self.mol_weight_2d = pickle.load(f)
-        if split in ["test"]:
+        if self.split in ["test"]:
             with open(os.path.join(self.dir, "Superclass/index.pkl"), "rb") as f:
                 self.NP_classes = pickle.load(f)
-            
-        if parser_args['train_on_all_info_set'] or split in ["val", "test"]:
+        
+        if config.base_config.train_on_all_info_set or self.split in ('val', 'test'):
             logger.info(f"[FolderDataset]: only all info datasets")
-            path_to_load_full_info_indices = f"{repo_path}/datasets/{split}_indices_of_full_info_NMRs.pkl"
+            # TODO: refactor this?
+            path_to_load_full_info_indices = f"{repo_path}/datasets/{self.split}_indices_of_full_info_NMRs.pkl"
             self.files = pickle.load(open(path_to_load_full_info_indices, "rb"))
             print("loaded full info indices\n\n\n")
             # print("36690.pt" in self.files, self.files[0])
@@ -75,47 +76,30 @@ class FolderDataset(Dataset):
             if rank != 0:
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 logger.setLevel(logging.WARNING)
-        logger.info(f"[FolderDataset]: dir={dir},input_src={input_src},split={split},FP={FP_choice},normalize_hsqc={parser_args['normalize_hsqc']}")
+
+        logger.info(
+            f"[FolderDataset]: dir={self.dir}, input_src={self.input_src}, split={split}, "
+            f"FP={self.fp_suffix}, normalize_hsqc={config.base_config.normalize_hsqc}"
+        )
         
-        if self.parser_args['only_C_NMR']:
-            def filter_unavailable(x):
-                if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
-                    return False 
-                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
-                return len(c_tensor)>0
-            self.files = list(filter(filter_unavailable, self.files))
-        elif self.parser_args['only_H_NMR']:
-            def filter_unavailable(x):
-                if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
-                    return False 
-                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
-                return len(h_tensor)>0
-            self.files = list(filter(filter_unavailable, self.files))
-            
-        elif self.parser_args['only_oneD_NMR']:
-            def filter_unavailable(x):
-                if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
-                    return False 
-                c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
-                return len(h_tensor)>0 and len(c_tensor)>0
-            self.files = list(filter(filter_unavailable, self.files))
+        # TODO: verify these conversions
+        def filter_unavailable(x):
+            if os.path.exists(os.path.join(self.dir, "oneD_NMR", x)) == False:
+                return False 
+            c_tensor, h_tensor = torch.load(f"{self.dir}/oneD_NMR/{x}")
+            return (len(c_tensor) > 0 or 'c' not in self.input_src) and (len(h_tensor) > 0 or 'h' not in self.input_src)
+        self.files = list(filter(filter_unavailable, self.files))
 
         logger.info(f"[FolderDataset]: dataset size is {len(self)}")
         
-        # print("\n\n\n", "36690.pt" in self.files, self.files[0])
-        
-        
-        
     def __len__(self):
-        if self.parser_args['debug'] or self.parser_args.get('foldername') == "debug":
+        if self.base_config.debug:
             return 3000
         length = len(self.files)
         if self.parser_args['combine_oneD_only_dataset']:
             length += len(self.files_1d)
         return length
-        
-
-
+    
     def __getitem__(self, idx):
         
         if idx >= len(self.files): 
@@ -125,8 +109,8 @@ class FolderDataset(Dataset):
             # hsqc is empty tensor
             hsqc = torch.empty(0,3)
             c_tensor, h_tensor = torch.load(f"{self.dir_1d}/oneD_NMR/{self.files_1d[i]}")
-            if self.parser_args['jittering'] >0 and self.split=="train":
-                jittering = self.parser_args['jittering']
+            if self.base_config.jittering > 0 and self.split=="train":
+                jittering = self.base_config.jittering
                 c_tensor = c_tensor + torch.randn_like(c_tensor) * jittering
                 h_tensor = h_tensor + torch.randn_like(h_tensor) * jittering * 0.1
                 
@@ -437,35 +421,72 @@ def normalize_hsqc(hsqc, style="minmax"):
     
 
 class FolderDataModule(pl.LightningDataModule):
-    def __init__(self, dir, FP_choice, input_src, fp_loader, batch_size: int = 32,  parser_args=None, persistent_workers = True):
+    def __init__(self, config: ProjectConfig, fp_loader, FP_choice, input_src, persistent_workers = True):
         super().__init__()
-        self.batch_size = batch_size
+        self.base_config = config.base_config
+        self.batch_size = self.base_config.batch_size
         self.fp_loader = fp_loader
-        self.dir = dir
+        self.dir = self.base_config.data_folder
         self.FP_choice = FP_choice
         self.input_src = input_src
         self.collate_fn = pad
-        self.parser_args = parser_args
         self.should_persist_workers = persistent_workers
     
     def setup(self, stage):
         if stage == "fit" or stage == "validate" or stage is None:
-            self.train = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src=self.input_src, split="train", parser_args=self.parser_args, fp_loader=self.fp_loader)
-            self.val = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src=self.input_src, split="val", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.train = FolderDataset(
+                dir=self.dir,
+                FP_choice=self.FP_choice,
+                input_src=self.input_src,
+                split="train",
+                fp_loader=self.fp_loader
+            )
+            self.val = FolderDataset(
+                dir=self.dir,
+                FP_choice=self.FP_choice,
+                input_src=self.input_src,
+                split="val",
+                fp_loader=self.fp_loader
+            )
         if stage == "test":
-            self.test = FolderDataset(dir=self.dir, FP_choice=self.FP_choice, input_src=self.input_src, split="test", parser_args=self.parser_args, fp_loader=self.fp_loader)
+            self.test = FolderDataset(
+                dir=self.dir,
+                FP_choice=self.FP_choice,
+                input_src=self.input_src,
+                split="test",
+                parser_args=self.parser_args,
+                fp_loader=self.fp_loader
+            )
         if stage == "predict":
             raise NotImplementedError("Predict setup not implemented")
 
     def train_dataloader(self):
-            
-        return DataLoader(self.train, shuffle=True, batch_size=self.batch_size, collate_fn=self.collate_fn,
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.should_persist_workers)
+        return DataLoader(
+            self.train,
+            shuffle=True,
+            batch_size=self.batch_size,
+            collate_fn=self.collate_fn,
+            num_workers=self.base_config.num_workers,
+            pin_memory=True,
+            persistent_workers=self.should_persist_workers
+        )
 
     def val_dataloader(self):
-        return DataLoader(self.val, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.should_persist_workers)
+        return DataLoader(
+            self.val,
+            batch_size=self.batch_size,
+            collate_fn=self.collate_fn, 
+            num_workers=self.base_config.num_workers,
+            pin_memory=True,
+            persistent_workers=self.should_persist_workers
+        )
 
     def test_dataloader(self):
-        return DataLoader(self.test, batch_size=self.batch_size, collate_fn=self.collate_fn, 
-                          num_workers=self.parser_args['num_workers'], pin_memory=True, persistent_workers=self.should_persist_workers)
+        return DataLoader(
+            self.test,
+            batch_size=self.batch_size,
+            collate_fn=self.collate_fn, 
+            num_workers=self.base_config.num_workers,
+            pin_memory=True,
+            persistent_workers=self.should_persist_workers
+        )

@@ -42,10 +42,11 @@ class BaseConfig(BaseModel):
     num_class: int = 25
     loss_func: Literal["MSE", "CE"] = "MSE"
     
-    input_types: list[Literal["mw", "c", "h", "2d"]] = ["2d"]
+    input_types: list[Literal["mw", "c", "h", "hsqc", "ms"]] = ["hsqc"]
+    combine_with_1d_dataset: bool = False
     separate_classifier: bool = False
     weighted_sample_based_on_input_type: bool = False
-    weighted_sampling_strategy: str = "none"
+    weighted_sampling_strategy: Literal["none", "fewer_HSQC", "match_probability"] = "none"
     random_seed: int = 42
     train_on_all_info_set: bool = False
     
