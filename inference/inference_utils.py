@@ -82,7 +82,7 @@ from datasets.dataset_utils import fp_loader_configer
 
 
 
-def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False, checkpoint_path=None):
+def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False, checkpoint_path=None, load_for_moonshot=False):
     if checkpoint_path is None:
         if fp_type == "DB_specific_FP":
             checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
@@ -98,9 +98,15 @@ def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=Fal
         
     del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
     # hparams['use_peak_values'] = False
-    hparams['num_workers'] = 0
-    fp_loader = fp_loader_configer.fp_loader
     print("loading model from: ", checkpoint_path)
+    
+    if load_for_moonshot:
+        fp_loader = None
+        model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, fp_loader = fp_loader,  **hparams)
+        return model
+    
+    fp_loader = fp_loader_configer.fp_loader
+    hparams['num_workers'] = 0
     model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, fp_loader = fp_loader,  **hparams)
     max_radius = int(hparams['FP_choice'].split("_")[-1])
     fp_loader.setup(hparams['out_dim'], max_radius)
@@ -111,7 +117,6 @@ def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=Fal
         return hparams, model
     
     test_loader = get_test_loader(model_type, should_shuffle_loader, hparams)
-    model.eval()
     return hparams, model, test_loader
         
             
