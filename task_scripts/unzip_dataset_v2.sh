@@ -13,7 +13,7 @@ echo "start to unzip..."
 # unzip -q /workspace/combined_two_datasetes_and_rankingsets_without_empty_oned_NMR.zip -d /workspace/
 # unzip -q /workspace/weird_H_and_tautomer_cleaned.zip -d /workspace/
 # unzip -q /workspace/RemoveIsomericInfoSMILES.zip -d /workspace/
-unzip /workspace/$zipname -d /workspace/
+unzip -q /workspace/$zipname -d /workspace/
 
 # SMART_2D_combined_by_canonical_smiles.zip
 # OneD_Only_Dataset.zip

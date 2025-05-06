@@ -1,0 +1,3 @@
+CC(/C=C/Cc1ccoc1)=C\C=C\C(C)C
+CC[C@@H](C)/C=C/C=C/C=C(\C)[C@@H]1Oc2ccn(OC)c(=O)c2[C@@H](O)[C@H]1C
+CCC(C)C=CC=CC=C(C)C1Oc2ccn(OC)c(=O)c2C(O)C1C
