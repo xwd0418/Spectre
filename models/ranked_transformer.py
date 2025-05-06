@@ -85,10 +85,10 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.out_logger.info("[RankedTransformer] Started Initializing")
         self.logger_should_sync_dist = torch.cuda.device_count() > 1
         # logging print
-        if self.global_rank == 0:
-            for k, v in params.items():
-                if k in RANKED_TNSFMER_ARGS:
-                    self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
+        # if self.global_rank == 0:
+        #     for k, v in params.items():
+        #         if k in RANKED_TNSFMER_ARGS:
+        #             self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
 
 
         # === All Parameters ===
