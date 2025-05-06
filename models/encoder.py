@@ -1,6 +1,7 @@
 import logging
 import torch
 import numpy as np
+import torch.distributed as dist
 
 class PositionalEncoder(torch.nn.Module):
   """Encode positions using sine and cosine waves.
@@ -166,6 +167,7 @@ class SignCoordinateEncoder(torch.nn.Module):
     self.positional_encoders = []
     self.dim_coords = dim_coords
     self.use_peak_values = use_peak_values
+    rank = dist.get_rank()
     for idx, dim in enumerate(dim_coords[:-1]):
       if wavelength_bounds:
         min_wavelength = wavelength_bounds[idx][0]
@@ -181,10 +183,11 @@ class SignCoordinateEncoder(torch.nn.Module):
         #     f"Cos wavelengths: {str(np.round(2 * torch.pi / p.cos_terms, 3))}")
       else:
         p = PositionalEncoder(dim_model=dim)
-        self.logger.warning(
-            f"Pushed an encoder with no bounds")
+        if rank == 0:
+            self.logger.info(f"Pushed an encoder with no bounds")
       self.positional_encoders.append(p)
-    self.logger.warning(f"Initialized SignCoordinateEncoder[{dim_model}] with dims " +
+    if rank == 0:
+        self.logger.info(f"Initialized SignCoordinateEncoder[{dim_model}] with dims " +
                         f"{self.dim_coords} and {len(self.positional_encoders)} positional encoders. " +
                         f"{self.sign_embedding_dims} bits are reserved for encoding the final bit")
 

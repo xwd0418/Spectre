@@ -81,12 +81,14 @@ class HsqcRankedTransformer(pl.LightningModule):
             if rank != 0:
                 # For any process with rank other than 0, set logger level to WARNING or higher
                 self.out_logger.setLevel(logging.WARNING)
-        self.out_logger.info("[RankedTransformer] Started Initializing")
+        if self.global_rank == 0:
+            self.out_logger.info("[RankedTransformer] Started Initializing")
         self.logger_should_sync_dist = torch.cuda.device_count() > 1
         # logging print
-        for k, v in params.items():
-            if k in RANKED_TNSFMER_ARGS:
-                self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
+        if self.global_rank == 0
+            for k, v in params.items():
+                if k in RANKED_TNSFMER_ARGS:
+                    self.out_logger.info(f"[RankedTransformer] {k=},{v=}")
 
 
         # === All Parameters ===
@@ -135,8 +137,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         # ranked encoder
         self.enc = build_encoder(
             coord_enc, dim_model, dim_coords, wavelength_bounds, gce_resolution, kwargs['use_peak_values'])
-        self.out_logger.info(
-            f"[RankedTransformer] Using {str(self.enc.__class__)}")
+        if self.global_rank == 0:
+            self.out_logger.info(f"[RankedTransformer] Using {str(self.enc.__class__)}")
 
 
         ### Loss function 
@@ -183,11 +185,13 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.NMR_type_embedding = nn.Embedding(4, dim_model)
         # HSQC, C NMR, H NMR, MW
         # MW isn't NMR, but, whatever......
-        self.out_logger.info("[RankedTransformer] nn.linear layer to be initialized")
+        if self.global_rank == 0:
+            self.out_logger.info("[RankedTransformer] nn.linear layer to be initialized")
         # print("out_dim is ", out_dim, " dim_model is ", dim_model)
         # exit(0)
         self.fc = nn.Linear(dim_model, out_dim)
-        self.out_logger.info("[RankedTransformer] nn.linear layer is initialized")
+        if self.global_rank == 0:
+            self.out_logger.info("[RankedTransformer] nn.linear layer is initialized")
         # (1, 1, dim_model)
         self.latent = torch.nn.Parameter(torch.randn(1, 1, dim_model)) # the <cls> token
 
@@ -205,7 +209,8 @@ class HsqcRankedTransformer(pl.LightningModule):
         )
         # === END Parameters ===
 
-        self.out_logger.info("[RankedTransformer] weights are initialized")
+        if self.global_rank == 0:
+            self.out_logger.info("[RankedTransformer] weights are initialized")
         
         if L1_decay:
             self.out_logger.info("[RankedTransformer] L1_decay is applied")
@@ -216,7 +221,8 @@ class HsqcRankedTransformer(pl.LightningModule):
             self.out_logger.info("[RankedTransformer] Freezing Weights")
             for parameter in self.parameters():
                 parameter.requires_grad = False
-        self.out_logger.info("[RankedTransformer] Initialized")
+        if self.global_rank == 0:
+            self.out_logger.info("[RankedTransformer] Initialized")
 
     
 
