@@ -206,7 +206,7 @@ if __name__ == '__main__':
     print("model device: ", model.device)
 
     # step 2: load rankingset
-    smiles_and_names = pickle.load(open(f'{root_path}/inference/inference_metadata_latest_RDkit.pkl', 'rb'))
+    smiles_and_names = pickle.load(open(f'{root_path}/inference/inference_metadata_name_updated.pkl', 'rb'))
     rankingset_path = f'{root_path}/inference/non_collision_FP_rankingset_r6_dim_16384/FP.pt'
     rankingset_data = torch.load(rankingset_path).to("cuda")
     # smiles_to_NMR_path = pickle.load(open(f'{root_path}/inference/SMILES_chemical_to_NMR_paths.pkl','rb'))
