@@ -36,6 +36,8 @@ app = Flask(__name__)
 CORS(app)
 
 from flask import Response
+import requests
+from concurrent.futures import ThreadPoolExecutor
 
 @app.before_request
 def basic_authentication():
@@ -87,8 +89,28 @@ def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
 
         if i == k:
             break
+        
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        np_results = list(executor.map(fetch_np, [entry['smile'] for entry in retrievals_to_return]))
+
+    # Step 4: Merge the results into the retrievals
+    for entry, np_data in zip(retrievals_to_return, np_results):
+        entry["np_class"] = np_data
+
     return retrievals_to_return
 
+
+
+def fetch_np(smile):
+    try:
+        np_url = f"https://npclassifier.gnps2.org/classify?smiles={smile}"
+        res = requests.get(np_url, timeout=5)
+        return res.json()
+    except Exception as e:
+        print(f"[WARNING] NPClassifier failed for {smile}: {e}")
+        return {"error": "fetch_failed"}
+    
+    
 @app.route('/api/hello', methods=['GET','OPTIONS'])
 def hello():
     return build_actual_response(jsonify({'retrievals': "hello"}))

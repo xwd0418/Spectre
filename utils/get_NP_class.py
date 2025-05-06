@@ -6,6 +6,7 @@ def get_superclass_and_glycoside(smiles):
         url = f"https://npclassifier.gnps2.org/classify?smiles={smiles}"
         response = requests.get(url)
         json_dat = json.loads(response.content)
+        # print(json_dat)
         superclass_results = json_dat['superclass_results']
         isglycoside = json_dat['isglycoside']
         if len(superclass_results) == 0:
@@ -15,3 +16,8 @@ def get_superclass_and_glycoside(smiles):
         print(f"Error in {smiles}")
         print(e)
         return ["unknown"], None
+    
+    
+if __name__ == "__main__":
+    data = get_superclass_and_glycoside('CC1C(O)CC2C1C(OC1OC(COC(C)=O)C(O)C(O)C1O)OC=C2C(O)=O')
+    print(data)
