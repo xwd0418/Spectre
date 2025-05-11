@@ -225,10 +225,20 @@ class FolderDataset(Dataset):
             if self.parser_args['optional_inputs'] and self.parser_args["optional_MW"]:
                 if random.random() <= 0.5:
                     mol_weight = torch.tensor([])
-                
+        
+        ####################################
+        # TODO: check new input by anthony
+        ####################################
+        iso_dist = None
+        if self.parser_args['use_ID']:
+            iso_dist = torch.load(f"{self.dir}/IsotopicDistribution/{self.files[i]}").float() # loads in torch tensor
+            
+            if self.parser_args['optional_inputs'] and self.parser_args["optional_ID"]:
+                if random.random() <= 0.5:
+                    iso_dist = None
             
         # padding and stacking： 
-        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight, iso_dist)
             
         # remember build ranking set
         
@@ -262,7 +272,7 @@ class FolderDataset(Dataset):
             combined = (inputs, mfp, NMR_type_indicator, np_class_mapping[int(dataset_files[i].split(".")[0])])
         return combined
     
-    def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight):
+    def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight, iso_dist):
         '''
         embedding mapping:
         0: HSQC
@@ -270,6 +280,7 @@ class FolderDataset(Dataset):
         2: H NMR
         3: MW
         4: normal hsqc
+        5: isotopic distribution
         
         future:
         Mass Spectrometry
@@ -285,8 +296,16 @@ class FolderDataset(Dataset):
         if mol_weight is not None and len(mol_weight) > 0:
             inputs.append(mol_weight)
             NMR_type_indicator.append(3)
-            
-        inputs = torch.vstack(inputs)               
+
+        ####################################
+        # TODO: check new input by anthony
+        ####################################
+        if iso_dist is not None:
+            iso_dist = F.pad(iso_dist, (0, 1), "constant", 0)
+            inputs.append(iso_dist)
+            NMR_type_indicator += [5] * len(iso_dist)
+
+        inputs = torch.vstack(inputs)
         NMR_type_indicator = torch.tensor(NMR_type_indicator).long()
         return inputs, NMR_type_indicator
     

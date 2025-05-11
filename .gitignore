@@ -574,3 +574,6 @@ inference/HSQC_for_deepsat/
 compare_with_deepsat
 
 task_scripts/inchi_mapping.pkl 
+
+inference_data/
+reproduce_previous_works/

@@ -16,7 +16,7 @@ from multiprocessing import Pool, cpu_count
 import tqdm
 import sys
 
-sys.path.insert(0,"/root/gurusmart/MorganFP_prediction/reproduce_previous_works/Spectre")
+sys.path.insert(0,"/root/gurusmart/MorganFP_prediction")
 
 
 fp_dim = 16384
@@ -52,8 +52,8 @@ def step1_build_small_pieces():
     save_dir = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/non_collision_FP_rankingset_max_radius_{max_radius}_dim_{fp_dim}/"
     os.makedirs(save_dir, exist_ok=True)
 
-    batch_size = 2000
-    num_workers = min(cpu_count(), 16)  # Use up to 8 cores
+    batch_size = 500
+    num_workers = min(cpu_count(), 4)  # Use up to 8 cores
 
     # Split data into batches
     batches = [all_smiles_and_chemical_names[i:i + batch_size] for i in range(0, len(all_smiles_and_chemical_names), batch_size)]

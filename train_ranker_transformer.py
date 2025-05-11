@@ -202,10 +202,12 @@ def add_parser_arguments( parser):
     # control inputs
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
     parser.add_argument("--optional_MW",  type=lambda x:bool(str2bool(x)), default=False, help="also make molecular weight as optional input")
+    parser.add_argument("--optional_ID",  type=lambda x:bool(str2bool(x)), default=False, help="also make isotopic distribution as optional input")
     parser.add_argument("--use_HSQC", type=lambda x:bool(str2bool(x)), default=True, help="also make molecular weight as optional input")
     parser.add_argument("--use_H_NMR",  type=lambda x:bool(str2bool(x)), default=True, help="using 1D NMR")
     parser.add_argument("--use_C_NMR",  type=lambda x:bool(str2bool(x)), default=True, help="using 1D NMR")
-    parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
+    parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using molecular weight")
+    parser.add_argument("--use_ID",  type=lambda x:bool(str2bool(x)), default=True, help="using isotopic distributions")
     parser.add_argument("--train_on_all_info_set", type=lambda x:bool(str2bool(x)), default=False, help="train on subset of training set, where every mol has 3 types of NMR")
     ### the args above will be used to assign values to the following args
     # parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data, but not using solvent data")

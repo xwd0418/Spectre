@@ -76,8 +76,15 @@ class All_Info_Dataset(FolderDataset):
             mol_weight = self.mol_weight[int(self.files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
         
+        ####################################
+        # TODO: check new input by anthony
+        ####################################
+        iso_dist = None
+        if self.parser_args['use_ID']:
+            iso_dist = torch.load(f"{self.dir}/IsotopicDistribution/{self.files[i]}").float() # loads in torch tensor
+            
         # padding and stacking： 
-        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight, iso_dist)
          
         file_index = int(self.files[i].split(".")[0])
         if self.show_smiles: # prediction stage
