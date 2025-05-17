@@ -23,10 +23,7 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
         case "HSQC":
-            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_hsqc_trial_2/checkpoints/epoch=61-step=53134.ckpt")
-            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_hsqc_trial_1/checkpoints/epoch=82-step=71131.ckpt")
-            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_flexible_MW/r0_r6_trial_1/checkpoints/epoch=99-only_hsqc.ckpt")
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/all_HSQC_jittering_search/only_hsqc_jittering_1/checkpoints/epoch=89-step=19350.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/all_HSQC_jittering_search/only_hsqc_jittering_1-trial-1/checkpoints/epoch=82-step=35607.ckpt")
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
         
@@ -82,7 +79,8 @@ from datasets.dataset_utils import fp_loader_configer
 
 
 
-def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False, checkpoint_path=None, load_for_moonshot=False):
+def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False, checkpoint_path=None, load_for_moonshot=False, load_untrained_model=False):
+    
     if checkpoint_path is None:
         if fp_type == "DB_specific_FP":
             checkpoint_path = find_checkpoint_path_DB_specific_FP(model_type)
@@ -100,9 +98,11 @@ def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=Fal
     # hparams['use_peak_values'] = False
     print("loading model from: ", checkpoint_path)
     
+    if load_untrained_model:
+        model = OptionalInputRankedTransformer(**hparams,  fp_loader = None, save_params=False)
+        return model
     if load_for_moonshot:
-        fp_loader = None
-        model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, fp_loader = fp_loader,  **hparams)
+        model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, fp_loader = None,  **hparams, save_params=False)
         return model
     
     fp_loader = fp_loader_configer.fp_loader
@@ -475,7 +475,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
             if similarity_mapping_showing in ["MFP_Specific_Radius", 0, False]:
                 img = Draw.MolToImage(mol)
             elif similarity_mapping_showing in ["DB_Specific_Radius", 1, True]:
-                img = show_retrieved_mol_with_highlighted_frags(pred[0], smile) #
+                img = show_retrieved_mol_with_highlighted_frags(pred[0], smile, img_size=img_size) #
             elif similarity_mapping_showing == "both":
                 img_no_sim_map = Draw.MolToImage(mol, size=(img_size,img_size))
                 img_with_sim_map = show_retrieved_mol_with_highlighted_frags(pred[0], smile, img_size=img_size) #
