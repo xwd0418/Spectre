@@ -28,14 +28,20 @@ def retrieve_by_rankingset(data, prediction_query, smiles_and_names):
 
 
 
-def convert_to_tensor_1d_nmr(tensor_1d):
+def convert_to_tensor_1d_nmr(tensor_1d, type):
     try:
         if tensor_1d == "":
             tensor_1d = None
         else:
             c_vals = np.fromstring(tensor_1d, sep=",")
             tensor_1d = np.zeros((c_vals.shape[0], 3))
-            tensor_1d[:,0] = c_vals
+            if type == "C-NMR":
+                val_index = 0 
+            elif type == "H-NMR":
+                val_index = 1
+            else:
+                raise ValueError("Invalid type in function convert_to_tensor_1d_nmr. Expected 'C-NMR' or 'H-NMR'.")
+            tensor_1d[:,val_index] = c_vals
             tensor_1d = torch.tensor(tensor_1d).float()
         return tensor_1d
     except Exception as e:
