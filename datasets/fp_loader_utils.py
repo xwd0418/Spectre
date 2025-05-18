@@ -359,13 +359,19 @@ class Hash_Entropy_FP_loader(FP_loader):
     
     def build_mfp_from_bitInfo(self, atom_to_bitInfos, ignoreAtoms = []):
         # atom_to_bitInfos: a dict of atom index to bitInfo
+        # ignoreAtoms: a list of atom indices to ignore ("ignore" can be a misnomer, because we are not only ignore this specific atom, but also all the atoms that having the same bitInfo)
         mfp = np.zeros(self.out_dim)
         for atom_idx, bitInfos in atom_to_bitInfos.items():
-            if atom_idx in ignoreAtoms:
-                continue
             for bitInfo in bitInfos:
                 if bitInfo in self.bitInfos_to_fp_index_map:
                     mfp[self.bitInfos_to_fp_index_map[bitInfo]] = 1
+        print(ignoreAtoms)
+        for atom_idx in ignoreAtoms: 
+            bitInfos = atom_to_bitInfos[atom_idx]
+            for bitInfo in bitInfos:
+                if bitInfo in self.bitInfos_to_fp_index_map:
+                    mfp[self.bitInfos_to_fp_index_map[bitInfo]] = 0
+                    
         return torch.tensor(mfp).float()
     
     def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
