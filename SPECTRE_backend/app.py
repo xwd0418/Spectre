@@ -164,8 +164,7 @@ def generate_image():
         include_MW = mw != "",
         hsqc = hsqc, c_tensor = c_tensor, h_tensor = h_tensor, mw = float(mw) if mw != "" else None,
     )
-    print("inputs", inputs)
-    print("NMR_type_indicator", NMR_type_indicator)
+
     retrieved_molecules = show_topK(inputs, NMR_type_indicator, k=k, MW_range = mw_range)
     nmr_fig_str= plot_NMR(hsqc, c_tensor, h_tensor)
     res = jsonify({'retrievals': retrieved_molecules, "NMR_plt": nmr_fig_str})
