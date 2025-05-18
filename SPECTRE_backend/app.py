@@ -154,8 +154,8 @@ def generate_image():
         # if no_peak_signs: # deprecated
         #     hsqc = torch.cat([hsqc, torch.ones(len(hsqc)).unsqueeze(1)], dim=1)
             
-    c_tensor = None if C_NMR=="" else convert_to_tensor_1d_nmr(C_NMR) 
-    h_tensor = None if H_NMR=="" else convert_to_tensor_1d_nmr(H_NMR)
+    c_tensor = None if C_NMR=="" else convert_to_tensor_1d_nmr(C_NMR, type="C-NMR") 
+    h_tensor = None if H_NMR=="" else convert_to_tensor_1d_nmr(H_NMR, type="H-NMR")
     
     NMR_type_indicator, inputs = get_inputs_and_indicators_from_NMR_tensors(
         include_hsqc = hsqc is not None, 
@@ -164,6 +164,7 @@ def generate_image():
         include_MW = mw != "",
         hsqc = hsqc, c_tensor = c_tensor, h_tensor = h_tensor, mw = float(mw) if mw != "" else None,
     )
+
     retrieved_molecules = show_topK(inputs, NMR_type_indicator, k=k, MW_range = mw_range)
     nmr_fig_str= plot_NMR(hsqc, c_tensor, h_tensor)
     res = jsonify({'retrievals': retrieved_molecules, "NMR_plt": nmr_fig_str})
