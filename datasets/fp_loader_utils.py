@@ -365,7 +365,6 @@ class Hash_Entropy_FP_loader(FP_loader):
             for bitInfo in bitInfos:
                 if bitInfo in self.bitInfos_to_fp_index_map:
                     mfp[self.bitInfos_to_fp_index_map[bitInfo]] = 1
-        print(ignoreAtoms)
         for atom_idx in ignoreAtoms: 
             bitInfos = atom_to_bitInfos[atom_idx]
             for bitInfo in bitInfos:
