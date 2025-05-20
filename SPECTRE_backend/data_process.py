@@ -115,7 +115,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
 
     ax3 = fig.add_subplot(gs[0, 1])  # Smaller subplot
     if h_tensor is not None:
-        ax3.scatter(h_tensor[:,0], torch.ones(len(h_tensor)),c="black", s=2)
+        ax3.scatter(h_tensor[:,1], torch.ones(len(h_tensor)),c="black", s=2)
     ax3.set_xlim([0, 12])
     ax3.set_title("1H-NMR")
     ax3.set_yticks([])
