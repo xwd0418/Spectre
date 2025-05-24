@@ -311,7 +311,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
     # Step 5: Draw similarity map on molecule without hydrogens
     d = Draw.MolDraw2DCairo(img_size, img_size)
-    SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d)
+    SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d, contourLines=0)
     
     d.FinishDrawing()
     img = (show_png(d.GetDrawingText()))
