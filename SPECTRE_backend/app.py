@@ -47,26 +47,6 @@ def basic_authentication():
 '''for a single model, show top-5'''
 def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
     retrievals_to_return = []
-    # inputs = inputs.unsqueeze(0)
-    # pred = model(inputs)
-    # pred = torch.sigmoid(pred) # sigmoid
-    # # pred_FP = torch.where(pred.squeeze()>0.5, 1, 0)
-
-    # sorted_retrievals = retrieve_by_rankingset(rankingset_data, pred, smiles_and_names)
-    
-    # i=0
-    # for ite, (value, (smile, name, mw, db_name), retrieved_FP) in enumerate(sorted_retrievals):
-    #     if MW_range is not None:
-    #         if mw < MW_range[0] or mw > MW_range[1]:
-    #             continue
-    #     print(f"_retival #{i+1}, retrival cosine similarity to prediction: {value.item()}_")
-    #     mol = Chem.MolFromSmiles(smile)
-    #     # print("retrived FP", retrieved_FP.squeeze().tolist())
-       
-    #     # print(f"SMILES: {smile}")
-    #     # print(f"Name {name}")
-
-    #     img = Draw.MolToImage(mol)
         
     returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values =  inference_topK(
         inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
@@ -76,6 +56,7 @@ def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
             verbose=False,
             weighting_pred = None,
             infer_in_backend_service = True,
+            img_size = 800
     )
     for i, (smile, name, (img_no_sim_map, image_with_sim_map), mw, cos_value) in enumerate(zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values)):
         
@@ -170,39 +151,41 @@ def generate_image():
     res = jsonify({'retrievals': retrieved_molecules, "NMR_plt": nmr_fig_str})
     return build_actual_response(res)
 
+
+@app.route('/api/search-retrievals-by-smiles', methods=['POST','OPTIONS'])
+def search_retrievals():
+    data = request.get_json()
+  
+    SMILES = data['SMILES']
+    k = data['k_samples']
+    FP = fp_loader.build_mfp_for_new_SMILES(SMILES).unsqueeze(0).to("cuda")
+    topk = retrieve_top_k_by_rankingset(rankingset_data, FP, smiles_and_names, k=k)
+    returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values = return_infos_from_topk(topk, FP)
+    
+    retrievals_to_return = []
+    for i, (smile, name, (img_no_sim_map, image_with_sim_map), mw, cos_value) in enumerate(zip(returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values)):
+        
+        retrievals_to_return.append({"smile": smile, 
+                              "name": name, 
+                              "MW": mw,
+                              "cos": cos_value,
+                              "image_no_sim_map": img_no_sim_map,
+                              "image_with_sim_map": image_with_sim_map,
+                                    })
+
+    res = jsonify({'retrievals': retrievals_to_return})
+    return build_actual_response(res)
+    
 if __name__ == '__main__':
     from waitress import serve
     # step 1: load model and datamodule   (here we assume we use all three NMRs)
     from datasets.dataset_utils import  fp_loader_configer
-    from inference.inference_utils import choose_model
+    from inference.inference_utils import choose_model, return_infos_from_topk, retrieve_top_k_by_rankingset
 
     fp_loader_configer.select_version("Hash_Entropy")
     fp_loader = fp_loader_configer.fp_loader
     
     hparams, model = choose_model("backend", return_data_loader=False)
-
-    
-    # model_path = Path(f"/{root_path}/model_weights/flexible_models_best_FP/r0_r3_FP_trial_2/")
-    # hyperpaerameters_path = model_path / "hparams.yaml"
-    # checkpoint_path = model_path / "checkpoints/epoch=41-all_inputs.ckpt"
-
-    # with open(hyperpaerameters_path, 'r') as file:
-    #     hparams = yaml.safe_load(file)
-        
-    # FP_building_type = hparams['FP_building_type'].split("_")[-1]
-    # only_2d = not hparams['use_oneD_NMR_no_solvent']
-    # print("FP_building_type", FP_building_type)
-    # print("FP_choice: 0~",int(hparams['FP_choice'].split("_")[-1][1:]))
-    # print('setting up specific_radius_mfp_loader...')
-    # specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
-    # print('set up specific_radius_mfp_loader')
-    # specific_radius_mfp_loader.set_max_radius(int(hparams['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
-
-    # del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
-    # hparams['use_peak_values'] = False
-    # hparams['skip_ranker'] = True
-    # model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
-    # model.to("cpu")
 
     print("model device: ", model.device)
 

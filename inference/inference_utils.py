@@ -404,7 +404,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
                    weighting_pred = None,
                    infer_in_backend_service = False,
                    encode_img = True,
-                   img_size = 400,
+                   img_size = 800,
                    ):
     """
     Run inference on a given input tensor and visualize the top-k retrieved molecules.
@@ -414,11 +414,7 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
     if verbose:
         print("_________________________________________________________")
 
-    returning_smiles = []
-    returning_names = []
-    returning_imgs = []
-    returning_values = []
-    returning_MWs = []
+    
     inputs = inputs.unsqueeze(0).to(model.device)
     NMR_type_indicator = NMR_type_indicator.to(model.device)
     rankingset_data = rankingset_data.to(model.device)
@@ -436,6 +432,16 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
         raise ValueError("filter_by_MW must be a list of two elements, or 'from_input' or None!")
     topk = retrieve_top_k_by_rankingset(rankingset_data, pred, smiles_and_names, k=k, filter_by_MW=filter_by_MW, weighting_pred = weighting_pred)
        
+    return return_infos_from_topk(topk, pred, ground_truth_FP, similarity_mapping_showing, verbose, encode_img, img_size, infer_in_backend_service)
+
+def return_infos_from_topk(topk, pred, ground_truth_FP = None, similarity_mapping_showing = "both", verbose = False, encode_img = True, img_size = 800, infer_in_backend_service = True):
+    
+    returning_smiles = []
+    returning_names = []
+    returning_imgs = []
+    returning_values = []
+    returning_MWs = []
+    
     i=0
     for value, (smile, name, mw, _), retrieved_FP in topk:
         if verbose or infer_in_backend_service:
