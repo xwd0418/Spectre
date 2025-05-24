@@ -311,14 +311,75 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
     weights, max_weight = SimilarityMaps.GetStandardizedWeights(weights)
     # Step 5: Draw similarity map on molecule without hydrogens
     d = Draw.MolDraw2DCairo(img_size, img_size)
-    SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d, contourLines=0)
+    # SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d, contourLines=0)
+    draw_high_res_similarity_map(retrieval_mol, weights, draw2d=d, contourLines=0,)
     
     d.FinishDrawing()
     img = (show_png(d.GetDrawingText()))
     
     # img.show()
     return img
-                    
+         
+         
+from rdkit import Chem, Geometry
+from rdkit.Chem import Draw, rdDepictor
+from rdkit.Chem.Draw import rdMolDraw2D
+from matplotlib import cm
+import matplotlib
+
+def draw_high_res_similarity_map(mol, weights, draw2d, colorMap=None, 
+                                sigma=None, contourLines=10, gridResolution = 0.05
+                                ):
+  """
+  copied from /opt/conda/lib/python3.11/site-packages/rdkit/Chem/Draw/SimilarityMaps.py  => GetSimilarityMapFromWeights
+  """
+  if mol.GetNumAtoms() < 2:
+    raise ValueError("too few atoms")
+
+  if draw2d is None:
+    raise ValueError("the draw2d argument must be provided")
+  mol = rdMolDraw2D.PrepareMolForDrawing(mol, addChiralHs=False)
+  if not mol.GetNumConformers():
+    rdDepictor.Compute2DCoords(mol)
+  if sigma is None:
+    if mol.GetNumBonds() > 0:
+      bond = mol.GetBondWithIdx(0)
+      idx1 = bond.GetBeginAtomIdx()
+      idx2 = bond.GetEndAtomIdx()
+      sigma = 0.3 * (mol.GetConformer().GetAtomPosition(idx1) -
+                     mol.GetConformer().GetAtomPosition(idx2)).Length()
+    else:
+      sigma = 0.3 * (mol.GetConformer().GetAtomPosition(0) -
+                     mol.GetConformer().GetAtomPosition(1)).Length()
+    sigma = round(sigma, 2)
+
+  sigmas = [sigma] * mol.GetNumAtoms()
+  locs = []
+  for i in range(mol.GetNumAtoms()):
+    p = mol.GetConformer().GetAtomPosition(i)
+    locs.append(Geometry.Point2D(p.x, p.y))
+  draw2d.ClearDrawing()
+  ps = Draw.ContourParams()
+  ps.fillGrid = True
+  ps.gridResolution = gridResolution
+  ps.extraGridPadding = 0.5
+
+  if colorMap is not None:
+    if cm is not None and isinstance(colorMap, type(cm.Blues)):
+      # it's a matplotlib colormap:
+      clrs = [tuple(x) for x in colorMap([0, 0.5, 1])]
+    elif type(colorMap) == str:
+      if cm is None:
+        raise ValueError("cannot provide named colormaps unless matplotlib is installed")
+      clrs = [tuple(x) for x in matplotlib.colormaps[colorMap]([0, 0.5, 1])]
+    else:
+      clrs = [colorMap[0], colorMap[1], colorMap[2]]
+    ps.setColourMap(clrs)
+
+  Draw.ContourAndDrawGaussians(draw2d, locs, weights, sigmas, nContours=contourLines, params=ps)
+  draw2d.drawOptions().clearBackground = False
+  draw2d.DrawMolecule(mol)
+  return draw2d           
     
 ######  for unknow compound ######    
 def build_input(compound_dir, mode = None, include_hsqc = True, include_c_nmr = True, include_h_nmr = True, include_MW = True):
