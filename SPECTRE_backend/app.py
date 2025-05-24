@@ -21,8 +21,6 @@ import sys, pathlib
 root_path = pathlib.Path(__file__).resolve().parents[2]
 repo_path = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(repo_path))
-# from datasets.dataset_utils import specific_radius_mfp_loader
-# from models.optional_input_ranked_transformer import OptionalInputRankedTransformer
 
 
 # helper functions 
@@ -45,9 +43,8 @@ def basic_authentication():
         return Response()
     
 '''for a single model, show top-5'''
-def show_topK(inputs, NMR_type_indicator, k=5, MW_range = None):
+def show_topK(model, inputs, NMR_type_indicator, k=5, MW_range = None):
     retrievals_to_return = []
-        
     returning_smiles, returning_names, returning_imgs, returning_MWs, returning_values =  inference_topK(
         inputs, NMR_type_indicator, model, rankingset_data, smiles_and_names, 
             k=k, mode = None, ground_truth_FP=None,
@@ -146,7 +143,21 @@ def generate_image():
         hsqc = hsqc, c_tensor = c_tensor, h_tensor = h_tensor, mw = float(mw) if mw != "" else None,
     )
 
-    retrieved_molecules = show_topK(inputs, NMR_type_indicator, k=k, MW_range = mw_range)
+    match  data['model_type']:
+        case "optional":
+            model = model_optional     
+        case "only_C":
+            model = model_only_C
+        case "only_H":
+            model = model_only_H
+        case "only_1d":
+            model = model_only_1d
+        case "only_HSQC":
+            model = model_only_HSQC
+        case _:
+            raise ValueError(f"Unknown model type: {data['model_type']}")
+        
+    retrieved_molecules = show_topK(model, inputs, NMR_type_indicator, k=k, MW_range = mw_range)
     nmr_fig_str= plot_NMR(hsqc, c_tensor, h_tensor)
     res = jsonify({'retrievals': retrieved_molecules, "NMR_plt": nmr_fig_str})
     return build_actual_response(res)
@@ -185,9 +196,13 @@ if __name__ == '__main__':
     fp_loader_configer.select_version("Hash_Entropy")
     fp_loader = fp_loader_configer.fp_loader
     
-    hparams, model = choose_model("backend", return_data_loader=False)
+    _, model_optional = choose_model("backend-optional", return_data_loader=False)
+    _, model_only_C = choose_model("backend-only-C", return_data_loader=False)
+    _, model_only_H = choose_model("backend-only-H", return_data_loader=False)
+    _, model_only_1d = choose_model("backend-only-1d", return_data_loader=False)
+    _, model_only_HSQC = choose_model("backend-only-HSQC", return_data_loader=False)
 
-    print("model device: ", model.device)
+    print("model device: ", model_optional.device)
 
     # step 2: load rankingset
     smiles_and_names = pickle.load(open(f'{root_path}/inference/inference_metadata_name_updated.pkl', 'rb'))

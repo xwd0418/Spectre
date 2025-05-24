@@ -13,8 +13,16 @@ import base64
 ### model selection ###
 def find_checkpoint_path_entropy_on_hashes_FP(model_type):
     match model_type:
-        case "backend":
+        case "backend-optional":
             checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_model_weights.ckpt")
+        case "backend-only-C":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_c.ckpt")
+        case "backend-only-H":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_h.ckpt")
+        case "backend-only-HSQC":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_HSQC.ckpt")
+        case "backend-only-1d":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_1d_nmr.ckpt")
         case "optional":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW/r0_r6_trial_1/checkpoints/epoch=73-step=16724.ckpt")
