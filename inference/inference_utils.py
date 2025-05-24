@@ -312,7 +312,7 @@ def show_retrieved_mol_with_highlighted_frags(predicted_FP, retrieval_smiles, ne
     # Step 5: Draw similarity map on molecule without hydrogens
     d = Draw.MolDraw2DCairo(img_size, img_size)
     # SimilarityMaps.GetSimilarityMapFromWeights(retrieval_mol, weights, draw2d=d, contourLines=0)
-    draw_high_res_similarity_map(retrieval_mol, weights, draw2d=d, contourLines=0, gridResolution = 0.05)
+    draw_high_res_similarity_map(retrieval_mol, weights, draw2d=d, contourLines=0, gridResolution = 0.06)
     
     d.FinishDrawing()
     img = (show_png(d.GetDrawingText()))
@@ -496,7 +496,9 @@ def inference_topK(inputs, NMR_type_indicator, model, rankingset_data, smiles_an
     return return_infos_from_topk(topk, pred, ground_truth_FP, similarity_mapping_showing, verbose, encode_img, img_size, infer_in_backend_service)
 
 def return_infos_from_topk(topk, pred, ground_truth_FP = None, similarity_mapping_showing = "both", verbose = False, encode_img = True, img_size = 800, infer_in_backend_service = True):
-    
+    # not implemented yet
+    # if infer_in_backend_service:
+    #     return return_infos_from_topk_multithread(topk, pred, img_size=img_size)
     returning_smiles = []
     returning_names = []
     returning_imgs = []
