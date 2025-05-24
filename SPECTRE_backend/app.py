@@ -179,7 +179,7 @@ if __name__ == '__main__':
     fp_loader_configer.select_version("Hash_Entropy")
     fp_loader = fp_loader_configer.fp_loader
     
-    hparams, model = choose_model("backend", return_test_loader=False)
+    hparams, model = choose_model("backend", return_data_loader=False)
 
     
     # model_path = Path(f"/{root_path}/model_weights/flexible_models_best_FP/r0_r3_FP_trial_2/")

@@ -79,7 +79,11 @@ from datasets.dataset_utils import fp_loader_configer
 
 
 
-def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=False, should_shuffle_loader=False, checkpoint_path=None, load_for_moonshot=False, load_untrained_model=False):
+def choose_model(model_type, fp_type="entropy_on_hashes", return_data_loader=False, 
+                 use_predict_loader=True,
+                 should_shuffle_loader=False, 
+                 checkpoint_path=None, 
+                 load_for_moonshot=False, load_untrained_model=False, ):
     
     if checkpoint_path is None:
         if fp_type == "DB_specific_FP":
@@ -113,56 +117,15 @@ def choose_model(model_type, fp_type="entropy_on_hashes", return_test_loader=Fal
     
         
     model.eval()
-    if not return_test_loader:
+    if not return_data_loader:
         return hparams, model
     
-    test_loader = get_test_loader(model_type, should_shuffle_loader, hparams)
+    test_loader = get_data_loader(model_type, should_shuffle_loader, hparams, use_predict_loader)
     return hparams, model, test_loader
         
             
-def choose_model_entropy_based_FP(model_type, include_test_loader=True, should_shuffle_loader=False):
-    
-    checkpoint_path = find_checkpoint_path_entropy_based_FP(model_type)
-    
-    model_path = checkpoint_path.parents[1]
-    hyperpaerameters_path = model_path / "hparams.yaml"
 
-    # checkpoint_path = model_path / "checkpoints/epoch=14-step=43515.ckpt"
-
-
-    with open(hyperpaerameters_path, 'r') as file:
-        hparams = yaml.safe_load(file)
-        
-    FP_building_type = hparams['FP_building_type'].split("_")[-1]
-    only_2d = False
-    # only_2d = True
-    print(FP_building_type)
-    max_radius = int(hparams['FP_choice'].split("_")[-1][1:])
-    print("max_radius: ", max_radius)
-    
-    specific_radius_mfp_loader = fp_loader_configer.fp_loader
-    if  max_radius!=specific_radius_mfp_loader.max_radius or only_2d!=specific_radius_mfp_loader.only_2d:
-        specific_radius_mfp_loader.setup(only_2d=only_2d,FP_building_type=FP_building_type)
-        specific_radius_mfp_loader.set_max_radius(int(hparams['FP_choice'].split("_")[-1][1:]), only_2d=only_2d)
-
-
-    del hparams['checkpoint_path'] # prevent double defition of checkpoint_path
-    hparams['use_peak_values'] = False
-    hparams['num_workers'] = 0
-    if "test_on_deepsat_retrieval_set" not in hparams:
-        hparams['test_on_deepsat_retrieval_set'] = False
-    if "rank_by_test_set" not in hparams:
-        hparams['rank_by_test_set'] = False
-    model = OptionalInputRankedTransformer.load_from_checkpoint(checkpoint_path, **hparams)
-    
-    if not include_test_loader:
-        return hparams, model
-    
-    test_loader = get_test_loader(model_type, should_shuffle_loader, hparams)
-    model.eval()
-    return hparams, model, test_loader
-
-def get_test_loader(model_type, should_shuffle_loader, hparams):
+def get_data_loader(model_type, should_shuffle_loader, hparams, use_predict_loader):
     # if model_type == "HSQC":
     #     # datamodule = FolderDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC"], batch_size=hparams['bs'], parser_args=hparams, persistent_workers=False)
     #     # # datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], batch_size=hparams['bs'], parser_args=hparams)
@@ -173,11 +136,17 @@ def get_test_loader(model_type, should_shuffle_loader, hparams):
     #     input_src=["HSQC"]
     # else:
     #     input_src=["HSQC", "oneD_NMR"]
+    
     datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], fp_loader = fp_loader_configer.fp_loader, batch_size=1, parser_args=hparams)
-    datamodule.setup("predict")
-    loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
-        datamodule.predict_dataloader(shuffle=should_shuffle_loader)
-        
+    if use_predict_loader:
+        datamodule.setup("predict")
+        loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
+            datamodule.predict_dataloader(shuffle=should_shuffle_loader)
+    else:
+        datamodule.setup("test")
+        loader_all_inputs, loader_HSQC_H_NMR, loader_HSQC_C_NMR, loader_only_hsqc, loader_only_1d, loader_only_H_NMR, loader_only_C_NMR = \
+            datamodule.test_dataloader()
+            
     match model_type:
         case "C-NMR":
             test_loader = loader_only_C_NMR

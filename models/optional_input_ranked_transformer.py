@@ -56,13 +56,16 @@ class OptionalInputRankedTransformer(HsqcRankedTransformer):
             self.fc = self.classifiers[dataloader_idx]
         current_batch_name = self.all_dataset_names[dataloader_idx]
         metrics, np_classes, rank_1_hits = super().test_step(batch, batch_idx)
+        # print(f"test_step: {current_batch_name} {metrics}")
+        # print("np_classes", np_classes)
+        # print("rank_1_hits", rank_1_hits.tolist())
         self.test_step_outputs[current_batch_name].append(metrics)
         
-        for curr_classes, curr_rank_1_hits in zip(np_classes, rank_1_hits.tolist()):
+        for curr_classes, curr_rank_1_hits in zip(np_classes, rank_1_hits.reshape(-1).tolist()):
                 for np_class in curr_classes:
                     self.test_np_classes_rank1[current_batch_name][np_class].append(curr_rank_1_hits)
         
-        # return metrics
+        return metrics
     
     def predict_step(self, batch, batch_idx, dataloader_idx,return_representations=False):
         if self.separate_classifier:
