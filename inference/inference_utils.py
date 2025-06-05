@@ -31,7 +31,8 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
         case "HSQC":
-            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/all_HSQC_jittering_search/only_hsqc_jittering_1-trial-1/checkpoints/epoch=82-step=35607.ckpt")
+            # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/all_HSQC_jittering_search/only_hsqc_jittering_1-trial-1/checkpoints/epoch=82-step=35607.ckpt")
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_hsqc_trial_1/checkpoints/epoch=94-step=13585.ckpt")
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
         
