@@ -87,7 +87,7 @@ class All_Info_Dataset(FolderDataset):
                 return inputs, (smiles, chemical_name, NMR_type_indicator, NMR_path, self.NP_classes[file_index])
             return inputs, (smiles, chemical_name, NMR_type_indicator, NMR_path)
         
-        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy"): # should be in the format of "pick_entropy_r9"
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("Morgan_FP") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy"): # should be in the format of "pick_entropy_r9"
             mfp = self.fp_loader.build_mfp(int(self.files[i].split(".")[0]), "2d" ,self.split)
         else:   
             mfp = torch.load(f"{self.dir}/{self.fp_suffix}/{self.files[i]}")

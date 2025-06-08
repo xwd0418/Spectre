@@ -191,7 +191,10 @@ class FolderDataset(Dataset):
                             hsqc[:,2] = 0
                                           
                         assert (len(hsqc) > 0 or len(c_tensor) > 0 or len(h_tensor) > 0), "all NMRs are dropped"
-                            
+                       
+            if self.parser_args.get("convert_to_normal_HSQC"):
+                hsqc[:,2] = 0
+                 
             if self.parser_args['only_oneD_NMR']:
                 hsqc = torch.empty(0,3)                
             if self.parser_args['only_C_NMR']:
@@ -232,7 +235,7 @@ class FolderDataset(Dataset):
             
         # remember build ranking set
         
-        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy") :
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("Morgan_FP") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy") :
             # print(f"current i is {i}")
             # print("self.files len is ", len(self.files))
             mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)

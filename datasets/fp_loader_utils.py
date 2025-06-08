@@ -51,6 +51,9 @@ def convert_bits_positions_to_array(FP_on_bits, length):
 def generate_morgan_FP(mol, radius=2, length=6144):
     if type(mol) == str:
         mol = Chem.MolFromSmiles(mol)
+    if mol is None:
+        print(f"Invalid SMILES, returning all zeros")
+        return np.zeros(length)
     # mol = Chem.AddHs(mol) # add implicit Hs to the molecule
     gen = rdFingerprintGenerator.GetMorganGenerator(radius=radius, fpSize=length)
  
@@ -89,6 +92,44 @@ class FP_loader():
         pass
     def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
         pass
+  
+class Morgan_FP_loader(FP_loader):  
+    def __init__(self, ) -> None:
+        self.max_radius = None
+        self.out_dim = None
+        
+        self.smiles_dict_lookup = {}
+        for dataset_src in ["1d", "2d"]:
+            dataset_dir = "SMILES_dataset" if dataset_src == "2d" else "OneD_Only_Dataset"
+            for split in ["train", "val", "test"]:
+                self.path_to_smiles = DATASET_root_path / f"{dataset_dir}/{split}/SMILES/index.pkl"
+                if not self.path_to_smiles.exists():
+                    raise FileNotFoundError(f"SMILES index file not found at {self.path_to_smiles}")
+                with open(self.path_to_smiles, "rb") as f:
+                    smiles_dict = pickle.load(f)
+                self.smiles_dict_lookup[(dataset_src, split)] = smiles_dict
+                
+    def setup(self, out_dim, max_radius):
+        if self.out_dim == out_dim and self.max_radius == max_radius:
+            print("Morgan_FP_loader is already setup")
+            return
+        self.max_radius = max_radius
+        self.out_dim = out_dim
+        
+    def build_mfp(self, file_idx, dataset_src, split):
+        smiles_dict = self.smiles_dict_lookup[(dataset_src, split)] 
+        smiles = smiles_dict[file_idx]
+        mol = Chem.MolFromSmiles(smiles)
+        if mol is None:
+            print(f"Invalid SMILES: {smiles}, returning all zeros")
+            return torch.zeros(self.out_dim).float()
+        mfp = generate_morgan_FP(mol, radius=self.max_radius, length=self.out_dim)   
+        return torch.tensor(mfp).float()
+    def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
+        
+        rankingset_path = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/vanilla_fp_rankingset_max_radius_{max_radius}_dim_{fp_dim}_stacked_together/FP.pt"
+        print(f"loading {rankingset_path}")
+        return torch.load(rankingset_path)#.to("cuda")
     
 # @set_float32_highest_precision
 class Specific_Radius_MFP_loader(FP_loader):
@@ -398,6 +439,9 @@ class FP_Loader_Configer():
         elif version == "Hash_Entropy":
             print("choosing Hash_Entropy_FP_loader")
             self.fp_loader = Hash_Entropy_FP_loader()
+        elif version == "Morgan_FP":
+            print("choosing Morgan_FP_loader")
+            self.fp_loader = Morgan_FP_loader()
 
         else:
             raise ValueError("version should be either Specific_Radius or DB_Specific")

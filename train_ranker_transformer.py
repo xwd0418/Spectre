@@ -2,7 +2,7 @@ import pathlib
 import yaml
 
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "entropy_on_hashes"
+curr_exp_folder_name = "more_specialized_models"
 
 import logging, os, sys, torch
 import random, pickle
@@ -203,6 +203,8 @@ def add_parser_arguments( parser):
     parser.add_argument("--optional_inputs",  type=lambda x:bool(str2bool(x)), default=False, help="use optional 2D input, inference will contain different input versions")
     parser.add_argument("--optional_MW",  type=lambda x:bool(str2bool(x)), default=False, help="also make molecular weight as optional input")
     parser.add_argument("--use_HSQC", type=lambda x:bool(str2bool(x)), default=True, help="also make molecular weight as optional input")
+    parser.add_argument("--convert_to_normal_HSQC", type=lambda x:bool(str2bool(x)), default=False, help="use normal HSQC input, i.e. not multiplicity edited")
+
     parser.add_argument("--use_H_NMR",  type=lambda x:bool(str2bool(x)), default=True, help="using 1D NMR")
     parser.add_argument("--use_C_NMR",  type=lambda x:bool(str2bool(x)), default=True, help="using 1D NMR")
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
@@ -339,6 +341,12 @@ if __name__ == '__main__':
         radius = int(args['FP_choice'].split("_")[-1])
         fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
         
+    elif args['FP_choice'].startswith("Morgan_FP"):
+        fp_loader_configer.select_version("Morgan_FP")
+        fp_loader = fp_loader_configer.fp_loader
+        radius = int(args['FP_choice'].split("_")[-1])
+        fp_loader.setup(out_dim=args['out_dim'], max_radius=radius)
+  
     elif args['FP_choice'].startswith("DB_specific_FP"):
         fp_loader_configer.select_version("DB_Specific")
         fp_loader = fp_loader_configer.fp_loader

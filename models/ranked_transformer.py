@@ -123,7 +123,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         self.rank_by_test_set = kwargs['rank_by_test_set']
         
         
-        if FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy"):
+        if FP_choice.startswith("DB_specific_FP") or FP_choice.startswith("Hash_Entropy") or FP_choice.startswith("Morgan_FP"):
             self.radius = int(FP_choice.split("_")[-1])
         elif FP_choice.startswith("pick_entropy"):
             self.radius = int(FP_choice.split("_")[-1][1:])

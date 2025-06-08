@@ -148,7 +148,7 @@ class OneDDataset(FolderDataset):
         inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
          
             
-        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy"):
+        if self.fp_suffix.startswith("pick_entropy") or self.fp_suffix.startswith("Morgan_FP") or self.fp_suffix.startswith("DB_specific_FP") or self.fp_suffix.startswith("Hash_Entropy"):
             mfp = self.fp_loader.build_mfp(int(dataset_files[i].split(".")[0]), current_dataset ,self.split)
             # mfp_orig = torch.load(f"{dataset_dir}/R0_to_R4_reduced_FP/{dataset_files[i]}").float() 
             # print("current dataset is ", current_dataset)
