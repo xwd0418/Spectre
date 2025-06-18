@@ -182,7 +182,7 @@ class HsqcRankedTransformer(pl.LightningModule):
         from collections import defaultdict
         self.test_np_classes_rank1 = defaultdict(list)
 
-        self.NMR_type_embedding = nn.Embedding(4, dim_model)
+        self.NMR_type_embedding = nn.Embedding(6, dim_model)
         # HSQC, C NMR, H NMR, MW
         # MW isn't NMR, but, whatever......
         if self.global_rank == 0:

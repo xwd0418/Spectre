@@ -75,9 +75,13 @@ class All_Info_Dataset(FolderDataset):
         if self.parser_args['use_MW']:
             mol_weight = self.mol_weight[int(self.files[i].split(".")[0])]
             mol_weight = torch.tensor([mol_weight,0,0]).float()
+            
+        mass_spec = None
+        if self.parser_args['use_MS'] and os.path.exists(os.path.join(self.dir, 'MassSpec', self.files[i])):
+            mass_spec = torch.load(f"{self.dir}/MassSpec/{self.files[i]}").float() # loads in torch tensor
         
         # padding and stacking： 
-        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight, mass_spec)
          
         file_index = int(self.files[i].split(".")[0])
         if self.show_smiles: # prediction stage

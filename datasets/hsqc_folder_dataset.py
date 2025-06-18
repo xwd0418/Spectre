@@ -117,7 +117,8 @@ class FolderDataset(Dataset):
 
 
     def __getitem__(self, idx):
-        
+        def file_exist(src, filename):
+            return os.path.exists(os.path.join(self.dir, src, filename))
         if idx >= len(self.files): 
         ### load 1D dataset
             current_dataset = "1d"
@@ -144,8 +145,7 @@ class FolderDataset(Dataset):
         ### BEGINNING 2D dataset case
             current_dataset = "2d"
             i = idx
-            def file_exist(src, filename):
-                return os.path.exists(os.path.join(self.dir, src, filename))
+            
             
             # Load HSQC as 1-channel image 
             if "HSQC_images_1channel" in self.input_src:
@@ -225,10 +225,20 @@ class FolderDataset(Dataset):
             if self.parser_args['optional_inputs'] and self.parser_args["optional_MW"]:
                 if random.random() <= 0.5:
                     mol_weight = torch.tensor([])
+        
+        mass_spec = None
+        ms_dir = self.dir if idx >= len(self.files) else self.dir_1d
+        ms_fn = self.files_1d[idx - len(self.files)] if idx >= len(self.files) else self.files[idx]
+        if self.parser_args['use_MS'] and os.path.exists(os.path.join(ms_dir, 'MassSpec', ms_fn)):
+            mass_spec = torch.load(f"{ms_dir}/MassSpec/{ms_fn}").float() # loads in torch tensor
+            
+            if self.parser_args['optional_inputs'] and self.parser_args["optional_MS"]:
+                if random.random() <= 0.5:
+                    mass_spec = None
                 
             
         # padding and stacking： 
-        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight)
+        inputs, NMR_type_indicator = self.pad_and_stack_input(hsqc, c_tensor, h_tensor, mol_weight, mass_spec)
             
         # remember build ranking set
         
@@ -262,7 +272,7 @@ class FolderDataset(Dataset):
             combined = (inputs, mfp, NMR_type_indicator, np_class_mapping[int(dataset_files[i].split(".")[0])])
         return combined
     
-    def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight):
+    def pad_and_stack_input(self, hsqc, c_tensor, h_tensor, mol_weight, mass_spec):
         '''
         embedding mapping:
         0: HSQC
@@ -270,10 +280,7 @@ class FolderDataset(Dataset):
         2: H NMR
         3: MW
         4: normal hsqc
-        
-        future:
-        Mass Spectrometry
-        
+        5: mass spec
         '''
         
         c_tensor, h_tensor = c_tensor.view(-1, 1), h_tensor.view(-1, 1)
@@ -285,6 +292,10 @@ class FolderDataset(Dataset):
         if mol_weight is not None and len(mol_weight) > 0:
             inputs.append(mol_weight)
             NMR_type_indicator.append(3)
+        if mass_spec is not None:
+            mass_spec = F.pad(mass_spec, (0, 1), "constant", 0)
+            inputs.append(mass_spec)
+            NMR_type_indicator += [5] * len(mass_spec)
             
         inputs = torch.vstack(inputs)               
         NMR_type_indicator = torch.tensor(NMR_type_indicator).long()
