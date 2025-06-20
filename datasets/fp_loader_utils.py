@@ -127,7 +127,7 @@ class Morgan_FP_loader(FP_loader):
         return torch.tensor(mfp).float()
     def build_inference_ranking_set_with_everything(self, fp_dim, max_radius, use_hyun_fp = False, test_on_deepsat_retrieval_set = False):
         
-        rankingset_path = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/vanilla_fp_rankingset_max_radius_{max_radius}_dim_{fp_dim}_stacked_together/FP.pt"
+        rankingset_path = f"/root/gurusmart/MorganFP_prediction/inference_data/inference_rankingset_with_stable_sort/vanilla_fp_rankingset_max_radius_{max_radius}_fp_dim_{fp_dim}_stacked_together_sparse/FP.pt"
         print(f"loading {rankingset_path}")
         return torch.load(rankingset_path)#.to("cuda")
     

@@ -33,6 +33,11 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
         case "HSQC":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/all_HSQC_jittering_search/only_hsqc_jittering_1-trial-1/checkpoints/epoch=82-step=35607.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_hsqc_trial_1/checkpoints/epoch=94-step=13585.ckpt")
+
+        # case "standard_HSQC_no_MW":
+        #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/more_specialized_models/train_on_all_data_possible_with_jittering/no_mw_only_hsqc_trial_2/checkpoints/epoch=132-step=17290.ckpt")
+        # case "eHSQC_no_MW":
+        #     checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/more_specialized_models/train_on_all_data_possible_with_jittering/no_mw_only_normal_hsqc_trial_3/checkpoints/epoch=101-step=13260.ckpt")
         case _:
             raise ValueError(f"model_type: {model_type} not recognized")
         
@@ -146,6 +151,15 @@ def get_data_loader(model_type, should_shuffle_loader, hparams, use_predict_load
     # else:
     #     input_src=["HSQC", "oneD_NMR"]
     
+    if "HSQC" in model_type:
+        datamodule = FolderDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC"], fp_loader = fp_loader_configer.fp_loader, batch_size=1, parser_args=hparams,persistent_workers = False)
+        if use_predict_loader:
+            datamodule.setup("predict")
+            return datamodule.predict_dataloader()
+        else:
+            datamodule.setup("test")
+            return datamodule.test_dataloader()
+
     datamodule = OptionalInputDataModule(dir="/workspace/SMILES_dataset", FP_choice=hparams["FP_choice"], input_src=["HSQC", "oneD_NMR"], fp_loader = fp_loader_configer.fp_loader, batch_size=1, parser_args=hparams)
     if use_predict_loader:
         datamodule.setup("predict")
@@ -175,7 +189,8 @@ def get_data_loader(model_type, should_shuffle_loader, hparams, use_predict_load
             test_loader = loader_only_1d
         case "only_C-NMR_DTD":
             test_loader = loader_only_C_NMR
-        
+        case "eHSQC_no_MW":
+            test_loader = loader_only_hsqc
         case "optional":
             test_loader = loader_all_inputs
                         

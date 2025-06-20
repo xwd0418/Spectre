@@ -2,8 +2,8 @@ import pathlib
 import yaml
 
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "more_specialized_models"
-
+curr_exp_folder_name = "entropy_on_hashes"
+# more_specialized_models
 import logging, os, sys, torch
 import random, pickle
 import numpy as np
@@ -210,11 +210,14 @@ def add_parser_arguments( parser):
     parser.add_argument("--use_MW",  type=lambda x:bool(str2bool(x)), default=True, help="using mass spectra")
     parser.add_argument("--train_on_all_info_set", type=lambda x:bool(str2bool(x)), default=False, help="train on subset of training set, where every mol has 3 types of NMR")
     ### the args above will be used to assign values to the following args
-    # parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data, but not using solvent data")
-    # parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="will use /workspace/OneD_Only_Dataset/")
-    # parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
-    # parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
-    # parser.add_argument("--only_H_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD H_NMR. Need to use together with only_oneD_NMR")
+    
+    import os
+    if os.environ.get("old_input_control") is not None:
+        parser.add_argument("--use_oneD_NMR_no_solvent",  type=lambda x:bool(str2bool(x)), default=True, help="use 1D NMR data, but not using solvent data")
+        parser.add_argument("--combine_oneD_only_dataset",  type=lambda x:bool(str2bool(x)), default=False, help="will use /workspace/OneD_Only_Dataset/")
+        parser.add_argument("--only_oneD_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD NMR, C or H or both. By default is both")
+        parser.add_argument("--only_C_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD C_NMR. Need to use together with only_oneD_NMR")
+        parser.add_argument("--only_H_NMR",  type=lambda x:bool(str2bool(x)), default=False, help="only use oneD H_NMR. Need to use together with only_oneD_NMR")
     
     ### some fancy stuff i tried but didn't work
     parser.add_argument("--separate_classifier",  type=lambda x:bool(str2bool(x)), default=False, help="use separate classifier for various 2D/1D input")
@@ -241,7 +244,7 @@ if __name__ == '__main__':
     args = vars(parser.parse_known_args()[0])
     apply_args(parser, args["modelname"])
     args = vars(parser.parse_known_args()[0])
-    
+
     args = parse_nmr_input_types(args)
     # if args['only_C_NMR'] or args['only_H_NMR']:
     #     assert args['only_oneD_NMR'], "only_C_NMR or only_H_NMR should be used with only_oneD_NMR"
