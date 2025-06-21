@@ -129,12 +129,14 @@ class OneDDataset(FolderDataset):
       
         # loading MW and MFP in different datasets 
         if idx >= len(self.files): # load 1D dataset    
-            mol_weight_dict = self.mol_weight_1d
+            if self.parser_args['use_MW']:
+                mol_weight_dict = self.mol_weight_1d
             dataset_files = self.files_1d
             dataset_dir = self.dir_1d
             current_dataset = "1d"
         else:
-            mol_weight_dict = self.mol_weight_2d
+            if self.parser_args['use_MW']:
+                mol_weight_dict = self.mol_weight_2d
             dataset_files = self.files
             dataset_dir = self.dir
             current_dataset = "2d"
