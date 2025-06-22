@@ -105,6 +105,7 @@ def generate_image():
     mw_range = data['MW_range']
     HSQC_format = data['HSQC_format']
     k = data['k_samples']
+    model_type = data['model_type']
     # print("HSQC_format", HSQC_format)
     
     '''
@@ -143,19 +144,51 @@ def generate_image():
         hsqc = hsqc, c_tensor = c_tensor, h_tensor = h_tensor, mw = float(mw) if mw != "" else None,
     )
 
-    match  data['model_type']:
-        case "optional":
-            model = model_optional     
-        case "only_C":
-            model = model_only_C
-        case "only_H":
-            model = model_only_H
-        case "only_1d":
-            model = model_only_1d
-        case "only_HSQC":
-            model = model_only_HSQC
-        case _:
-            raise ValueError(f"Unknown model type: {data['model_type']}")
+  
+    if model_type == "optional":
+        model = model_optional
+        print("using model_optional")
+    else:
+        is_standard_hsqc = all(hsqc[:,2] == 0) if hsqc is not None else True
+        
+        if c_tensor != None  and h_tensor is None and hsqc is None and mw !="":
+            model = model_only_C_mw
+            print("using model_only_C_mw")
+        elif h_tensor != None and c_tensor is None and hsqc is None and mw !="":
+            model = model_only_H_mw
+            print("using model_only_H_mw")
+        elif c_tensor != None and h_tensor != None and hsqc is None and mw !="":
+            model = model_only_1d_mw
+            print("using model_only_1d_mw")
+        elif hsqc != None and c_tensor is None and h_tensor is None and  mw !="":
+            if is_standard_hsqc:
+                model = model_only_standard_HSQC_mw
+                print("using model_only_standard_HSQC_mw")
+            else:
+                model = model_only_eHSQC_mw
+                print("using model_only_eHSQC_mw")
+                
+        elif c_tensor != None and h_tensor is None and hsqc is None and mw =="":
+            model = model_only_C_no_mw
+            print("using model_only_C_no_mw")
+        elif h_tensor != None and c_tensor is None and hsqc is None and mw =="":
+            model = model_only_H_no_mw
+            print("using model_only_H_no_mw")
+        elif c_tensor != None and h_tensor != None and hsqc is None and mw =="":
+            model = model_only_1d_no_mw
+            print("using model_only_1d_no_mw")
+        elif hsqc != None and c_tensor is None and h_tensor is None and  mw =="":
+            if is_standard_hsqc:
+                model = model_only_standard_HSQC_no_mw
+                print("using model_only_standard_HSQC_no_mw")
+            else:
+                model = model_only_eHSQC_no_mw
+                print("using model_only_eHSQC_no_mw")
+        
+        else:
+            model = model_optional
+            print("using model_optional")
+            
         
     retrieved_molecules = show_topK(model, inputs, NMR_type_indicator, k=k, MW_range = mw_range)
     nmr_fig_str= plot_NMR(hsqc, c_tensor, h_tensor)
@@ -197,11 +230,18 @@ if __name__ == '__main__':
     fp_loader = fp_loader_configer.fp_loader
     
     _, model_optional = choose_model("backend-optional", return_data_loader=False)
-    _, model_only_C = choose_model("backend-only-C", return_data_loader=False)
-    _, model_only_H = choose_model("backend-only-H", return_data_loader=False)
-    _, model_only_1d = choose_model("backend-only-1d", return_data_loader=False)
-    _, model_only_HSQC = choose_model("backend-only-HSQC", return_data_loader=False)
-
+    _, model_only_C_mw = choose_model("backend-only-C", return_data_loader=False)
+    _, model_only_H_mw = choose_model("backend-only-H", return_data_loader=False)
+    _, model_only_1d_mw = choose_model("backend-only-1d", return_data_loader=False)
+    _, model_only_eHSQC_mw = choose_model("backend-only-HSQC", return_data_loader=False)
+    _, model_only_standard_HSQC_mw = choose_model("backend-only-standard-HSQC", return_data_loader=False)
+    
+    _, model_only_C_no_mw = choose_model("backend-only-C-no-mw", return_data_loader=False)
+    _, model_only_H_no_mw = choose_model("backend-only-H-no-mw", return_data_loader=False)
+    _, model_only_1d_no_mw = choose_model("backend-only-1d-no-mw", return_data_loader=False)
+    _, model_only_eHSQC_no_mw = choose_model("backend-only-HSQC-no-mw", return_data_loader=False)
+    _, model_only_standard_HSQC_no_mw = choose_model("backend-only-standard-HSQC-no-mw", return_data_loader=False)  
+    
     print("model device: ", model_optional.device)
 
     # step 2: load rankingset

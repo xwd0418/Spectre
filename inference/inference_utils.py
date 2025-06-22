@@ -23,6 +23,20 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
             checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_HSQC.ckpt")
         case "backend-only-1d":
             checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_1d_nmr.ckpt")
+        
+        case "backend-only-standard-HSQC":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_standard_HSQC.ckpt")
+        case "backend-only-C-no-mw":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_c_no_mw.ckpt")
+        case "backend-only-H-no-mw":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_h_no_mw.ckpt")
+        case "backend-only-1d-no-mw":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_1d_nmr_no_mw.ckpt")
+        case "backend-only-HSQC-no-mw":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_HSQC_no_mw.ckpt")
+        case "backend-only-standard-HSQC-no-mw":
+            checkpoint_path = Path("/home/ad.ucsd.edu/w6xu/model_weights/flexible_model_flexible_MW_entropy_on_hash/checkpoints/spectre_only_standard_HSQC_no_mw.ckpt")
+        
         case "optional":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW/r0_r6_trial_1/checkpoints/epoch=73-step=16724.ckpt")
