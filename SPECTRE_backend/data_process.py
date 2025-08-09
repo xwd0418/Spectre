@@ -94,21 +94,22 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
         # original HSQC plot
         if len(normal):
             ax1.scatter(normal[:,1], normal[:,0], c="black", s=2)
-    ax1.set_title("HSQC")
-    ax1.set_xlabel('Proton Shift (1H)')  # X-axis label
+    # ax1.set_title("HSQC")
+    ax1.set_xlabel('HSQC')  # X-axis label
     ax1.set_xlim([0, 12])
     ax1.set_ylim([0, 220])
     ax1.invert_yaxis()
     ax1.invert_xaxis()
-    ax1.legend()
+    if not len(normal):
+        ax1.legend()
 
 
     ax2 = fig.add_subplot(gs[1, 0])  # Smaller subplot
     if c_tensor is not None:
         ax2.scatter( torch.ones(len(c_tensor)), c_tensor[:,0], c="black", s=2)
     ax2.set_ylim([0, 220])
-    ax2.set_title("13C-NMR")
-    ax2.set_ylabel('Carbon Shift (13C)')
+    # ax2.set_title("13C-NMR")
+    ax2.set_ylabel('¹³C NMR Chemical Shift(ppm)')
     ax2.set_xticks([])
     ax2.invert_yaxis()
     ax2.invert_xaxis()
@@ -117,7 +118,7 @@ def plot_NMR(hsqc, c_tensor, h_tensor):
     if h_tensor is not None:
         ax3.scatter(h_tensor[:,1], torch.ones(len(h_tensor)),c="black", s=2)
     ax3.set_xlim([0, 12])
-    ax3.set_title("1H-NMR")
+    ax3.set_title("¹H NMR Chemical Shift(ppm)")
     ax3.set_yticks([])
     ax3.invert_yaxis()
     ax3.invert_xaxis()
