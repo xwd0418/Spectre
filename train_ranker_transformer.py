@@ -2,8 +2,8 @@ import pathlib
 import yaml
 
 DATASET_root_path = pathlib.Path("/workspace/")
-curr_exp_folder_name = "entropy_on_hashes"
-# more_specialized_models
+# curr_exp_folder_name = "entropy_on_hashes"
+curr_exp_folder_name = "more_specialized_models"
 import logging, os, sys, torch
 import random, pickle
 import numpy as np

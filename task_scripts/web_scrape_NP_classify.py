@@ -17,7 +17,7 @@ def process_file(file, smiles_pkl):
 
 if __name__ == "__main__":
     for split in [
-        'val',
+        # 'val',
         # 'test',
         "train"
         ]:

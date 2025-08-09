@@ -41,6 +41,10 @@ def find_checkpoint_path_entropy_on_hashes_FP(model_type):
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_size_1/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW/r0_r6_trial_1/checkpoints/epoch=73-step=16724.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW_flexible_normal_hsqc/r0_r6_trial_1/checkpoints/epoch=95-step=21696.ckpt")
+        case "optional2":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW_flexible_normal_hsqc/r0_r6_trial_2/checkpoints/epoch=91-step=20792.ckpt")
+        case "optional3":
+            checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/flexible_models_jittering_flexible_MW_flexible_normal_hsqc/r0_r6_trial_3/checkpoints/epoch=67-step=46104.ckpt")
         case "C-NMR":
             # checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible/only_c_trial_2/checkpoints/epoch=79-step=64640.ckpt")
             checkpoint_path = Path("/root/gurusmart/MorganFP_prediction/reproduce_previous_works/entropy_on_hashes/train_on_all_data_possible_with_jittering/only_c_trial_1/checkpoints/epoch=90-step=73528.ckpt")
@@ -697,3 +701,110 @@ def convert_hsqc_tensort_to_txt(path, name_info):
         
 # convert_hsqc_tensort_to_txt("/workspace/SMILES_dataset/test/HSQC/10018.pt")
     
+    
+
+import matplotlib.pyplot as plt
+from collections import defaultdict
+
+def plot_topk_accuracy(mean_rank_records_list, max_k=25, title="Structure Dereplication (Similarity = 1.0)",
+                       bbox_to_anchor=(0.5, 0.5),
+                       ylabel = '% of correct dereplication (containing the ground truth compound)'):
+    """
+    Plot Top-K accuracy curves for different models, sorted by performance in the legend.
+
+    Args:
+        mean_rank_records (dict): Dictionary mapping model names to lists of ranks.
+        max_k (int): Maximum K value to plot.
+        title (str): Plot title.
+    """
+
+    plt.figure(figsize=(15, 10))
+
+    # Define a list of distinct colors
+    # These colors are chosen for better visual separation than default matplotlib colors.
+    colors = [
+        '#E6194B', "#4BDD5E", "#FFDD00", "#6F8AEE", '#F58231',
+        '#911EB4', '#46F0F0', '#F032E6', 
+        '#008080',  "#A7671F", "#0202FF", '#808080',  '#000000',
+    ]
+
+    plot_order =['eHSQC, H NMR, and C NMR',
+                'eHSQC and C NMR',
+                'Standard HSQC, H NMR, and C NMR',
+                'Standard HSQC and C NMR',
+                'eHSQC and H NMR',
+                'eHSQC Only',
+                'Standard HSQC and H NMR',
+                'Standard HSQC only',
+                'C NMR and H NMR',
+                'DeepSAT -- eHSQC',
+                'DeepSAT -- Standard HSQC',
+                'C NMR Only',
+                'H NMR Only']
+    
+    def get_single_mdoel_performance(mean_rank_records):
+        # Calculate Top-K accuracy for each model and store for sorting
+        model_performance = {}
+        for model_name, ranks in mean_rank_records.items():
+            
+            topk_accuracies = []
+            for k in range(1, max_k + 1):
+                correct_count = sum(1 for rank in ranks if rank < k)
+                accuracy = (correct_count / len(ranks)) * 100
+                topk_accuracies.append(accuracy)
+            # Store the calculated accuracies and the model name
+            model_performance[model_name] = topk_accuracies
+            # if model_name == "eHSQC, H NMR, and C NMR" or model_name == "eHSQC and C NMR":
+            #     print(f"Model: {model_name}, Top-K Accuracies: {topk_accuracies[:5]}")
+        return model_performance
+    
+    def average_dicts(json_list):
+        avg_result = defaultdict(list)
+        n = len(json_list)
+
+        for key in json_list[0]:
+            # Zip all corresponding lists under the same key
+            for values in zip(*(j[key] for j in json_list)):
+                avg_value = sum(values) / n
+                avg_result[key].append(avg_value)
+
+        return dict(avg_result)
+
+    all_model_perfs = [get_single_mdoel_performance(record) for record in mean_rank_records_list]
+    model_performance = average_dicts(all_model_perfs)
+    # Sort models by their final accuracy (at max_k) in descending order
+    # sorted_models = sorted(model_performance.items(), key=lambda item: item[1][-1], reverse=True)
+
+    # for i, (model_name, topk_accuracies) in enumerate(sorted_models):
+    for i, model_name in enumerate(plot_order):
+        if model_name not in model_performance:
+            # print(f"Warning: {model_name} not found in model_performance. Skipping.")
+            continue
+        topk_accuracies = model_performance[model_name]
+        x_values = range(1, max_k + 1)
+        plt.step(x_values, topk_accuracies,
+                 label=model_name.replace("H NMR", "¹H NMR").replace("C NMR", "¹³C NMR").replace("only","").replace("Only",''),
+                 color=colors[i % len(colors)],
+                 linewidth=1.3,
+                 where='post')
+
+    # Customize the plot
+    plt.xlabel('Top-K Retrieved Compounds', fontsize=18)
+    plt.ylabel(ylabel, fontsize=15)
+    plt.title(title, fontsize=18)
+    plt.grid(True, alpha=0.3)
+    plt.legend(fontsize=14,
+               loc='center right',
+                bbox_to_anchor=bbox_to_anchor
+               )
+
+    # Set axis limits
+    plt.xlim(0, max_k)
+    plt.ylim(0, 100)
+
+    # Add more tick marks on x-axis
+    plt.xticks(range(0, max_k + 1, 5), fontsize=15)
+    plt.yticks(range(0, 101, 10), fontsize=15)
+
+    plt.tight_layout()
+    plt.show()
