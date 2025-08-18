@@ -30,7 +30,7 @@ from flask_utils import build_actual_response
 from inference.inference_utils import inference_topK, get_inputs_and_indicators_from_NMR_tensors
 
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="/app/static", static_url_path="")
 CORS(app)
 
 from flask import Response
@@ -247,7 +247,8 @@ if __name__ == '__main__':
     # step 2: load rankingset
     smiles_and_names = pickle.load(open(f'{root_path}/inference/inference_metadata_name_updated.pkl', 'rb'))
     rankingset_path = f'{root_path}/inference/non_collision_FP_rankingset_r6_dim_16384/FP.pt'
-    rankingset_data = torch.load(rankingset_path).to("cuda")
+    #rankingset_data = torch.load(rankingset_path).to("cuda")
+    rankingset_data = torch.load(rankingset_path, map_location="cpu")
     # smiles_to_NMR_path = pickle.load(open(f'{root_path}/inference/SMILES_chemical_to_NMR_paths.pkl','rb'))
 
     print("starting server")
